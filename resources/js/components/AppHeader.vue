@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SORGENTE } from '@/lib/sorgente'
     
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -84,7 +85,7 @@ const mainNavItems = computed<NavItem[]>(() => [
 
 const rightNavItems = computed(() =>
     [
-        { type: 'link', title: trans('appHeader.repository'), href: 'https://github.com/vince844/kondomanager-free', icon: GitGraph, external: true },
+        { type: 'link', title: trans('appHeader.repository'), href: SORGENTE, icon: GitGraph, external: true },
         { type: 'link', title: trans('appHeader.documentation'), href: 'https://kondomanager.com/docs/index.html', icon: BookText, external: true },
         { 
             type: 'link', 

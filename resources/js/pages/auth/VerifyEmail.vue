@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SORGENTE } from '@/lib/sorgente'
 
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -52,7 +53,7 @@ const submit = () => {
             </a> 
             — 
             <a 
-                href="https://github.com/vince844/kondomanager-free" 
+                :href="SORGENTE" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 class="transition-colors hover:text-foreground hover:underline"

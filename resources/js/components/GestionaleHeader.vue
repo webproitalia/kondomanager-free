@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SORGENTE } from '@/lib/sorgente'
 
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -134,7 +135,7 @@ const rightNavItems: LinkItem[] = [
     {
         type: 'link',
         title: 'Repository',
-        href: 'https://github.com/vince844/kondomanager-free',
+        href: SORGENTE,
         icon: GitGraph,
         external: true,
     },

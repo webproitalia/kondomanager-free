@@ -9,6 +9,8 @@
 [![GitHub issues](https://img.shields.io/github/issues/vince844/kondomanager-free)](https://github.com/vince844/kondomanager-free/issues)
 [![GitHub last commit](https://img.shields.io/github/last-commit/vince844/kondomanager-free)](https://github.com/vince844/kondomanager-free/commits/main)
 
+> **Modified version by Web Pro Italia S.r.l.** — This repository is a fork of [KondoManager](https://github.com/vince844/kondomanager-free) by Vincenzo Vecchio, released under the same AGPL-3.0 license. Since 9 November 2026 the `wpi` branch adds **Settings → Appearance** (colour palettes and corner style) and **Settings → AI agents** (keys for AI assistants, function catalog, preview of changes, log; see [docs/agenti_ai.it.md](docs/agenti_ai.it.md)). Everything else is the original KondoManager: report issues about the software on the [original repository](https://github.com/vince844/kondomanager-free/issues). Contact for this version: info@webproitalia.com
+
 # KondoManager - Free and Open Source Condominium Management Software
 
 **KondoManager** is the first open source, self-hosted condominium management software, built with **Laravel, Vue 3, Inertia.js and MySQL**. Designed for property managers who need a serious tool: double-entry bookkeeping, instalment plans, a digital resident portal and automatic updates — no subscriptions, no vendor lock-in.

@@ -1,6 +1,27 @@
 Kondomanager - Property Management Software
 Copyright (c) 2026 Vincenzo Vecchio (Kondomanager). All rights reserved.
 
+Modified version maintained by Web Pro Italia S.r.l. (info@webproitalia.com)
+Modifications Copyright (c) 2026 Web Pro Italia S.r.l., released under the same AGPL-3.0-or-later license.
+
+================================================================================
+                    MODIFIED VERSION (AGPLv3 Section 5(a))
+================================================================================
+
+This is a MODIFIED version of KondoManager, changed by Web Pro Italia S.r.l.
+starting on 9 November 2026 (branch "wpi", based on upstream 1.11.0):
+
+- Settings → Appearance ("Aspetto"): primary colour palettes and corner style.
+- Settings → AI agents ("Agenti AI"): personal keys for AI agents, the
+  /agenti/catalogo function catalog, preview mode for writes, log of the
+  changes made by agents (see docs/agenti_ai.it.md).
+- "Source code" links in the interface point to this modified version.
+
+Complete corresponding source code of THIS modified version:
+🔗 https://github.com/webproitalia/kondomanager-free (branch "wpi")
+
+The original, unmodified KondoManager is available at the address below.
+
 ================================================================================
                          NOTICE OF LICENSE AND COPYRIGHT
 ================================================================================
