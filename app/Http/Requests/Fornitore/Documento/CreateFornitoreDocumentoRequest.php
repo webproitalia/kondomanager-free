@@ -30,7 +30,7 @@ class CreateFornitoreDocumentoRequest extends FormRequest
             'created_by'      => 'required|exists:users,id',
             'is_published'    => 'required|boolean',
             'is_approved'     => 'required|boolean',
-            'file'            => 'required|file|mimes:pdf|max:'.LimiteCaricamento::regolaMax(),
+            'file'            => 'required|file|'.\App\Support\FormatiDocumento::regola().'|max:'.LimiteCaricamento::regolaMax(),
         ];
     }
 

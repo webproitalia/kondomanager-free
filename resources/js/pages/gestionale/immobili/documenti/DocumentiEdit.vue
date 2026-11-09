@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
 import { Link, Head, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import GestionaleLayout from '@/layouts/GestionaleLayout.vue';
@@ -94,9 +95,7 @@ const form = useForm<EditDocumentForm>({
 // installazione a installazione. Un `20 * 1024 * 1024` scritto a mano rifiutava file che il server
 // avrebbe accettato, e ne lasciava partire altri che rifiutava lui — con un messaggio generico.
 const validateFile = (selectedFile: File): boolean => {
-  const allowedTypes = ['application/pdf'];
-
-  if (!allowedTypes.includes(selectedFile.type)) {
+  if (!formatoDocumentoAmmesso(selectedFile)) {
     form.setError('file', 'Sono ammessi solo file PDF');
     return false;
   }
@@ -331,7 +330,7 @@ const submit = (): void => {
                           id="file-upload"
                           type="file"
                           class="hidden"
-                          accept=".pdf,application/pdf"
+                          :accept="ACCETTA_DOCUMENTO"
                           @change="handleFileChange"
                           ref="fileInputRef"
                         />

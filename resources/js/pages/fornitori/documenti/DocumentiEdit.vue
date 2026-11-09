@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
 import { ref, computed } from 'vue';
 import { Link, Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -84,9 +85,7 @@ const pageGuides = [
 // JPG e PNG, che la regola a server (`mimes:pdf`) non ha mai accettato: si offrivano all'utente per
 // poi respingerli dopo il caricamento.
 const validateFile = (selectedFile: File): boolean => {
-  const allowedTypes = ['application/pdf'];
-
-  if (!allowedTypes.includes(selectedFile.type)) {
+  if (!formatoDocumentoAmmesso(selectedFile)) {
     form.setError('file', 'Sono ammessi solo file PDF');
     return false;
   }
@@ -299,7 +298,7 @@ const submit = (): void => {
                                     id="file-upload"
                                     type="file"
                                     class="hidden"
-                                    accept="application/pdf"
+                                    :accept="ACCETTA_DOCUMENTO"
                                     @change="handleFileChange"
                                     ref="fileInputRef"
                                 />

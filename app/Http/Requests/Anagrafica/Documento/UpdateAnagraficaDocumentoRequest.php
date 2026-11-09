@@ -33,7 +33,7 @@ class UpdateAnagraficaDocumentoRequest extends FormRequest
             'description'  => ['nullable', 'string'],
             'is_published' => ['required', 'boolean'],
             'is_approved'  => ['required', 'boolean'],
-            'file'         => ['nullable', 'file', 'mimes:pdf', 'max:'.LimiteCaricamento::regolaMax()],
+            'file'         => ['nullable', 'file', \App\Support\FormatiDocumento::regola(), 'max:'.LimiteCaricamento::regolaMax()],
         ];
     }
 

@@ -32,7 +32,7 @@ class UpdateImmobileDocumentoRequest extends FormRequest
             'created_by'      => ['sometimes', 'required', 'exists:users,id'],
             'is_approved'     => ['sometimes', 'required', 'boolean'],
             'is_published'    => ['sometimes', 'required', 'boolean'],
-            'file'            => ['nullable', 'file', 'mimes:pdf', 'max:'.\App\Support\LimiteCaricamento::regolaMax()],
+            'file'            => ['nullable', 'file', \App\Support\FormatiDocumento::regola(), 'max:'.\App\Support\LimiteCaricamento::regolaMax()],
         ];
     }
 

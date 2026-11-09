@@ -798,13 +798,13 @@ return [
                         'visibility_title' => 'Visibilità',
                         'visibility_description' => 'Scegli tra uso interno o visibile per i condòmini.',
                         'upload_title' => 'Upload (PDF)',
-                        'upload_description' => 'Carica il file in formato PDF.',
+                        'upload_description' => 'Carica il file: PDF, foto, Word, Excel, testo, XML/P7M, ZIP o email.',
                     ],
                     'sections' => [
                         'details_title' => 'Dettagli e permessi',
                         'details_description' => 'Indica le informazioni del file e la sua visibilità.',
                         'file_title' => 'Allega file',
-                        'file_description' => 'Carica il documento in formato PDF.',
+                        'file_description' => 'Carica il documento: PDF, foto, Word, Excel, testo, XML/P7M, ZIP o email.',
                     ],
                     'placeholders' => [
                         'name' => 'Es.: Contratto di locazione 2026',

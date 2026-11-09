@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
 
 import { ref, watch, computed, type Ref } from 'vue';
 import { Link, Head, useForm } from '@inertiajs/vue3';
@@ -263,7 +264,7 @@ const submit = (): void => {
                                 id="file-upload"
                                 type="file"
                                 class="hidden"
-                                accept="application/pdf"
+                                :accept="ACCETTA_DOCUMENTO"
                                 @change="handleFileChange"
                             />
                         </label>

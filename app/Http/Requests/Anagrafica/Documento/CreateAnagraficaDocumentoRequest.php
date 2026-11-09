@@ -45,7 +45,7 @@ class CreateAnagraficaDocumentoRequest extends FormRequest
             // schermata: allargarla qui vorrebbe dire avere un tipo di file che l'archivio non sa
             // mostrare, e un documento che si carica e non si apre è peggio di uno che non si
             // carica.
-            'file'         => ['required', 'file', 'mimes:pdf', 'max:'.LimiteCaricamento::regolaMax()],
+            'file'         => ['required', 'file', \App\Support\FormatiDocumento::regola(), 'max:'.LimiteCaricamento::regolaMax()],
         ];
     }
 

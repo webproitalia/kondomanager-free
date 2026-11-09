@@ -44,7 +44,7 @@ class CreateDocumentoRequest extends FormRequest
             'is_approved'     => 'required|boolean',
             'is_private'      => 'sometimes|boolean',
             'created_by'      => 'required|exists:users,id',
-            'file'            => 'required|file|mimes:pdf|max:'.LimiteCaricamento::regolaMax(),
+            'file'            => 'required|file|'.\App\Support\FormatiDocumento::regola().'|max:'.LimiteCaricamento::regolaMax(),
             'condomini_ids'   => ['required', 'array'],
             // Non basta che il condominio esista (giro di sicurezza della 1.11.0-beta.39, Coda 184):
             // deve essere uno dei condomìni dell'utente, altrimenti il documento finisce nell'archivio

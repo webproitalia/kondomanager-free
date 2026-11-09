@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
 import { computed, ref } from 'vue';
 import { Link, Head, useForm } from '@inertiajs/vue3';
 import GestionaleLayout from '@/layouts/GestionaleLayout.vue';
@@ -76,7 +77,7 @@ function handleFileChange(event: Event): void {
   const target = event.target as HTMLInputElement
   if (target?.files?.length) {
     const selectedFile = target.files[0]
-    if (selectedFile.type !== 'application/pdf') {
+    if (!formatoDocumentoAmmesso(selectedFile)) {
       alert("Solo file PDF sono ammessi.")
       return
     }
@@ -231,7 +232,7 @@ const submit = (): void => {
                         id="file-upload"
                         type="file"
                         class="hidden"
-                        accept="application/pdf"
+                        :accept="ACCETTA_DOCUMENTO"
                         @change="handleFileChange"
                       />
                     </label>

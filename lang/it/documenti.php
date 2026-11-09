@@ -158,7 +158,7 @@ return [
         'delete_document_description'   => 'Questa azione non è reversibile. Eliminerà il documento e tutti i dati associati.',
         'select_document_title'         => 'Trascina qui il tuo documento',
         'select_document_description'   => 'Oppure clicca per selezionarlo dal tuo dispositivo.',
-        'document_supported_types'      => 'È ammesso solo il formato PDF.',
+        'document_supported_types'      => 'Formati ammessi: PDF, foto, Word, Excel, testo, XML/P7M, ZIP o email.',
         'categories' => [
             'delete_category_title'       => 'Sei sicuro di voler eliminare questa categoria?',
             'delete_category_description' => 'Questa azione non è reversibile. I documenti non vengono toccati: una categoria che ne contiene non si può eliminare.',

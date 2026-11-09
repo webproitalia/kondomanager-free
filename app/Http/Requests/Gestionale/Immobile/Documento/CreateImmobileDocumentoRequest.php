@@ -38,7 +38,7 @@ class CreateImmobileDocumentoRequest extends FormRequest
             // Il tetto non è più un numero fisso: `max:20480` prometteva 20 MB su qualunque
             // installazione, anche dove il server ne accetta 2. Ora è il minimo fra i limiti di
             // PHP e il nostro, letto a ogni richiesta.
-            'file'            => 'required|file|mimes:pdf|max:'.\App\Support\LimiteCaricamento::regolaMax(),
+            'file'            => 'required|file|'.\App\Support\FormatiDocumento::regola().'|max:'.\App\Support\LimiteCaricamento::regolaMax(),
         ];
     }
 

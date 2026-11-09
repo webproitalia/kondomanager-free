@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
 
 import { ref, computed, watch } from 'vue';
 import { Link, Head, useForm } from '@inertiajs/vue3';
@@ -124,9 +125,7 @@ const rigaApprovazione = computed(() => rigaServeApprovazione('documenti', props
 // ⚠️ E i formati: la regola a server è `mimes:pdf`, quindi JPEG e PNG non sono mai passati. Offrirli
 // qui voleva dire far scegliere un file e respingerlo dopo il caricamento.
 const validateFile = (selectedFile: File): boolean => {
-  const allowedTypes = ['application/pdf'];
-
-  if (!allowedTypes.includes(selectedFile.type)) {
+  if (!formatoDocumentoAmmesso(selectedFile)) {
     form.setError('file', trans('documenti.dialogs.document_supported_types'));
     return false;
   }
@@ -380,7 +379,7 @@ const submit = (): void => {
                                     id="file-upload"
                                     type="file"
                                     class="hidden"
-                                    accept="application/pdf"
+                                    :accept="ACCETTA_DOCUMENTO"
                                     @change="handleFileChange"
                                     ref="fileInputRef"
                                 />

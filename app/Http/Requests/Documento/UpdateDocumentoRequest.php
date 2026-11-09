@@ -54,7 +54,7 @@ class UpdateDocumentoRequest extends FormRequest
             // Il segno della pagina del portale, che ha solo le categorie: arriva qui quando quella
             // pagina la apre chi ha il pannello (vedi `prepareForValidation()`).
             'categorie_nel_modulo' => ['sometimes', 'boolean'],
-            'file'            => ['nullable', 'file', 'mimes:pdf', 'max:'.LimiteCaricamento::regolaMax()],
+            'file'            => ['nullable', 'file', \App\Support\FormatiDocumento::regola(), 'max:'.LimiteCaricamento::regolaMax()],
         ];
     }
 

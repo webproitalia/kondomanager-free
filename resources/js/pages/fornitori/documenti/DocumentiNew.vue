@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
   
 import { ref, computed } from 'vue';
 import { Link, Head, useForm } from '@inertiajs/vue3';
@@ -52,12 +53,8 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const pageGuides = [
   {
     title: 'Caricamento',
-    // ⚠️ **Diceva «PDF o immagine (JPG/PNG)», e il server le immagini le rifiuta**:
-    // `CreateFornitoreDocumentoRequest` valida `mimes:pdf`. Chi ci provava con un JPG lo caricava,
-    // aspettava, e si prendeva un errore su una cosa che la schermata gli aveva appena promesso.
-    // Il supporto alle immagini è una richiesta del forum e ha la sua voce in roadmap: finché non
-    // c'è, qui si dichiara quello che la macchina accetta davvero. *(Corretto il 31/08/2026.)*
-    description: 'Carica il documento in formato PDF.',
+    // Web Pro Italia (09/11/2026): i formati sono quelli di App\Support\FormatiDocumento, gli stessi che la richiesta valida.
+    description: 'Il documento può essere PDF, foto, Word, Excel, testo, XML/P7M, ZIP o email.',
     icon: FileUp,
     colorVariant: 'blue' as const
   },
@@ -208,7 +205,7 @@ const submit = (): void => {
                                 id="file-upload"
                                 type="file"
                                 class="hidden"
-                                accept="application/pdf"
+                                :accept="ACCETTA_DOCUMENTO"
                                 @change="handleFileChange"
                                 ref="fileInputRef"
                             />

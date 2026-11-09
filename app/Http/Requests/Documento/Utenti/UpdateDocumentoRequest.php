@@ -43,7 +43,7 @@ class UpdateDocumentoRequest extends FormRequest
             // Coda 307: il segno che la richiesta viene dal modulo, con il suo elenco delle categorie
             // (vedi `prepareForValidation()` qui sotto).
             'categorie_nel_modulo' => ['sometimes', 'boolean'],
-            'file'            => ['nullable', 'file', 'mimes:pdf', 'max:'.LimiteCaricamento::regolaMax()],
+            'file'            => ['nullable', 'file', \App\Support\FormatiDocumento::regola(), 'max:'.LimiteCaricamento::regolaMax()],
         ];
     }
 

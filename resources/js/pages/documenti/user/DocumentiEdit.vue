@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
 
 import { Link, Head, useForm } from '@inertiajs/vue3';
 import { trans } from 'laravel-vue-i18n';
@@ -73,7 +74,7 @@ function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement
   if (target?.files?.length) {
     const selectedFile = target.files[0]
-    if (selectedFile.type !== 'application/pdf') {
+    if (!formatoDocumentoAmmesso(selectedFile)) {
       alert("Solo file PDF sono ammessi.")
       return
     }
@@ -199,7 +200,7 @@ const submit = () => {
                             type="file"
                             name="file" 
                             class="hidden"
-                            accept="application/pdf"
+                            :accept="ACCETTA_DOCUMENTO"
                             @change="handleFileChange"
                           />
                         </label>

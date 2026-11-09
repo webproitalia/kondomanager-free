@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
 /**
  * Il caricamento di un documento sulla scheda di un'anagrafica.
  *
@@ -68,10 +69,9 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const pageGuides = computed(() => [
   {
     title: 'Caricamento',
-    // ⚠️ Dice **solo PDF** perché è quello che la richiesta valida (`mimes:pdf`). La pagina gemella
-    // del fornitore promette «PDF o immagine (JPG/PNG)» e poi rifiuta le immagini: una promessa che
-    // il server non mantiene è peggio di una limitazione dichiarata.
-    description: `Il documento va caricato in PDF, fino a ${props.limiteFile}.`,
+    // Web Pro Italia (09/11/2026): i formati sono quelli di App\Support\FormatiDocumento, gli stessi che la
+    // richiesta valida: la pagina dice quello che il server accetta davvero.
+    description: `Il documento può essere ${'PDF, foto, Word, Excel, testo, XML/P7M, ZIP o email'}, fino a ${props.limiteFile}.`,
     icon: FileUp,
     colorVariant: 'blue' as const,
   },
@@ -123,7 +123,7 @@ function registraFile(scelto: File): void {
   // Il nome si propone dal file **solo finché nessuno l'ha scritto a mano**: riempirlo sempre
   // sovrascriverebbe quello che uno ha appena battuto.
   if (form.name.trim() === '') {
-    form.name = scelto.name.replace(/\.pdf$/i, '');
+    form.name = scelto.name.replace(/\.[^.]+$/, '');
   }
 }
 
@@ -216,7 +216,7 @@ function salva(): void {
                     ref="fileInputRef"
                     type="file"
                     class="hidden"
-                    accept="application/pdf"
+                    :accept="ACCETTA_DOCUMENTO"
                     @change="fileDalCampo"
                   />
                 </label>

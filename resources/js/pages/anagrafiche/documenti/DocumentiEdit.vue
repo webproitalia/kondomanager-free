@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACCETTA_DOCUMENTO, formatoDocumentoAmmesso } from '@/lib/formatiDocumento'
 /**
  * La modifica di un documento sulla scheda di un'anagrafica.
  *
@@ -222,7 +223,7 @@ function salva(): void {
                     ref="fileInputRef"
                     type="file"
                     class="hidden"
-                    accept="application/pdf"
+                    :accept="ACCETTA_DOCUMENTO"
                     @change="fileDalCampo"
                   />
                 </label>

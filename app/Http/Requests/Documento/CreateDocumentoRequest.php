@@ -42,7 +42,7 @@ class CreateDocumentoRequest extends FormRequest
             'is_published'    => 'required|boolean',
             'is_approved'     => 'required|boolean',
             'created_by'      => 'required|exists:users,id',
-            'file'            => 'required|file|mimes:pdf|max:'.LimiteCaricamento::regolaMax(),
+            'file'            => 'required|file|'.\App\Support\FormatiDocumento::regola().'|max:'.LimiteCaricamento::regolaMax(),
             'anagrafiche'     => ['nullable', 'array'],
             'anagrafiche.*'   => ['integer', Rule::exists('anagrafiche', 'id')],
             'condomini_ids'   => ['required', 'array'],

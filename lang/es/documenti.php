@@ -158,7 +158,7 @@ return [
         'delete_document_description'   => 'This action cannot be undone. It will delete the document and all associated data.',
         'select_document_title'         => 'Drag your document here',
         'select_document_description'   => 'Or click to select it from your device.',
-        'document_supported_types'      => 'Solo se admite el formato PDF.',
+        'document_supported_types'      => 'Formatos admitidos: PDF, fotos, Word, Excel, texto, XML/P7M, ZIP o correo.',
         'categories' => [
             'delete_category_title'       => 'Are you sure you want to delete this category?',
             'delete_category_description' => 'Esta acción no se puede deshacer. Los documentos no se tocan: una categoría que contiene alguno no se puede eliminar.',
