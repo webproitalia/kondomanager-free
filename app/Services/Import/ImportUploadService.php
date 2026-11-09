@@ -7,6 +7,7 @@ use App\Models\ImportFile;
 use App\Services\Import\Parser\ModelloManualeParser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -71,7 +72,14 @@ final class ImportUploadService
             return $gia;
         }
 
-        $percorso = $file->store('import/'.$batch->uuid, self::DISCO);
+        // L'estensione con cui si salva è quella del file caricato, non quella che PHP indovina dal contenuto:
+        // un CSV con il punto e virgola o con gli accenti in Windows-1252 «sembra» testo semplice, e salvato
+        // come `.txt` veniva poi rifiutato dal lettore (Web Pro Italia, 09/11/2026). La validazione ha già
+        // ammesso solo xls, xlsx e csv.
+        $estensione = strtolower($file->getClientOriginalExtension());
+        $percorso = in_array($estensione, SpreadsheetReader::ESTENSIONI_AMMESSE, true)
+            ? $file->storeAs('import/'.$batch->uuid, Str::random(40).'.'.$estensione, self::DISCO)
+            : $file->store('import/'.$batch->uuid, self::DISCO);
 
         if ($percorso === false) {
             throw new RuntimeException('Non riesco a salvare il file caricato.');

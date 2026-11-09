@@ -327,13 +327,18 @@ class ImportController extends Controller
             'file' => ['required', 'array', 'min:1', 'max:20'],
             'file.*' => [
                 'file',
-                'mimes:'.implode(',', SpreadsheetReader::ESTENSIONI_AMMESSE),
+                // L'estensione dichiarata deve essere xls, xlsx o csv; il contenuto può risultare anche «txt»,
+                // perché un CSV con il punto e virgola o con accenti in Windows-1252 viene riconosciuto come
+                // testo semplice e prima veniva rifiutato (Web Pro Italia, 09/11/2026).
+                'extensions:'.implode(',', SpreadsheetReader::ESTENSIONI_AMMESSE),
+                'mimes:'.implode(',', [...SpreadsheetReader::ESTENSIONI_AMMESSE, 'txt']),
                 // Il tetto dell'importatore resta **25 MB, il suo** — un export di più esercizi è
                 // grosso per natura — ma non promette mai più di quanto il server accetti.
                 'max:'.LimiteCaricamento::regolaMax(self::tettoImportMb()),
             ],
         ], [
-            'file.*.mimes' => 'Accetto solo file :values. Se il tuo gestionale esporta in un altro formato, aprilo in Excel e salvalo come .xls.',
+            'file.*.mimes' => 'Accetto solo file xls, xlsx, csv. Se il tuo gestionale esporta in un altro formato, aprilo in Excel e salvalo come .xls.',
+            'file.*.extensions' => 'Accetto solo file xls, xlsx, csv. Se il tuo gestionale esporta in un altro formato, aprilo in Excel e salvalo come .xls.',
             'file.*.max' => 'Un file supera il limite di '.LimiteCaricamento::etichetta(self::tettoImportMb())
                 .'. Esporta un esercizio alla volta, oppure scrivici.',
         ]);
