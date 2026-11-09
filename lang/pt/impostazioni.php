@@ -146,6 +146,8 @@ return [
      | Front‑end strings (headings, titles, descriptions)
      | ------------------------------------------------------------------ */
     'header' => [
+        'aspetto_title' => 'Aparência',
+        'aspetto_description' => 'Cor principal e forma dos cantos',
         'installazione_title' => 'Esta instalação',
         'installazione_description' => 'Quantos condomínios, quanto espaço e que funções: os factos desta instalação',
         'settings_head' => 'Configurações',
@@ -250,6 +252,8 @@ return [
      | Empty‑state / dialog messages
      | ------------------------------------------------------------------ */
     'dialogs' => [
+        'aspetto_title' => 'Aparência',
+        'aspetto_description' => 'Cor principal e forma dos cantos',
         'installazione_title' => 'Esta instalação',
         'installazione_description' => 'Limites, espaço e funções ativas desta instalação',
         'general_settings_title' => 'Configurações gerais',
@@ -450,4 +454,13 @@ return [
     'ruolo_registrazione' => [
         'solo_amministratore' => 'Só um administrador pode alterar o perfil padrão para novos utilizadores.',
     ],
+    'aspetto' => [
+        'salvato' => 'Aparência guardada: recarregue a página para a ver em todo o lado.',
+        'colore_title' => 'Cor principal',
+        'colore_description' => 'A cor dos botões, menus e seleções.',
+        'angoli_title' => 'Cantos',
+        'angoli_description' => 'Quão arredondados são os painéis e botões.',
+        'salva' => 'Guardar',
+    ],
+
 ];

@@ -146,6 +146,8 @@ return [
      | Front‑end strings (headings, titles, descriptions)
      | ------------------------------------------------------------------ */
     'header' => [
+        'aspetto_title' => 'Appearance',
+        'aspetto_description' => 'Main colour and corner style of the application',
         'installazione_title' => 'This installation',
         'installazione_description' => 'How many buildings, how much storage and which functions: the facts of this installation',
         'settings_head' => 'Settings',
@@ -250,6 +252,8 @@ return [
      | Empty‑state / dialog messages
      | ------------------------------------------------------------------ */
     'dialogs' => [
+        'aspetto_title' => 'Appearance',
+        'aspetto_description' => 'Main colour and corner style of the application',
         'installazione_title' => 'This installation',
         'installazione_description' => 'Limits, storage and enabled functions of this installation',
         'general_settings_title' => 'General settings',
@@ -450,4 +454,13 @@ return [
     'ruolo_registrazione' => [
         'solo_amministratore' => 'Only an administrator can change the default role for new users.',
     ],
+    'aspetto' => [
+        'salvato' => 'Appearance saved: reload the page to see it everywhere.',
+        'colore_title' => 'Main colour',
+        'colore_description' => 'The colour of buttons, menus and selections.',
+        'angoli_title' => 'Corners',
+        'angoli_description' => 'How rounded cards and buttons are.',
+        'salva' => 'Save',
+    ],
+
 ];

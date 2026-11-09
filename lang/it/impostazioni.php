@@ -149,6 +149,8 @@ return [
      | Front‑end strings (headings, titles, descriptions)
      | ------------------------------------------------------------------ */
     'header' => [
+        'aspetto_title' => 'Aspetto',
+        'aspetto_description' => 'Colore principale e forma degli angoli del gestionale',
         'installazione_title' => 'Questa installazione',
         'installazione_description' => 'Quanti condomini, quanto spazio e quali funzioni: i fatti di questa installazione',
         'settings_head' => 'Settings',
@@ -253,6 +255,8 @@ return [
      | Empty‑state / dialog messages
      | ------------------------------------------------------------------ */
     'dialogs' => [
+        'aspetto_title' => 'Aspetto',
+        'aspetto_description' => 'Colore principale e forma degli angoli del gestionale',
         'installazione_title' => 'Questa installazione',
         'installazione_description' => 'Limiti, spazio e funzioni attive di questa installazione',
         'general_settings_title' => 'Impostazioni generali',
@@ -447,4 +451,13 @@ return [
     'ruolo_registrazione' => [
         'solo_amministratore' => 'Il ruolo predefinito dei nuovi utenti lo cambia solo un amministratore.',
     ],
+    'aspetto' => [
+        'salvato' => 'Aspetto salvato: ricarica la pagina per vederlo ovunque.',
+        'colore_title' => 'Colore principale',
+        'colore_description' => 'Il colore di pulsanti, menu e selezioni.',
+        'angoli_title' => 'Angoli',
+        'angoli_description' => 'Quanto sono arrotondati riquadri e pulsanti.',
+        'salva' => 'Salva',
+    ],
+
 ];

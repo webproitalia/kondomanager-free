@@ -13,6 +13,8 @@
 
         @routes
         @vite(['resources/js/app.ts'])
+        {{-- Aspetto scelto in Impostazioni → Aspetto (Web Pro Italia): ridefinisce solo le variabili dei colori --}}
+        <style id="km-aspetto">{!! \App\Support\Tema::css() !!}</style>
         @inertiaHead
     </head>
     <body class="font-sans antialiased">

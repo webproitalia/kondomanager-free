@@ -9,7 +9,8 @@ return [
      * put them (manually) here.
      */
     'settings' => [
-        GeneralSettings::class
+        GeneralSettings::class,
+        \App\Settings\AspettoSettings::class, // Web Pro Italia: Impostazioni → Aspetto
     ],
 
     /*

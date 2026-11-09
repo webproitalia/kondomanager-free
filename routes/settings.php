@@ -5,6 +5,7 @@ use App\Http\Controllers\Impostazioni\BackupSettingsController;
 use App\Http\Controllers\Impostazioni\CronSettingsController;
 use App\Http\Controllers\Impostazioni\ImpostazioniController;
 use App\Http\Controllers\Impostazioni\ImpostazioniGeneraliController;
+use App\Http\Controllers\Impostazioni\ImpostazioniAspettoController;
 use App\Http\Controllers\Impostazioni\ImpostazioniStampeController;
 use App\Http\Controllers\Impostazioni\InstallazioneController;
 use App\Http\Controllers\Impostazioni\LogsController;
@@ -33,6 +34,13 @@ Route::middleware('auth')->group(function () {
 
     Route::post('impostazioni/generali', [ImpostazioniGeneraliController::class, 'store'])
         ->name('impostazioni.generali.store');
+
+    // Aspetto: colore principale e angoli (Web Pro Italia)
+    Route::get('impostazioni/aspetto', [ImpostazioniAspettoController::class, 'index'])
+        ->name('impostazioni.aspetto');
+
+    Route::post('impostazioni/aspetto', [ImpostazioniAspettoController::class, 'store'])
+        ->name('impostazioni.aspetto.store');
 
     Route::get('impostazioni/stampe', [ImpostazioniStampeController::class, 'index'])
         ->name('impostazioni.stampe');

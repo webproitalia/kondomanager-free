@@ -146,6 +146,8 @@ return [
      | Front‑end strings (headings, titles, descriptions)
      | ------------------------------------------------------------------ */
     'header' => [
+        'aspetto_title' => 'Apariencia',
+        'aspetto_description' => 'Color principal y forma de las esquinas',
         'installazione_title' => 'Esta instalación',
         'installazione_description' => 'Cuántos edificios, cuánto espacio y qué funciones: los hechos de esta instalación',
         'settings_head' => 'Settings',
@@ -250,6 +252,8 @@ return [
      | Empty‑state / dialog messages
      | ------------------------------------------------------------------ */
     'dialogs' => [
+        'aspetto_title' => 'Apariencia',
+        'aspetto_description' => 'Color principal y forma de las esquinas',
         'installazione_title' => 'Esta instalación',
         'installazione_description' => 'Límites, espacio y funciones activas de esta instalación',
         'general_settings_title' => 'General settings',
@@ -450,4 +454,13 @@ return [
     'ruolo_registrazione' => [
         'solo_amministratore' => 'Solo un administrador puede cambiar el rol predeterminado para nuevos usuarios.',
     ],
+    'aspetto' => [
+        'salvato' => 'Apariencia guardada: recarga la página para verla en todas partes.',
+        'colore_title' => 'Color principal',
+        'colore_description' => 'El color de botones, menús y selecciones.',
+        'angoli_title' => 'Esquinas',
+        'angoli_description' => 'Qué tan redondeados son los paneles y botones.',
+        'salva' => 'Guardar',
+    ],
+
 ];
