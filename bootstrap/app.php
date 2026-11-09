@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\System\SaluteController;
+use App\Http\Middleware\AutenticaAgente;
 use App\Http\Middleware\AutenticaSessione;
 use App\Http\Middleware\CheckForPendingUpdates;
 use App\Http\Middleware\CheckHasAnagrafica;
@@ -74,6 +75,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // bloccare tutto (update check incluso) senza toccare DB/sessione.
         $middleware->web(prepend: [
             CheckRestoreMode::class,
+            // Agenti AI (Web Pro Italia): la chiave `kag_` al posto del login, prima della sessione. Vedi la classe.
+            AutenticaAgente::class,
         ]);
 
         // CheckSuspendedUser sta nel gruppo `web` e non sulle singole rotte: agganciato rotta per
