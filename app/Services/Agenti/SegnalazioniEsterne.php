@@ -74,6 +74,24 @@ class SegnalazioniEsterne
         $creata = false;
         $persona = null;
 
+        // ADOZIONE: la segnalazione è nata qui e il sistema esterno, che l'ha ricevuta con l'avviso «segnalazione.nata»,
+        // ora la lega al suo riferimento. Il testo resta quello scritto qui (l'impronta si registra, non si applica).
+        if (! $segnalazione && ! empty($d['kondo_id'])) {
+            $nata = Segnalazione::find((int) $d['kondo_id']);
+            $giaLegata = $nata && CollegamentoEsterno::where('sorgente', $sorgente)->where('collegabile_type', $tipo)
+                ->where('collegabile_id', $nata->id)->whereNull('eliminato_at')->exists();
+
+            if (! $nata || $giaLegata) {
+                return ['scollegata' => true, 'motivo' => $nata ? 'La segnalazione è già collegata a un altro riferimento.' : 'La segnalazione non c\'è più nel gestionale.'];
+            }
+
+            $segnalazione = $nata;
+            $legame = CollegamentoEsterno::create([
+                'sorgente' => $sorgente, 'riferimento' => $riferimento, 'collegabile_type' => $tipo,
+                'collegabile_id' => $segnalazione->id, 'dati' => ['testo' => $impronta, 'link' => $d['link'] ?? null, 'nata_qui' => true],
+            ]);
+        }
+
         if (! $segnalazione) {
             if (! empty($d['eliminata'])) {
                 return ['scollegata' => true, 'motivo' => 'Mai arrivata nel gestionale.'];

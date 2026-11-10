@@ -22,6 +22,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth', 'verified', 'role_or_permission:amministratore|collaboratore|Accesso pannello amministratore'])
     ->prefix('agenti/esterni')->name('agenti.esterni.')->group(function () {
         Route::get('condomini', [SegnalazioniEsterneController::class, 'condomini'])->name('condomini');
+        Route::get('condomini/{condominio}/persone', [SegnalazioniEsterneController::class, 'persone'])->whereNumber('condominio')->name('persone');
+        Route::put('{sorgente}/comunicazioni/{riferimento}', [SegnalazioniEsterneController::class, 'comunicazione'])
+            ->where(['sorgente' => '[a-z0-9_-]{2,50}', 'riferimento' => '[A-Za-z0-9_.:-]{1,100}'])
+            ->name('comunicazione');
         Route::put('{sorgente}/segnalazioni/{riferimento}', [SegnalazioniEsterneController::class, 'sincronizza'])
             ->where(['sorgente' => '[a-z0-9_-]{2,50}', 'riferimento' => '[A-Za-z0-9_.:-]{1,100}'])
             ->name('segnalazione');

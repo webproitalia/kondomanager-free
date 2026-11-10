@@ -3,9 +3,11 @@
 namespace App\Observers\Agenti;
 
 use App\Enums\EventoTipo;
+use App\Jobs\Agenti\AvvisaRubricaCambiata;
 use App\Jobs\Agenti\AvvisaSistemaEsterno;
 use App\Models\CollegamentoEsterno;
 use App\Models\Commento;
+use App\Models\Comunicazione;
 use App\Models\Evento;
 use App\Models\Segnalazione;
 use App\Services\Agenti\SegnalazioniEsterne;
@@ -25,7 +27,11 @@ use Throwable;
  *     nasce qui (non è l'eco di una sincronizzazione), parte l'avviso «è cambiata»: il sistema esterno si
  *     rimette in pari. Vale per stato, priorità, testo, cancellazione e per ogni commento nuovo.
  *
- * Niente di tutto questo deve poter far fallire il salvataggio di una segnalazione: gli errori si registrano.
+ *  3. LE SEGNALAZIONI NATE QUI, LA BACHECA E LA RUBRICA. Una segnalazione creata nel gestionale, una
+ *     comunicazione pubblicata in bacheca e un cambiamento nelle anagrafiche partono anche loro verso il sistema
+ *     esterno (vedi AvvisaSistemaEsterno): così l'app dei condòmini e il gestionale hanno le stesse cose.
+ *
+ * Niente di tutto questo deve poter far fallire un salvataggio: gli errori si registrano.
  */
 class SegnalazioneCollegataObserver
 {
@@ -33,9 +39,55 @@ class SegnalazioneCollegataObserver
     {
         $this->senzaRompere(fn () => $this->inbox($segnalazione));
 
-        if ($segnalazione->wasRecentlyCreated || $segnalazione->wasChanged(['stato', 'priority', 'subject', 'description'])) {
+        if ($segnalazione->wasRecentlyCreated) {
+            // Nata qui (non arriva da una sincronizzazione): il sistema esterno la riceve con i suoi dati e la adotta.
+            // Qualche secondo dopo, perché chi la crea le collega le persone subito dopo averla salvata.
+            if (! SegnalazioniEsterne::$inCorso && config('agenti.webhook_url')) {
+                $this->senzaRompere(function () use ($segnalazione) {
+                    $lavoro = (new AvvisaSistemaEsterno('segnalazione.nata', null, null, (int) $segnalazione->id))->delay(now()->addSeconds(5));
+                    DB::afterCommit(fn () => dispatch($lavoro));
+                });
+            }
+        } elseif ($segnalazione->wasChanged(['stato', 'priority', 'subject', 'description'])) {
             $this->senzaRompere(fn () => $this->avvisa($segnalazione, 'segnalazione.cambiata'));
         }
+    }
+
+    /** Una comunicazione della bacheca creata o cambiata qui. Registrato su Comunicazione::saved. */
+    public function comunicazioneSalvata(Comunicazione $comunicazione): void
+    {
+        if (SegnalazioniEsterne::$inCorso || ! config('agenti.webhook_url')) {
+            return;
+        }
+
+        $this->senzaRompere(function () use ($comunicazione) {
+            $lavoro = (new AvvisaSistemaEsterno('comunicazione.cambiata', null, null, (int) $comunicazione->id))->delay(now()->addSeconds(5));
+            DB::afterCommit(fn () => dispatch($lavoro));
+        });
+    }
+
+    public function comunicazioneEliminata(Comunicazione $comunicazione): void
+    {
+        $this->senzaRompere(function () use ($comunicazione) {
+            $legami = CollegamentoEsterno::di($comunicazione);
+            if (! SegnalazioniEsterne::$inCorso && config('agenti.webhook_url')) {
+                $lavoro = new AvvisaSistemaEsterno('comunicazione.eliminata', null, null, (int) $comunicazione->id,
+                    $legami->map(fn ($l) => ['sorgente' => $l->sorgente, 'riferimento' => $l->riferimento])->all());
+                DB::afterCommit(fn () => dispatch($lavoro));
+            }
+            CollegamentoEsterno::where('collegabile_type', $comunicazione->getMorphClass())
+                ->where('collegabile_id', $comunicazione->id)->whereNull('eliminato_at')->update(['eliminato_at' => now()]);
+        });
+    }
+
+    /** Un'anagrafica creata, cambiata o tolta: un solo avviso «la rubrica è cambiata», a cose ferme. */
+    public function rubricaCambiata(): void
+    {
+        if (! config('agenti.webhook_url')) {
+            return;
+        }
+
+        $this->senzaRompere(fn () => dispatch((new AvvisaRubricaCambiata)->delay(now()->addSeconds(30))));
     }
 
     public function deleted(Segnalazione $segnalazione): void

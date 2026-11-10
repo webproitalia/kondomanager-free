@@ -17,9 +17,10 @@ starting on 9 November 2026 (branch "wpi", based on upstream 1.11.0):
   changes made by agents (see docs/agenti_ai.it.md).
 - Document archive accepts more formats than PDF; CSV files with semicolons or
   Windows-1252 accents are no longer rejected by the importer.
-- External systems (e.g. a residents' app) can keep their tickets in sync with
-  the "segnalazioni" in both directions (/agenti/esterni, outbound signed
-  webhook); every open ticket now has its task in the Action Inbox.
+- External systems (e.g. a residents' app) can keep their tickets, notice board
+  and address book in sync with the "segnalazioni", "comunicazioni" and
+  "anagrafiche" (/agenti/esterni, outbound signed webhook); every open ticket
+  now has its task in the Action Inbox.
 - "Source code" links in the interface point to this modified version.
 
 Complete corresponding source code of THIS modified version:
