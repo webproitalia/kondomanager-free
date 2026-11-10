@@ -45,6 +45,20 @@ Con l'intestazione `X-Kondo-Prova: 1` una scrittura viene eseguita dentro una tr
 
 `GET /agenti/catalogo` elenca tutte le funzioni che la chiave può usare: nome della rotta, metodi, percorso, parametri, se scrive, se restituisce un file, i permessi richiesti e, se il controller usa un FormRequest, i campi del modulo con le loro regole. Con `?rotta=nome&parametri[condominio]=2` restituisce i campi di una rotta con i vincoli del condominio vero.
 
+## Sistemi esterni collegati (segnalazioni)
+
+Un'app o un programma fuori dal gestionale, per esempio l'app dei condòmini, può tenere le sue segnalazioni in pari con quelle di KondoManager, nei due sensi e senza cron. Usa una chiave «Consultare e modificare», meglio se di un utente tecnico dedicato.
+
+- `GET /agenti/esterni/condomini`: i condomini (id, nome, codice fiscale, indirizzo), per dire a quale corrisponde ciascuno di quelli del sistema esterno.
+- `PUT /agenti/esterni/{sorgente}/segnalazioni/{riferimento}`: il sistema esterno manda lo stato INTERO della sua segnalazione (titolo, testo, persona, stato, urgenza, tutte le risposte) e riceve quello del gestionale (id, stato, urgenza, i commenti scritti qui). La chiamata si può ripetere quante volte si vuole: niente doppioni, ogni oggetto è legato dal suo riferimento (tabella `collegamenti_esterni`).
+- Stato: `aperta`, `in_lavorazione`, `chiusa`. Urgenza: sì/no (alta e urgente = sì). Con `stato_base` e `urgente_base` il sistema esterno dice quale valore aveva all'ultima sincronizzazione: se è cambiato là si applica qui, altrimenti vale quello del gestionale.
+- La segnalazione nasce non pubblicata (non compare nel portale condòmini di KondoManager), con la persona agganciata all'anagrafica del condominio quando si trova per email o per nome.
+- **Inbox**: ogni segnalazione aperta ha il suo compito in «Ticket & manutenzione» (prima il riquadro restava sempre a zero); si chiude da solo quando la segnalazione è chiusa. Una risposta del condòmino entra come «Nuovo commento».
+- **Avviso in uscita**: con `KONDO_WEBHOOK_URL` e `KONDO_WEBHOOK_SEGRETO`, quando una segnalazione collegata cambia qui (stato, priorità, testo, commento, cancellazione) parte dalla coda un JSON firmato (`X-Kondo-Firma: sha256=HMAC del corpo`): `{evento, sorgente, riferimento, id}`. Il sistema esterno risponde rifacendo la chiamata qui sopra. Riprova da sola per circa un'ora.
+- Una segnalazione eliminata qui non viene ricreata: la chiamata risponde `scollegata`.
+
+Codice: `App\Services\Agenti\SegnalazioniEsterne`, `App\Observers\Agenti\SegnalazioneCollegataObserver`, `App\Jobs\Agenti\AvvisaSistemaEsterno`, `App\Models\CollegamentoEsterno`.
+
 ## Cosa un agente non può fare
 
 Qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e permessi, impostazioni (chiavi comprese), backup e ripristino, aggiornamenti, installazione, log, cancellazione di un condominio o di un esercizio, e ogni rotta che chiede di ridigitare la password. L'elenco è in `AutenticaAgente::VIETATE`.
@@ -55,6 +69,7 @@ Qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e p
 |---|---|
 | `KONDO_MCP_URL` | indirizzo del server MCP collegato: la pagina Agenti AI mostra come collegare un assistente |
 | `KONDO_AGENTI_RICHIESTE_MINUTO` | limite di richieste al minuto per chiave (predefinito 240) |
+| `KONDO_WEBHOOK_URL`, `KONDO_WEBHOOK_SEGRETO` | avviso in uscita al sistema esterno collegato (vedi sopra) |
 
 ## File
 

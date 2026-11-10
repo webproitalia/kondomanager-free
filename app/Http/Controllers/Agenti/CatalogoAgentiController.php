@@ -124,7 +124,7 @@ class CatalogoAgentiController extends Controller
 
             if (! $nome || str_starts_with($nome, 'generated::') || ! in_array('web', $middleware, true)
                 || AutenticaAgente::vietata($nome) || in_array('password.recente', $middleware, true)
-                || ! $this->autenticata($middleware) || $nome === 'agenti.catalogo') {
+                || ! $this->autenticata($middleware) || str_starts_with($nome, 'agenti.')) {
                 continue;
             }
 
