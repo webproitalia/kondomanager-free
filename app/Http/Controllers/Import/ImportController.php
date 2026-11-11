@@ -239,6 +239,16 @@ class ImportController extends Controller
      * prima che `user_id` esistesse, e murarli vorrebbe dire cancellare del lavoro vero senza
      * dirlo a nessuno.
      */
+    /** Le cose che esistono già (condominio, esercizio, persone) e aspettano ancora una risposta. */
+    private function collisioniAperte(array $anteprima, ImportBatch $batch): int
+    {
+        $decisioni = $batch->decisioni ?? [];
+
+        return collect($anteprima['collisioni']['voci'] ?? [])
+            ->filter(fn (array $c) => ! array_key_exists($c['chiave_decisione'], $decisioni))
+            ->count();
+    }
+
     private function lotto(string $uuid, array $con = []): ImportBatch
     {
         $batch = ImportBatch::where('uuid', $uuid)->with($con)->firstOrFail();
@@ -563,12 +573,18 @@ class ImportController extends Controller
     {
         $batch = $this->lotto($uuid, ['files']);
         $letto = $this->verifica->verifica($batch);
+        $anteprima = $this->anteprima->costruisci($letto['canonici']);
+        $aperte = $this->collisioniAperte($anteprima, $batch);
 
         return Inertia::render('import/ImportAnteprima', [
             'lotto' => ['uuid' => $batch->uuid, 'stato' => $batch->stato],
-            'anteprima' => $this->anteprima->costruisci($letto['canonici']),
+            'anteprima' => $anteprima,
             'decisioni' => $batch->decisioni ?? [],
-            'confermabile' => collect($letto['esiti'])->every(fn (EsitoVerifica $e) => $e->confermabile()),
+            // Le cose che esistono già contano anche qui, non solo nella schermata: chi legge
+            // l'anteprima senza browser (un agente) vedeva «confermabile» con 226 persone ancora
+            // da decidere, confermava, e l'importazione si fermava a «Persone» (WPI, 11/11/2026).
+            'collisioni_aperte' => $aperte,
+            'confermabile' => $aperte === 0 && collect($letto['esiti'])->every(fn (EsitoVerifica $e) => $e->confermabile()),
         ]);
     }
 
@@ -581,18 +597,23 @@ class ImportController extends Controller
      */
     public function decidi(Request $request, string $uuid)
     {
+        // `chiavi` (WPI, 11/11/2026): la stessa risposta a molte domande insieme, per «Unisci
+        // tutte» quando a esistere già sono duecento persone e non due.
         $validato = $request->validate([
-            'chiave' => ['required', 'string', 'max:190'],
+            'chiave' => ['required_without:chiavi', 'string', 'max:190'],
+            'chiavi' => ['required_without:chiave', 'array', 'max:5000'],
+            'chiavi.*' => ['string', 'max:190'],
             'scelta' => ['required', 'string', 'in:unisci,salta,crea_nuovo,dividi,lascia'],
         ]);
 
         $batch = $this->lotto($uuid);
+        $chiavi = array_values(array_unique([...($validato['chiavi'] ?? []), ...(isset($validato['chiave']) ? [$validato['chiave']] : [])]));
 
         $batch->update([
-            'decisioni' => [...($batch->decisioni ?? []), $validato['chiave'] => $validato['scelta']],
+            'decisioni' => [...($batch->decisioni ?? []), ...array_fill_keys($chiavi, $validato['scelta'])],
         ]);
 
-        return back()->with($this->flashSuccess('Decisione registrata.'));
+        return back()->with($this->flashSuccess(count($chiavi) === 1 ? 'Decisione registrata.' : count($chiavi).' decisioni registrate.'));
     }
 
     /**
@@ -669,6 +690,17 @@ class ImportController extends Controller
             Gate::authorize('update', Condominio::class);
         }
         $letto = $this->verifica->verifica($batch);
+
+        // Un'importazione con domande senza risposta non parte: si fermerebbe a metà, con i livelli
+        // prima già scritti e quelli dopo no. La schermata lo impediva già; qui vale per tutti.
+        $aperte = $this->collisioniAperte($this->anteprima->costruisci($letto['canonici']), $batch);
+
+        if ($aperte > 0) {
+            return back()->with($this->flashError(sprintf(
+                '%s: per ognuna scegli «unisci» o «lascia com\'è» prima di confermare. Non è entrato niente.',
+                $aperte === 1 ? 'Resta da decidere una cosa che esiste già' : 'Restano da decidere '.$aperte.' cose che esistono già',
+            )));
+        }
 
         $ctx = new ImportContext($batch);
 

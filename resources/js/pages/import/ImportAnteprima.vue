@@ -75,6 +75,18 @@ function decidi(chiave: string, scelta: string) {
   router.put(route('import.decisione', props.lotto.uuid), { chiave, scelta }, { preserveScroll: true });
 }
 
+// Una risposta per tutte le persone ancora da decidere (WPI, 11/11/2026): quando a esistere già
+// sono duecento persone, di solito perché un'importazione precedente si era fermata a metà,
+// duecento clic sono il punto in cui si rinuncia. Tocca solo le persone, mai condominio o esercizio.
+const personeAperte = computed(() =>
+  props.anteprima.collisioni.voci.filter((c) => c.cosa === 'persona' && !props.decisioni[c.chiave_decisione]),
+);
+
+function decidiTutte(scelta: string) {
+  const chiavi = personeAperte.value.map((c) => c.chiave_decisione);
+  if (chiavi.length) router.put(route('import.decisione', props.lotto.uuid), { chiavi, scelta }, { preserveScroll: true });
+}
+
 function conferma() {
   router.post(route('import.conferma', props.lotto.uuid));
 }
@@ -195,6 +207,11 @@ const puoConfermare = computed(
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-2">
+          <div v-if="personeAperte.length > 1" class="flex flex-wrap items-center gap-2 rounded-md border border-dashed bg-background p-3 text-sm">
+            <span class="text-muted-foreground">{{ personeAperte.length }} persone ancora da decidere:</span>
+            <Button size="sm" @click="decidiTutte('unisci')">Unisci tutte</Button>
+            <Button size="sm" variant="outline" @click="decidiTutte('salta')">Lascia com'è tutte</Button>
+          </div>
           <div
             v-for="c in props.anteprima.collisioni.voci"
             :key="c.chiave_decisione"
