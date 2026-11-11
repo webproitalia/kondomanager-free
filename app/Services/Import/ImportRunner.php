@@ -148,7 +148,22 @@ final class ImportRunner
 
             // Una transazione per livello: se salta qui, il livello non è entrato **affatto**,
             // e la ripresa lo ritenta da capo invece di trovarlo a metà.
-            $esito = DB::transaction(fn () => $livello->commit($ctx));
+            //
+            // ⚠️ Un errore del database dentro un livello (un vincolo violato, un dato che il codice non si
+            // aspettava) prima arrivava fino al browser come «Server Error», e il lotto restava «in corso» per
+            // sempre, con i livelli precedenti già scritti e nessuna spiegazione. Ora il livello si chiude
+            // come bloccato, con il motivo, e il lotto passa a «parziale»: la schermata dell'esito dice cosa
+            // è entrato e cosa no (Web Pro Italia, 11/11/2026).
+            try {
+                $esito = DB::transaction(fn () => $livello->commit($ctx));
+            } catch (\Throwable $e) {
+                report($e);
+                $esito = EsitoCommit::bloccato(Rilievo::errore(
+                    $livello->chiave().'.errore_interno',
+                    sprintf('«%s» non è entrato: il gestionale si è fermato su un errore (%s).', $livello->etichetta(), class_basename($e)),
+                    'Niente di questo livello è stato scritto; i livelli precedenti sì. Segnala il riferimento del lotto a chi gestisce il gestionale.',
+                ));
+            }
 
             $esiti[$livello->chiave()] = $esito;
 

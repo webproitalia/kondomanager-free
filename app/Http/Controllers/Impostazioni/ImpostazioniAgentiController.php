@@ -98,10 +98,20 @@ class ImpostazioniAgentiController extends Controller
         return redirect()->route('impostazioni.agenti')->with($this->flashSuccess(__('agenti.revocata', ['nome' => $trovata->nome])));
     }
 
+    /**
+     * Le persone a nome delle quali può agire una chiave. Fuori gli utenti tecnici dei collegamenti (email
+     * `@app.invalid`, per esempio «Portineria (app condòmini)»): non sono persone, e una chiave a loro nome
+     * firmerebbe col nome sbagliato tutto quello che fa l'assistente (11/11/2026: era il primo dell'elenco,
+     * quindi già scelto). Chi sta creando la chiave è in cima: è il caso normale.
+     */
     private function utentiAmmessi()
     {
+        $io = auth()->id();
+
         return User::role([Role::AMMINISTRATORE->value, Role::COLLABORATORE->value])
             ->whereNull('suspended_at')
+            ->where('email', 'not like', '%@app.invalid')
+            ->orderByRaw('id = ? desc', [$io])
             ->orderBy('name')
             ->get(['id', 'name', 'email']);
     }

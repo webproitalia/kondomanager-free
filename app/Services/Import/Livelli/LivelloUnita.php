@@ -109,15 +109,42 @@ final class LivelloUnita implements LivelloImport
         $risolti = [];
         $tipiNonMappati = [];
 
+        // ⚠️ **Due unità diverse non devono mai diventare la stessa** (Web Pro Italia, 11/11/2026).
+        //
+        // L'unità già in archivio si riconosce da palazzina e interno: serve a non creare doppioni quando
+        // si reimporta, o quando l'unità era stata inserita a mano. Ma l'interno in un condominio non è
+        // unico: nei grandi stabili si ripete a ogni piano (l'interno 5 del primo e quello del secondo), e
+        // quando Danea lo lascia vuoto il lettore usa il progressivo, che può coincidere con l'interno vero
+        // di un'altra unità. Prima, la seconda unità «trovava» la prima e veniva saltata: le sue persone
+        // finivano sull'unità sbagliata (sei proprietari su un appartamento) e i suoi millesimi andavano in
+        // conflitto con quelli della prima (`Duplicate entry … quote_tabella`), e l'importazione cadeva a
+        // metà. Misurato su un condominio vero: 245 unità, 46 confuse.
+        //
+        // Ora: (1) un'unità già in archivio si usa una volta sola per importazione; (2) se il file ha il piano
+        // e l'unità in archivio pure, devono coincidere; (3) se il file porta più unità con la stessa palazzina
+        // e lo stesso interno, nessuna si aggancia a un'unità esistente: si creano tutte, e quella creata qui
+        // porta il piano nell'interno quando serve a distinguerla («5 · p. 2»).
+        $ripetuti = [];
+        foreach ($unita as $d) {
+            $k = mb_strtoupper(trim($d->palazzina)).'|'.mb_strtoupper($d->interno ?? '');
+            $ripetuti[$k] = ($ripetuti[$k] ?? 0) + 1;
+        }
+        $presi = [];
+
         foreach ($unita as $chiave => $dati) {
             $palazzina = $this->palazzina($condominio, $dati->palazzina);
+            $interno = mb_strtoupper($dati->interno ?? '');
+            $ripetuto = ($ripetuti[mb_strtoupper(trim($dati->palazzina)).'|'.$interno] ?? 0) > 1;
 
-            $esistente = Immobile::where('condominio_id', $condominio->id)
-                ->where('interno', mb_strtoupper($dati->interno ?? ''))
+            $esistente = $ripetuto ? null : Immobile::where('condominio_id', $condominio->id)
+                ->where('interno', $interno)
                 ->when($palazzina !== null, fn ($q) => $q->where('palazzina_id', $palazzina->id))
+                ->when($dati->piano !== null && $dati->piano !== '', fn ($q) => $q->where(fn ($p) => $p->whereNull('piano')->orWhere('piano', '')->orWhere('piano', $dati->piano)))
+                ->whereNotIn('id', $presi ?: [0])
                 ->first();
 
             if ($esistente !== null) {
+                $presi[] = $esistente->id;
                 $risolti[$chiave] = $esistente;
                 $ctx->registra(self::CHIAVE, ImportBatchItem::AZIONE_SALTATO, $esistente);
                 $saltati++;
@@ -147,13 +174,14 @@ final class LivelloUnita implements LivelloImport
                 // facesse, la stessa unità creata a mano e importata risulterebbe diversa, e
                 // il riconoscimento dei duplicati fallirebbe proprio fra le due strade che
                 // devono incontrarsi.
-                'interno' => mb_strtoupper($dati->interno ?? ''),
+                'interno' => $ripetuto && $dati->piano !== null && $dati->piano !== '' ? $interno.' · P. '.mb_strtoupper($dati->piano) : $interno,
                 'piano' => $dati->piano,
                 'subalterno_catasto' => $dati->datiCatastali,
                 'note' => $dati->note,
                 'attivo' => true,
             ]);
 
+            $presi[] = $immobile->id;
             $risolti[$chiave] = $immobile;
             $ctx->registra(self::CHIAVE, ImportBatchItem::AZIONE_CREATO, $immobile);
             $creati++;
