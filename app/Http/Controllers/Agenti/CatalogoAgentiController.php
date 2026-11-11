@@ -31,7 +31,7 @@ use Throwable;
  */
 class CatalogoAgentiController extends Controller
 {
-    public const VERSIONE = 'agenti-1';
+    public const VERSIONE = 'agenti-2';
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -138,7 +138,7 @@ class CatalogoAgentiController extends Controller
                 'percorso'         => '/'.ltrim($rotta->uri(), '/'),
                 'parametri'        => $rotta->parameterNames(),
                 'scrive'           => $scrive,
-                'file'             => $this->restituisceFile($nome, $rotta->uri()),
+                'file'             => $scrive ? null : $this->restituisceFile($nome, $rotta->uri()),
                 'accesso'          => $this->accesso($middleware),
                 'esercizio'        => in_array(\App\Http\Middleware\EnsureCondominioHasEsercizio::class, $middleware, true) ?: null,
                 'campi'            => $campi,
@@ -215,7 +215,7 @@ class CatalogoAgentiController extends Controller
     {
         $ultima = substr($nome, strrpos($nome, '.') + 1);
 
-        return (str_contains($ultima, 'print') || in_array($ultima, ['download', 'modello', 'distinta', 'rapporto', 'copia-autentica'], true)
+        return (str_contains($ultima, 'print') || in_array($ultima, ['download', 'modello', 'distinta', 'rapporto', 'copia-autentica', 'prospetto-oneri'], true)
             || str_ends_with($uri, '.pdf')) ?: null;
     }
 

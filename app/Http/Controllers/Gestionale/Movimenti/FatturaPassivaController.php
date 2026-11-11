@@ -117,9 +117,11 @@ class FatturaPassivaController extends Controller
                 'noteCollegate', 'fatturaRettificata:id,numero_documento,data_documento'])
             ->when($request->stato_pagamento, fn ($q, $v) => $q->where('stato_pagamento', $v))
             ->when($request->stato_approvazione, fn ($q, $v) => $q->where('stato_approvazione', $v))
-            ->when($request->search, fn ($q, $v) => $q->where('numero_documento', 'like', "%{$v}%")
+            // Raggruppato (Web Pro Italia, 11/11/2026): senza la parentesi l'«oppure» sul fornitore scavalcava gli altri
+            // filtri, compreso quello del condominio, e la ricerca mostrava fatture dello stesso fornitore in altri condomìni.
+            ->when($request->search, fn ($q, $v) => $q->where(fn ($w) => $w->where('numero_documento', 'like', "%{$v}%")
                 ->orWhereHas('fornitore', fn ($qf) => $qf->where('ragione_sociale', 'like', "%{$v}%"))
-            )
+            ))
             ->when($request->data_da, fn ($q, $v) => $q->whereDate('data_documento', '>=', $v))
             ->when($request->data_a, fn ($q, $v) => $q->whereDate('data_documento', '<=', $v))
             ->tap(fn ($q) => $this->ordina($q, $ordinamento, self::colonneOrdinabili(), predefinita: 'data_documento', versoPredefinito: 'desc'))

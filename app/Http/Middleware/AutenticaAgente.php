@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\AzioneAgente;
 use App\Models\ChiaveAgente;
+use App\Support\Agenti\DiscoInProva;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Support\Header;
 use Symfony\Component\HttpFoundation\Response;
@@ -165,6 +167,7 @@ class AutenticaAgente
         Mail::fake();
         Notification::fake();
         Queue::fake();
+        $dischi = $this->dischiInProva();
 
         DB::beginTransaction();
 
@@ -174,7 +177,37 @@ class AutenticaAgente
             while (DB::transactionLevel() > 0) {
                 DB::rollBack();
             }
+            foreach ($dischi as $nome) {
+                Storage::forgetDisk($nome);
+            }
         }
+    }
+
+    /**
+     * In anteprima i file veri non si toccano: ogni disco configurato viene sostituito, per questa richiesta, da uno
+     * che non cancella, non sposta e non sovrascrive (vedi `DiscoInProva`). Il rollback del database da solo non
+     * basta: un documento «eliminato» in anteprima perdeva il file e teneva la riga.
+     *
+     * @return list<string> i dischi sostituiti, da rimettere a posto alla fine
+     */
+    private function dischiInProva(): array
+    {
+        $sostituiti = [];
+
+        foreach (array_keys((array) config('filesystems.disks', [])) as $nome) {
+            try {
+                $vero = Storage::disk($nome);
+
+                if ($vero instanceof \Illuminate\Filesystem\FilesystemAdapter && ! $vero instanceof DiscoInProva) {
+                    Storage::set($nome, new DiscoInProva($vero->getDriver(), $vero->getAdapter(), $vero->getConfig()));
+                    $sostituiti[] = $nome;
+                }
+            } catch (Throwable) {
+                // Un disco configurato ma non raggiungibile (S3 senza credenziali) non serve a questa richiesta.
+            }
+        }
+
+        return $sostituiti;
     }
 
     /** La risposta del gestionale, tradotta in una busta sola per l'agente. I file passano come sono. */

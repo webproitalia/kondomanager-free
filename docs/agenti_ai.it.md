@@ -39,7 +39,7 @@ I file (PDF, XML, Excel) passano come sono.
 
 ### Anteprima
 
-Con l'intestazione `X-Kondo-Prova: 1` una scrittura viene eseguita dentro una transazione che poi si annulla, con posta, notifiche e code finte. La risposta dice se andrebbe a buon fine e con quali avvisi o errori; nel database non resta niente. I file caricati durante un'anteprima possono restare nello storage.
+Con l'intestazione `X-Kondo-Prova: 1` una scrittura viene eseguita dentro una transazione che poi si annulla, con posta, notifiche e code finte. La risposta dice se andrebbe a buon fine e con quali avvisi o errori; nel database non resta niente. Anche i file veri non si toccano: per la durata dell'anteprima i dischi non cancellano, non spostano e non sovrascrivono (`App\Support\Agenti\DiscoInProva`), perché il rollback del database non riporta indietro un file cancellato. I file nuovi caricati durante un'anteprima possono restare nello storage.
 
 ### Catalogo
 
