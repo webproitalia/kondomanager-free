@@ -222,7 +222,8 @@ it('ogni codice di avviso che il motore produce è nel catalogo', function () {
     // 28 fino alla 1.11.0-beta.4. I sei in più sono gli avvisi del modello compilato a mano; gli
     // ultimi tre — «foglio non riconosciuto», «righe fuse su una posizione» e «tabelle omonime» —
     // vengono dalle due revisioni avversariali che hanno chiuso la beta.5.
-    expect(array_unique($sorgente))->toHaveCount(37);
+    // 38 dall'11/11/2026 (Web Pro Italia): «unità nuove fra quelle che c'erano già».
+    expect(array_unique($sorgente))->toHaveCount(38);
 
     $catalogo = array_keys(CatalogoControlli::voci());
     $fuori = array_values(array_diff(array_unique($sorgente), $catalogo));

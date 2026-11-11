@@ -1180,7 +1180,7 @@ it('il modello compilato entra in archivio, ed è questa la fotografia che l\'an
             ->where('import_batch_id', $batch->id)->where('livello', 'capitoli')->count())->toBe(0);
 });
 
-it('rifare la stessa importazione senza annullarla non duplica niente: si ferma in «parziale»', function () {
+it('rifare la stessa importazione senza annullarla non duplica niente: si ferma prima di scrivere', function () {
     // ⚠️ Questo caso **non riguarda l'annullamento**: fotografa la protezione che c'è **già**, ed
     // è quella che la beta.6 non deve rompere. Misurato il 30/08/2026: il secondo giro non scrive
     // una riga in più e il lotto resta `parziale` invece di dichiararsi completato.
@@ -1197,7 +1197,9 @@ it('rifare la stessa importazione senza annullarla non duplica niente: si ferma 
     $this->actingAs($utente)->get(route('import.verifica', $secondo->uuid));
     $this->actingAs($utente)->post(route('import.conferma', $secondo->uuid));
 
-    expect($secondo->fresh()->stato)->toBe('parziale')
+    // Dall'11/11/2026 (Web Pro Italia) la conferma non parte nemmeno: le persone che esistono già
+    // sono domande senza risposta, e il lotto resta aperto invece di fermarsi a metà in «parziale».
+    expect($secondo->fresh()->stato)->toBe('in_corso')
         ->and(fotografiaArchivio())->toBe($dopoIlPrimo);
 });
 

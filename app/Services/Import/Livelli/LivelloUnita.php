@@ -130,18 +130,34 @@ final class LivelloUnita implements LivelloImport
             $ripetuti[$k] = ($ripetuti[$k] ?? 0) + 1;
         }
         $presi = [];
+        $giaPresenti = Immobile::where('condominio_id', $condominio->id)->count();
+        $nuoveInMezzo = 0;
 
         foreach ($unita as $chiave => $dati) {
             $palazzina = $this->palazzina($condominio, $dati->palazzina);
             $interno = mb_strtoupper($dati->interno ?? '');
             $ripetuto = ($ripetuti[mb_strtoupper(trim($dati->palazzina)).'|'.$interno] ?? 0) > 1;
 
-            $esistente = $ripetuto ? null : Immobile::where('condominio_id', $condominio->id)
-                ->where('interno', $interno)
-                ->when($palazzina !== null, fn ($q) => $q->where('palazzina_id', $palazzina->id))
-                ->when($dati->piano !== null && $dati->piano !== '', fn ($q) => $q->where(fn ($p) => $p->whereNull('piano')->orWhere('piano', '')->orWhere('piano', $dati->piano)))
-                ->whereNotIn('id', $presi ?: [0])
-                ->first();
+            // ⚠️ Prima il codice di Danea, poi l'interno (Web Pro Italia, 11/11/2026). Il file «Anagrafica e
+            // millesimi» non ha la colonna dell'interno e il lettore ci mette il progressivo: caricato da solo
+            // sopra unità già importate, l'interno 17 dei millesimi (che è il progressivo 17) trovava l'unità
+            // con interno vero 17, cioè un'altra, e i millesimi finivano sulle unità sbagliate. Il codice
+            // palazzina · gruppo · progressivo è scritto nella descrizione di ogni unità entrata da Danea.
+            $esistente = $giaPresenti === 0 ? null : $this->perCodiceDanea($condominio, $palazzina, $dati, $presi);
+
+            if ($esistente === null && ! $ripetuto && $giaPresenti > 0) {
+                $esistente = Immobile::where('condominio_id', $condominio->id)
+                    ->where('interno', $interno)
+                    ->when($palazzina !== null, fn ($q) => $q->where('palazzina_id', $palazzina->id))
+                    ->when($dati->piano !== null && $dati->piano !== '', fn ($q) => $q->where(fn ($p) => $p->whereNull('piano')->orWhere('piano', '')->orWhere('piano', $dati->piano)))
+                    ->whereNotIn('id', $presi ?: [0])
+                    ->first();
+
+                // Stesso interno ma un altro progressivo di Danea: è un'altra unità, non questa.
+                if ($esistente !== null && ($altro = self::progressivoDanea($esistente)) !== null && $altro !== trim($dati->progressivo)) {
+                    $esistente = null;
+                }
+            }
 
             if ($esistente !== null) {
                 $presi[] = $esistente->id;
@@ -185,6 +201,15 @@ final class LivelloUnita implements LivelloImport
             $risolti[$chiave] = $immobile;
             $ctx->registra(self::CHIAVE, ImportBatchItem::AZIONE_CREATO, $immobile);
             $creati++;
+            $nuoveInMezzo += $giaPresenti > 0 ? 1 : 0;
+        }
+
+        if ($nuoveInMezzo > 0) {
+            $avvisi[] = Rilievo::avviso(
+                'unita.nuove_fra_esistenti',
+                sprintf('%d unità del file non corrispondevano a nessuna di quelle già nel condominio e sono entrate come nuove.', $nuoveInMezzo),
+                'Se il condominio aveva già queste unità (inserite a mano o con un altro programma), controlla l\'elenco delle unità: potrebbero essere doppie.',
+            );
         }
 
         // Un avviso per tipologia sconosciuta, non uno per unità: sedici righe identiche
@@ -202,6 +227,49 @@ final class LivelloUnita implements LivelloImport
         $ctx->risolviMolti(self::CHIAVE, $risolti);
 
         return new EsitoCommit(creati: $creati, saltati: $saltati, avvisi: $avvisi);
+    }
+
+    /**
+     * L'unità già in archivio con lo stesso codice di Danea, se ce n'è una sola. Il codice si legge dalla
+     * descrizione che l'importazione scrive («Palazzina 1 · gruppo A · piano 2 · n. 37», vedi
+     * CanonicalImmobile::descrizione()); il gruppo `0` o vuoto non compare, e un export porta la lettera
+     * dove un altro porta lo zero: se uno dei due non ha il gruppo, conta palazzina e progressivo.
+     */
+    private function perCodiceDanea(Condominio $condominio, ?Palazzina $palazzina, CanonicalImmobile $dati, array $presi): ?Immobile
+    {
+        $progressivo = trim($dati->progressivo);
+
+        if ($progressivo === '') {
+            return null;
+        }
+
+        $gruppo = trim($dati->gruppo) === '0' ? '' : trim($dati->gruppo);
+        $inizio = 'Palazzina '.trim($dati->palazzina).' · ';
+
+        $trovati = Immobile::where('condominio_id', $condominio->id)
+            ->when($palazzina !== null, fn ($q) => $q->where('palazzina_id', $palazzina->id))
+            ->whereNotIn('id', $presi ?: [0])
+            ->where('descrizione', 'like', addcslashes($inizio, '%_\\').'%n. '.addcslashes($progressivo, '%_\\'))
+            ->get()
+            ->filter(function (Immobile $i) use ($inizio, $gruppo, $progressivo) {
+                $resto = mb_substr((string) $i->descrizione, mb_strlen($inizio));
+
+                if (! preg_match('/^(?:gruppo (?<g>[^·]+?) · )?(?:piano [^·]+? · )?n\. (?<n>\S+)$/u', $resto, $m) || $m['n'] !== $progressivo) {
+                    return false;
+                }
+
+                $suo = trim($m['g'] ?? '');
+
+                return $gruppo === '' || $suo === '' || $suo === $gruppo;
+            });
+
+        return $trovati->count() === 1 ? $trovati->first() : null;
+    }
+
+    /** Il progressivo di Danea scritto nella descrizione di un'unità importata, se c'è. */
+    private static function progressivoDanea(Immobile $immobile): ?string
+    {
+        return preg_match('/^Palazzina .+ · n\. (\S+)$/u', (string) $immobile->descrizione, $m) ? $m[1] : null;
     }
 
     private function palazzina(Condominio $condominio, string $nome): ?Palazzina

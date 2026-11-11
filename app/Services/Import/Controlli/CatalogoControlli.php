@@ -209,6 +209,12 @@ final class CatalogoControlli
                 perche: 'Il tipo scritto da Danea non corrisponde a nessuna delle nostre tipologie: '
                     .'sceglierne una al posto tuo cambierebbe come l\'unità viene trattata.',
             ),
+            'unita.nuove_fra_esistenti' => new VoceCatalogo(
+                rotta: $immobili,
+                etichettaAzione: 'Vai alle unità',
+                perche: 'Il condominio aveva già delle unità e queste non corrispondevano a nessuna di loro: '
+                    .'se erano le stesse, scritte a mano o da un altro programma, adesso sono doppie.',
+            ),
             'condominio.nome_corrotto' => new VoceCatalogo(
                 rotta: $struttura,
                 etichettaAzione: 'Correggi il nome',
