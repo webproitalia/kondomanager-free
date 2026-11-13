@@ -389,6 +389,17 @@ Route::prefix('/gestionale/{condominio}')
     Route::get('esercizi/{esercizio}/stato-patrimoniale/print', [StatoPatrimonialeController::class, 'stampa'])
         ->name('esercizi.stato-patrimoniale.print');
 
+    // Fascicolo di bilancio (Web Pro Italia, 13/11/2026): la nota dello studio, le sezioni e il PDF unico per
+    // l'assemblea — copertina, nota sintetica esplicativa, rendiconto, stato patrimoniale, registro, preventivo.
+    Route::get('esercizi/{esercizio}/fascicolo-bilancio', [\App\Http\Controllers\Gestionale\Fascicolo\FascicoloBilancioController::class, 'index'])
+        ->name('esercizi.fascicolo-bilancio.index');
+
+    Route::put('esercizi/{esercizio}/fascicolo-bilancio', [\App\Http\Controllers\Gestionale\Fascicolo\FascicoloBilancioController::class, 'update'])
+        ->name('esercizi.fascicolo-bilancio.update');
+
+    Route::get('esercizi/{esercizio}/fascicolo-bilancio/print', [\App\Http\Controllers\Gestionale\Fascicolo\FascicoloBilancioController::class, 'stampa'])
+        ->name('esercizi.fascicolo-bilancio.print');
+
     // Il mastrino di un conto contabile — punto 2 di docs/registri_contabili.md (D21), beta.26.
     // Pagina figlia dello Stato patrimoniale, non una voce della barra. Il conto si risolve
     // dentro il condominio dell'esercizio (`Esercizio::contiContabili()`): scoped come le altre.

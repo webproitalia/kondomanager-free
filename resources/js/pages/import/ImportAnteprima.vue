@@ -47,7 +47,7 @@ const props = defineProps<{
       totale: number; senza_codice_fiscale: number;
       da_dividere: { chiave: string; nome: string; pezzi: string[] }[];
     };
-    unita: { totale: number; elenco: { chiave: string; nome: string }[] };
+    unita: { totale: number; gia_presenti?: number | null; nuove?: number | null; in_archivio?: number | null; elenco: { chiave: string; nome: string }[] };
     tabelle: { nome: string; partecipanti: number; somma: number; parziale: boolean; parti_uguali: boolean }[];
     saldi: null | {
       righe: number; totale_riferimento: string | null; somma_righe: string;
@@ -469,7 +469,18 @@ const puoConfermare = computed(
             <CardTitle class="flex items-center gap-2 text-base">
               <Building2 class="h-4 w-4" /> Unità immobiliari
             </CardTitle>
-            <CardDescription>{{ props.anteprima.unita.totale }} unità</CardDescription>
+            <CardDescription>
+              {{ props.anteprima.unita.totale }} unità
+              <!-- In un condominio che esiste già (Web Pro Italia, 13/11/2026): quante le ritrova e quante le crea. -->
+              <template v-if="props.anteprima.unita.gia_presenti !== null && props.anteprima.unita.gia_presenti !== undefined && (props.anteprima.unita.in_archivio ?? 0) > 0">
+                — il condominio ne ha già {{ props.anteprima.unita.in_archivio }}:
+                <strong>{{ props.anteprima.unita.gia_presenti }}</strong> le riconosco e le riuso,
+                <strong :class="(props.anteprima.unita.nuove ?? 0) > 0 ? 'text-amber-700' : ''">{{ props.anteprima.unita.nuove }}</strong> entrano come nuove.
+                <span v-if="(props.anteprima.unita.nuove ?? 0) > 0 && (props.anteprima.unita.gia_presenti ?? 0) > 0" class="block text-amber-700">
+                  Se quelle nuove sono in realtà unità che hai già, fermati: verrebbero doppie.
+                </span>
+              </template>
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div class="flex flex-wrap gap-1">

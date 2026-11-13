@@ -138,26 +138,7 @@ final class LivelloUnita implements LivelloImport
             $interno = mb_strtoupper($dati->interno ?? '');
             $ripetuto = ($ripetuti[mb_strtoupper(trim($dati->palazzina)).'|'.$interno] ?? 0) > 1;
 
-            // ⚠️ Prima il codice di Danea, poi l'interno (Web Pro Italia, 11/11/2026). Il file «Anagrafica e
-            // millesimi» non ha la colonna dell'interno e il lettore ci mette il progressivo: caricato da solo
-            // sopra unità già importate, l'interno 17 dei millesimi (che è il progressivo 17) trovava l'unità
-            // con interno vero 17, cioè un'altra, e i millesimi finivano sulle unità sbagliate. Il codice
-            // palazzina · gruppo · progressivo è scritto nella descrizione di ogni unità entrata da Danea.
-            $esistente = $giaPresenti === 0 ? null : $this->perCodiceDanea($condominio, $palazzina, $dati, $presi);
-
-            if ($esistente === null && ! $ripetuto && $giaPresenti > 0) {
-                $esistente = Immobile::where('condominio_id', $condominio->id)
-                    ->where('interno', $interno)
-                    ->when($palazzina !== null, fn ($q) => $q->where('palazzina_id', $palazzina->id))
-                    ->when($dati->piano !== null && $dati->piano !== '', fn ($q) => $q->where(fn ($p) => $p->whereNull('piano')->orWhere('piano', '')->orWhere('piano', $dati->piano)))
-                    ->whereNotIn('id', $presi ?: [0])
-                    ->first();
-
-                // Stesso interno ma un altro progressivo di Danea: è un'altra unità, non questa.
-                if ($esistente !== null && ($altro = self::progressivoDanea($esistente)) !== null && $altro !== trim($dati->progressivo)) {
-                    $esistente = null;
-                }
-            }
+            $esistente = $giaPresenti === 0 ? null : $this->giaInArchivio($condominio, $palazzina, $dati, $ripetuto, $presi);
 
             if ($esistente !== null) {
                 $presi[] = $esistente->id;
@@ -227,6 +208,86 @@ final class LivelloUnita implements LivelloImport
         $ctx->risolviMolti(self::CHIAVE, $risolti);
 
         return new EsitoCommit(creati: $creati, saltati: $saltati, avvisi: $avvisi);
+    }
+
+    /**
+     * L'unità del file è già in archivio? La stessa domanda la fanno il commit e l'anteprima, e devono dare la stessa
+     * risposta: per questo sta in un posto solo.
+     *
+     * ⚠️ Prima il codice di Danea, poi l'interno (Web Pro Italia, 11/11/2026). Il file «Anagrafica e millesimi» non ha
+     * la colonna dell'interno e il lettore ci mette il progressivo: caricato da solo sopra unità già importate,
+     * l'interno 17 dei millesimi (che è il progressivo 17) trovava l'unità con interno vero 17, cioè un'altra, e i
+     * millesimi finivano sulle unità sbagliate. Il codice palazzina · gruppo · progressivo è scritto nella descrizione
+     * di ogni unità entrata da Danea.
+     *
+     * @param  list<int>  $presi  le unità d'archivio già abbinate a un'altra unità di questa importazione
+     */
+    private function giaInArchivio(Condominio $condominio, ?Palazzina $palazzina, CanonicalImmobile $dati, bool $ripetuto, array $presi): ?Immobile
+    {
+        $esistente = $this->perCodiceDanea($condominio, $palazzina, $dati, $presi);
+
+        if ($esistente !== null || $ripetuto) {
+            return $esistente;
+        }
+
+        $esistente = Immobile::where('condominio_id', $condominio->id)
+            ->where('interno', mb_strtoupper($dati->interno ?? ''))
+            ->when($palazzina !== null, fn ($q) => $q->where('palazzina_id', $palazzina->id))
+            ->when($dati->piano !== null && $dati->piano !== '', fn ($q) => $q->where(fn ($p) => $p->whereNull('piano')->orWhere('piano', '')->orWhere('piano', $dati->piano)))
+            ->whereNotIn('id', $presi ?: [0])
+            ->first();
+
+        // Stesso interno ma un altro progressivo di Danea: è un'altra unità, non questa.
+        if ($esistente !== null && ($altro = self::progressivoDanea($esistente)) !== null && $altro !== trim($dati->progressivo)) {
+            return null;
+        }
+
+        return $esistente;
+    }
+
+    /**
+     * Per l'anteprima (Web Pro Italia, 13/11/2026): di queste unità, quante il gestionale riconosce fra quelle che il
+     * condominio ha già e quante entrerebbero come nuove. Legge e basta, con la stessa regola del commit: chi importa
+     * in un condominio che esiste deve saperlo PRIMA di confermare, non scoprirlo contando i doppioni dopo.
+     *
+     * @param  array<string, CanonicalImmobile>  $unita
+     * @return array{gia_presenti: int, nuove: int, in_archivio: int}
+     */
+    public function riconoscimento(Condominio $condominio, array $unita): array
+    {
+        $inArchivio = Immobile::where('condominio_id', $condominio->id)->count();
+
+        if ($inArchivio === 0) {
+            return ['gia_presenti' => 0, 'nuove' => count($unita), 'in_archivio' => 0];
+        }
+
+        $ripetuti = [];
+        foreach ($unita as $d) {
+            $k = mb_strtoupper(trim($d->palazzina)).'|'.mb_strtoupper($d->interno ?? '');
+            $ripetuti[$k] = ($ripetuti[$k] ?? 0) + 1;
+        }
+
+        $palazzine = Palazzina::where('condominio_id', $condominio->id)->get()->keyBy('name');
+        $presi = [];
+        $trovate = 0;
+
+        foreach ($unita as $dati) {
+            $nome = trim($dati->palazzina);
+            // Una palazzina che non esiste ancora la creerebbe il commit: per l'anteprima vuol dire «unità nuova».
+            if ($nome !== '' && ! $palazzine->has($nome)) {
+                continue;
+            }
+
+            $ripetuto = ($ripetuti[mb_strtoupper($nome).'|'.mb_strtoupper($dati->interno ?? '')] ?? 0) > 1;
+            $esistente = $this->giaInArchivio($condominio, $nome === '' ? null : $palazzine[$nome], $dati, $ripetuto, $presi);
+
+            if ($esistente !== null) {
+                $presi[] = $esistente->id;
+                $trovate++;
+            }
+        }
+
+        return ['gia_presenti' => $trovate, 'nuove' => count($unita) - $trovate, 'in_archivio' => $inArchivio];
     }
 
     /**

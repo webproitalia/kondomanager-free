@@ -33,6 +33,11 @@ const {
   firma_stampe_url,
   /** Limite di caricamento già scritto per l'utente («2 MB»), calcolato dal server. */
   limiteFirma,
+  // Il fascicolo di bilancio (Web Pro Italia, 13/11/2026): nome dello studio, riga sopra il titolo, foto di copertina.
+  fascicolo_studio,
+  fascicolo_sopratitolo,
+  fascicolo_copertina_url,
+  limiteCopertina,
 } = page.props
 
 const flashMessage = computed(() => (page.props as any).flash?.message)
@@ -62,7 +67,30 @@ const form = useForm({
   nota_legale_stampe: (nota_legale_stampe as string) || '',
   firma_stampe: null as File | null,
   delete_firma_stampe: false,
+  fascicolo_studio: (fascicolo_studio as string) || '',
+  fascicolo_sopratitolo: (fascicolo_sopratitolo as string) || '',
+  fascicolo_copertina: null as File | null,
+  delete_fascicolo_copertina: false,
 })
+
+const copertinaPreviewUrl = ref<string | null>((fascicolo_copertina_url as string) || null)
+
+const handleCopertinaUpload = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    form.fascicolo_copertina = target.files[0]
+    form.delete_fascicolo_copertina = false
+    copertinaPreviewUrl.value = URL.createObjectURL(target.files[0])
+  }
+}
+
+const removeCopertina = () => {
+  form.fascicolo_copertina = null
+  form.delete_fascicolo_copertina = true
+  copertinaPreviewUrl.value = null
+  const input = document.getElementById('fascicolo-copertina-upload') as HTMLInputElement
+  if (input) input.value = ''
+}
 
 const showGuide = ref(false)
 
@@ -207,6 +235,63 @@ const submit = () => {
                 <p v-if="form.errors.firma_stampe" class="text-sm text-red-500 mt-1">
                   {{ form.errors.firma_stampe }}
                 </p>
+              </div>
+            </div>
+
+            <!-- Il fascicolo di bilancio (Web Pro Italia, 13/11/2026): che cosa compare sulla copertina. Il colore è quello
+                 scelto in Impostazioni → Aspetto. -->
+            <div class="space-y-4 border-t pt-6">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-800">Fascicolo di bilancio</h3>
+                <p class="text-sm text-muted-foreground mt-1">
+                  La copertina del fascicolo che si manda ai condòmini con la convocazione dell'assemblea. Il colore è quello
+                  scelto in Impostazioni → Aspetto.
+                </p>
+              </div>
+              <div class="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Nome dello studio</label>
+                  <input v-model="form.fascicolo_studio" type="text" maxlength="200" placeholder="Studio Rossi – Amministrazioni condominiali"
+                    class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+                  <p class="text-sm text-muted-foreground mt-1">Compare nella fascia in fondo alla copertina.</p>
+                  <p v-if="form.errors.fascicolo_studio" class="text-sm text-red-500 mt-1">{{ form.errors.fascicolo_studio }}</p>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Riga sopra il titolo</label>
+                  <input v-model="form.fascicolo_sopratitolo" type="text" maxlength="120" placeholder="Amministrazione condominiale"
+                    class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm" />
+                  <p class="text-sm text-muted-foreground mt-1">La scritta piccola in cima alla copertina.</p>
+                  <p v-if="form.errors.fascicolo_sopratitolo" class="text-sm text-red-500 mt-1">{{ form.errors.fascicolo_sopratitolo }}</p>
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Foto di copertina</label>
+                <div class="flex items-center gap-4">
+                  <div class="relative h-28 w-44 border-2 border-dashed rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden"
+                    :class="{ 'border-gray-300': !copertinaPreviewUrl, 'border-emerald-500': copertinaPreviewUrl }">
+                    <img v-if="copertinaPreviewUrl" :src="copertinaPreviewUrl" class="h-full w-full object-cover" />
+                    <div v-else class="text-center p-4">
+                      <Upload class="w-6 h-6 mx-auto text-gray-400 mb-1" />
+                      <span class="text-xs text-gray-500">Nessuna foto</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <div>
+                      <input type="file" id="fascicolo-copertina-upload" accept="image/jpeg,image/png" class="hidden" @change="handleCopertinaUpload" />
+                      <label for="fascicolo-copertina-upload" class="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                        Carica una foto
+                      </label>
+                    </div>
+                    <Button v-if="copertinaPreviewUrl" type="button" variant="destructive" size="sm" @click="removeCopertina" class="w-full">
+                      <Trash class="w-4 h-4 mr-2" />
+                      Togli la foto
+                    </Button>
+                  </div>
+                </div>
+                <p class="text-sm text-muted-foreground mt-2">
+                  Una foto orizzontale, JPG o PNG, fino a {{ String(limiteCopertina ?? '5 MB') }}. Occupa la metà bassa della copertina; senza foto la copertina è tutta a colore.
+                </p>
+                <p v-if="form.errors.fascicolo_copertina" class="text-sm text-red-500 mt-1">{{ form.errors.fascicolo_copertina }}</p>
               </div>
             </div>
 

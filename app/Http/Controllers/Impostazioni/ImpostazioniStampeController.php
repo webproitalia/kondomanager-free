@@ -31,6 +31,11 @@ class ImpostazioniStampeController extends Controller
             // Il limite lo decide il server, non noi: il testo d'aiuto scriveva «max 2MB» a mano in
             // quattro lingue, e su uno spazio web che ne accetta uno prometteva il doppio.
             'limiteFirma'        => \App\Support\LimiteCaricamento::etichetta(2.0),
+            // Il fascicolo di bilancio: nome dello studio in fondo alla copertina, riga sopra il titolo, foto.
+            'fascicolo_studio'        => (string) $settings->fascicolo_studio,
+            'fascicolo_sopratitolo'   => (string) $settings->fascicolo_sopratitolo,
+            'fascicolo_copertina_url' => $settings->fascicolo_copertina_path ? $archivio->urlPubblico($settings->fascicolo_copertina_path) : null,
+            'limiteCopertina'         => \App\Support\LimiteCaricamento::etichetta(5.0),
         ]);
     }
 
@@ -57,6 +62,22 @@ class ImpostazioniStampeController extends Controller
                 $settings->firma_stampe_path = null;
             }
             
+            // Il fascicolo di bilancio. I due testi si cambiano solo se arrivano: così chi salva la pagina da una
+            // versione vecchia del modulo non li svuota.
+            if (array_key_exists('fascicolo_studio', $validated)) {
+                $settings->fascicolo_studio = trim((string) $validated['fascicolo_studio']) ?: null;
+            }
+            if (array_key_exists('fascicolo_sopratitolo', $validated)) {
+                $settings->fascicolo_sopratitolo = trim((string) $validated['fascicolo_sopratitolo']) ?: null;
+            }
+            if ($request->hasFile('fascicolo_copertina')) {
+                $archivio->eliminaPubblico($settings->fascicolo_copertina_path);
+                $settings->fascicolo_copertina_path = $archivio->salvaPubblico($request->file('fascicolo_copertina'), 'settings/fascicolo');
+            } elseif (! empty($validated['delete_fascicolo_copertina']) && $settings->fascicolo_copertina_path) {
+                $archivio->eliminaPubblico($settings->fascicolo_copertina_path);
+                $settings->fascicolo_copertina_path = null;
+            }
+
             $settings->save();
         } catch (\Exception $e) {
             return redirect()->back()->with(

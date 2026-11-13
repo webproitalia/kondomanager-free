@@ -243,8 +243,25 @@ final class AnteprimaImport
     {
         $unita = $canonici[LivelloUnita::CHIAVE] ?? [];
 
+        // Se il condominio di arrivo esiste già: quante di queste unità ci sono già e quante entrerebbero nuove
+        // (Web Pro Italia, 13/11/2026). Prima l'anteprima diceva solo «245 unità», e chi importava sopra un
+        // condominio esistente non sapeva se le avrebbe ritrovate o raddoppiate.
+        $riconoscimento = null;
+        $condominio = $canonici[LivelloCondominio::CHIAVE] ?? null;
+
+        if ($unita !== [] && $condominio instanceof CanonicalCondominio) {
+            $esistente = (new RicercaEsistenti)->condominio($condominio);
+
+            if ($esistente !== null) {
+                $riconoscimento = app(LivelloUnita::class)->riconoscimento($esistente, $unita);
+            }
+        }
+
         return [
             'totale' => count($unita),
+            'gia_presenti' => $riconoscimento['gia_presenti'] ?? null,
+            'nuove' => $riconoscimento['nuove'] ?? null,
+            'in_archivio' => $riconoscimento['in_archivio'] ?? null,
             'elenco' => array_map(
                 fn ($u) => ['chiave' => $u->chiave(), 'nome' => $u->denominazione()],
                 array_values($unita),

@@ -35,6 +35,12 @@ class UpdatePrintSettingsRequest extends FormRequest
             // Quel che cambia è che su un server più stretto la regola non ne promette più due.
             'firma_stampe'               => 'nullable|image|mimes:jpeg,png,jpg|max:'.LimiteCaricamento::regolaMax(2.0),
             'delete_firma_stampe'        => 'nullable|boolean',
+            // Il fascicolo di bilancio (Web Pro Italia, 13/11/2026). La foto di copertina è stampata a tutta larghezza:
+            // 5 MB bastano per una fotografia e tengono leggero il PDF che ogni condòmino riceve.
+            'fascicolo_studio'           => 'nullable|string|max:200',
+            'fascicolo_sopratitolo'      => 'nullable|string|max:120',
+            'fascicolo_copertina'        => 'nullable|image|mimes:jpeg,png,jpg|max:'.LimiteCaricamento::regolaMax(5.0),
+            'delete_fascicolo_copertina' => 'nullable|boolean',
         ];
     }
 }
