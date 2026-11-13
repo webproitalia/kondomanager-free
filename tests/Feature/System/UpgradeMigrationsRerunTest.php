@@ -235,6 +235,8 @@ it('resta rieseguibile dopo un\'interruzione a metà', function (string $file) {
     // Beta.10, in dataset dalla beta.60 (Coda 436): la tabella dei legami documento-categoria, il travaso e poi la chiave esterna e la colonna `documenti.category_id`
     // tolte con due guardie separate (su MySQL sono due statement). Lo stato a metà, con il suo travaso, lo prova il test sotto.
     '2026_08_31_140000_documenti_in_piu_categorie',
+    // La scadenza della rata dei saldi (Web Pro Italia, 13/11/2026): una colonna nullable su `piani_rate`, una guardia sola.
+    '2026_11_13_100000_add_data_rata_zero_to_piani_rate_table',
 ]);
 
 it('decisione 55 — la migrazione del legame interrotta fra i due statement (colonna sì, chiave esterna no) si riprende e mette una chiave sola, che azzera il legame', function () {

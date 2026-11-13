@@ -1226,6 +1226,16 @@ const printRipartoCapitoli = () => {
                         </HoverCardContent>
                     </HoverCard>
 
+                    <!-- BADGE SCADENZA DELLA RATA DEI SALDI (Web Pro Italia, 13/11/2026): solo se il piano ne ha una sua; senza, la rata 0 scade con la prima rata e non c'è niente da dire. -->
+                    <div
+                        v-if="props.pianoRate.data_rata_zero"
+                        class="inline-flex items-center gap-2 px-2.5 h-8 bg-slate-50 border border-slate-200 text-slate-600 rounded-md text-[11px] font-medium shadow-sm shrink-0 dark:bg-neutral-900 dark:border-neutral-800 dark:text-neutral-300"
+                        title="Scadenza scelta per la rata dei saldi (rata zero)"
+                    >
+                        <CalendarDays class="w-3.5 h-3.5" />
+                        <span>Rata dei saldi <strong>{{ toItalian(props.pianoRate.data_rata_zero) }}</strong></span>
+                    </div>
+
                     <div class="w-px h-5 bg-gray-300 shrink-0 dark:bg-neutral-700"></div>
 
                     <!-- SELEZIONA TUTTE -->

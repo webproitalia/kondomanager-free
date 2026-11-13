@@ -49,6 +49,12 @@ class PianoRateCreatorService
             // della gestione, cioè il comportamento di sempre. Vedi
             // `PianoRate::dataPartenzaCalendario()`.
             'data_prima_scadenza'  => $data['data_prima_scadenza'] ?? null,
+            // La scadenza della rata dei saldi (Web Pro Italia, 13/11/2026). NULL = scade insieme alla prima rata,
+            // come sempre. Si scrive solo con `rata_zero`: con gli altri due metodi la rata dei saldi non esiste, e
+            // una data rimasta nel modulo dopo aver cambiato metodo non deve viaggiare nascosta sul piano.
+            'data_rata_zero'       => ($data['metodo_distribuzione'] ?? 'prima_rata') === 'rata_zero'
+                ? ($data['data_rata_zero'] ?? null)
+                : null,
         ];
 
         // Qui c'era `$data['giorno_scadenza'] ?? 1`, e quell'1 non lasciava mai parlare il

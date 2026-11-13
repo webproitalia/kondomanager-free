@@ -69,6 +69,8 @@ class PianoRateResource extends JsonResource
             'stato'                         => $statoValue,
             'giorno_scadenza'               => $this->giorno_scadenza,
             'metodo_distribuzione'          => $this->metodo_distribuzione,
+            // La scadenza scelta per la rata dei saldi (Web Pro Italia, 13/11/2026); null = scade con la prima rata.
+            'data_rata_zero'                => $this->data_rata_zero?->format('Y-m-d'),
             // ⚠️ La chiave resta `data_inizio` **di proposito**, ma legge `created_at`.
             // `piani_rate.data_inizio` era in `$fillable` e nei `$casts` del Model, ma **la
             // colonna non esiste** (26 colonne, verificato): l'accessor restituiva sempre null e

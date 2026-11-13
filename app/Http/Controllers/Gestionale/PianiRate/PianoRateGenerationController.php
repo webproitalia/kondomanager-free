@@ -18,6 +18,7 @@ use App\Models\Gestionale\PianoRate;
 use App\Traits\HandleFlashMessages;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -47,6 +48,9 @@ class PianoRateGenerationController extends Controller
             'nota_scoperti' => 'required_if_accepted:accetta_scoperti|nullable|string|min:10',
             // B2, cancello (2) della decisione 14: stessa forma del cancello degli scoperti.
             'nota_destinatari' => 'required_if_accepted:accetta_destinatari|nullable|string|min:10',
+            // La scadenza della rata dei saldi (Web Pro Italia, 13/11/2026): facoltativa. Se la richiesta non la
+            // porta, il ricalcolo tiene quella salvata sul piano; se la porta la cambia, e vuota la toglie.
+            'data_rata_zero' => 'nullable|date',
         ]);
 
         $accettaScoperti = (bool) $request->boolean('accetta_scoperti', false);
@@ -86,12 +90,45 @@ class PianoRateGenerationController extends Controller
             return back()->with($this->flashError($fraseConguagliato));
         }
 
+        // La scadenza della rata dei saldi (rata 0) si può cambiare qui, con il ricalcolo (Web Pro Italia, 13/11/2026):
+        // un piano non ha una pagina di modifica, si rigenera. Conta la **presenza** della chiave nella richiesta, non il
+        // valore: assente vuol dire «tieni quella salvata» (è ciò che fanno «Ricalcola» e tutti i chiamanti di prima);
+        // presente e vuota (stringa vuota o null) vuol dire «toglila», e la rata dei saldi torna a scadere con la prima
+        // rata. Si cambia solo su un piano in bozza: un piano approvato ha già i promemoria dei condòmini con quella
+        // data, e prima si riporta in bozza. Una data uguale a quella salvata non è un cambio, e non ferma niente.
+        $cambiaDataRataZero = false;
+        $nuovaDataRataZero = null;
+        if ($request->exists('data_rata_zero')) {
+            $nuovaDataRataZero = filled($validated['data_rata_zero'] ?? null)
+                ? Carbon::parse($validated['data_rata_zero'])->toDateString()
+                : null;
+            $cambiaDataRataZero = $nuovaDataRataZero !== $pianoRate->data_rata_zero?->toDateString();
+
+            if ($cambiaDataRataZero && $pianoRate->stato === StatoPianoRate::APPROVATO) {
+                return back()->with($this->flashError(
+                    "La scadenza della rata dei saldi si cambia con il piano in bozza: riporta il piano in bozza e ricalcola."
+                ));
+            }
+            if ($cambiaDataRataZero && $nuovaDataRataZero !== null && $pianoRate->metodo_distribuzione !== 'rata_zero') {
+                return back()->with($this->flashError(
+                    "Questo piano non mette i saldi in una rata separata (rata zero): non c'è una scadenza della rata dei saldi da indicare."
+                ));
+            }
+        }
+
         try {
             DB::beginTransaction();
             // Le unità del condominio, bloccate come PRIMA istruzione: la generazione legge titolari e saldi senza lock, e un
             // passaggio o il suo annullamento che committasse nel frattempo lascerebbe quote calcolate su righe e saldi che
             // non esistono più (giro di verifica della 1.11.0-beta.37, C-R3; `Immobile::bloccaPerScrivere`).
             Immobile::bloccaDelCondominio((int) $condominio->id);
+
+            // Dentro la transazione: se la generazione si ferma (scoperti, destinatari, una spesa negativa) la data
+            // torna quella di prima insieme alle rate (Web Pro Italia, 13/11/2026).
+            if ($cambiaDataRataZero) {
+                $pianoRate->data_rata_zero = $nuovaDataRataZero;
+                $pianoRate->save();
+            }
 
             // 3. Sincronizzazione Granulare
             $orphanIds = $validated['orphan_ids'] ?? [];

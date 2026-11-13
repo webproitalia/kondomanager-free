@@ -261,6 +261,9 @@ class CreatePianoRateRequest extends FormRequest
             // Assente o vuota significa «parte dall'inizio della gestione»: è una scelta, non
             // un dato mancante, e per questo è `nullable` e non `required`.
             'data_prima_scadenza'  => ['nullable', 'date'],
+            // La scadenza della rata dei saldi (rata 0), solo con `rata_zero` (Web Pro Italia, 13/11/2026). Assente o
+            // vuota significa «scade insieme alla prima rata», come sempre: anche questa è una scelta, non un dato mancante.
+            'data_rata_zero'       => ['nullable', 'date'],
             'note'                 => ['nullable', 'string'],
             
             // Ricorrenza

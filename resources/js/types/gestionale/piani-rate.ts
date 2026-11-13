@@ -10,6 +10,8 @@ export interface PianoRate {
   stato: string // o 'bozza' | 'approvato' se preferisci string literal types
   giorno_scadenza?: number
   metodo_distribuzione?: string
+  // La scadenza scelta per la rata dei saldi (rata 0), solo con `rata_zero`; null = scade insieme alla prima rata.
+  data_rata_zero?: string | null
   data_inizio: string
   // In centesimi. Le entrate si sottraggono: da ripartire = spese − entrate.
   totale_spese?: number

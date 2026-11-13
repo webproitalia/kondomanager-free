@@ -106,7 +106,14 @@ class GenerateRateQuotesAction
             // -----------------------------------------------------------------------------
             if ($pianoRate->metodo_distribuzione === 'rata_zero' && !empty($saldiDaDistribuire)) {
                 
-                $scadenzaRataZero = $dateRate[0] ?? $now->format('Y-m-d');
+                // La scadenza della rata dei saldi (Web Pro Italia, 13/11/2026): quella che il piano dichiara in
+                // `data_rata_zero`, se c'è; altrimenti la data della prima rata, come sempre. Si legge dal piano e non
+                // da un parametro perché di qui passano tutte le porte della generazione (prima, «Ricalcola», «Rimuovi
+                // voce»): la data scelta alla creazione resta la stessa a ogni ricalcolo. Le rate ordinarie non la
+                // guardano: le loro date sono quelle di `$dateRate`, e non si spostano.
+                $scadenzaRataZero = $pianoRate->data_rata_zero instanceof \DateTimeInterface
+                    ? $pianoRate->data_rata_zero->format('Y-m-d')
+                    : ($dateRate[0] ?? $now->format('Y-m-d'));
 
                 $rataZero = Rata::create([
                     'piano_rate_id'  => $pianoRate->id,

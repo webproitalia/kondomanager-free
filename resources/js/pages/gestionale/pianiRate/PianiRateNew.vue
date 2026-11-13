@@ -214,6 +214,8 @@ const form = useForm({
   giorno_scadenza: 5,
   // Vuota = «parte dall'inizio della gestione», che è il comportamento di sempre.
   data_prima_scadenza: null as string | null,
+  // La scadenza della rata dei saldi (rata 0), solo con «Crea rata separata». Vuota = scade insieme alla prima rata.
+  data_rata_zero: null as string | null,
   note: '',
   genera_subito: true,
   recurrence_enabled: false,
@@ -274,6 +276,16 @@ const erroriCarrello = computed(() => Object.entries(form.errors as Record<strin
 // nascosto (verifica S6, R2). Il server non lo scriverebbe comunque; qui si dice la verità a video.
 watch(() => form.tipo_autorizzazione, (v) => {
   if (v === 'urgenza') form.data_delibera_assemblea = '';
+});
+
+// La scadenza della rata dei saldi esiste solo con la rata separata: cambiando metodo il campo sparisce, e la data
+// battuta prima non deve restare nel form e viaggiare nascosta (come la delibera con «Urgenza», qui sopra). Il server
+// non la scriverebbe comunque (`PianoRateCreatorService`); qui si dice la verità a video. (Web Pro Italia, 13/11/2026)
+watch(() => form.metodo_distribuzione, (v) => {
+  if (v !== 'rata_zero') {
+    form.data_rata_zero = null;
+    form.clearErrors('data_rata_zero');
+  }
 });
 
 const partenzaSuggerita = computed<string | null>(() => {
@@ -1040,6 +1052,29 @@ const submit = () => {
                     @update:modelValue="form.clearErrors('metodo_distribuzione')"
                   />
                   <InputError :message="form.errors.metodo_distribuzione" class="mt-1" />
+
+                  <!--
+                    La scadenza della rata dei saldi (Web Pro Italia, 13/11/2026). Solo con la rata separata: con gli
+                    altri due metodi i saldi stanno dentro le rate ordinarie e una data loro non esiste. Facoltativa:
+                    vuota vuol dire «insieme alla prima rata», che è ciò che il piano ha sempre fatto. La riga di aiuto
+                    sta sotto il campo e non in un HoverCard perché qui il campo è solo nella sua colonna.
+                  -->
+                  <div v-if="form.metodo_distribuzione === 'rata_zero'" class="mt-4">
+                    <Label for="data_rata_zero" class="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      Scadenza della rata dei saldi (rata zero)
+                    </Label>
+                    <Input
+                      id="data_rata_zero"
+                      type="date"
+                      v-model="form.data_rata_zero"
+                      class="mt-1 bg-white dark:bg-slate-950"
+                      @update:modelValue="form.clearErrors('data_rata_zero')"
+                    />
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Facoltativa. Se la lasci vuota scade insieme alla prima rata.
+                    </p>
+                    <InputError :message="form.errors.data_rata_zero" class="mt-1" />
+                  </div>
                 </div>
 
                 <div class="flex flex-col justify-center h-full border-t md:border-t-0 md:border-l border-slate-100 dark:border-slate-800 pt-5 md:pt-0 md:pl-8">

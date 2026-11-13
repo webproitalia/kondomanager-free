@@ -49,6 +49,8 @@ class PianoRate extends Model
         'numero_rate',
         'giorno_scadenza',
         'data_prima_scadenza',
+        // La scadenza della rata dei saldi, se scelta (Web Pro Italia, 13/11/2026): vale solo con `rata_zero`.
+        'data_rata_zero',
         'attivo',
         'note',
         'nota_scoperti',
@@ -70,6 +72,9 @@ class PianoRate extends Model
         'stato'                   => StatoPianoRate::class,
         // NULL = «parte dall'inizio della gestione», che è il comportamento di sempre.
         'data_prima_scadenza'     => 'date',
+        // NULL = «la rata dei saldi (rata 0) scade insieme alla prima rata», che è il comportamento di sempre
+        // (Web Pro Italia, 13/11/2026).
+        'data_rata_zero'          => 'date',
         'data_delibera_assemblea' => 'date',      // Cast automatico a Carbon per formattazione agevole
         'approvato_il'            => 'datetime',  // Cast automatico a Carbon con orario
         'attivo'                  => 'boolean',
