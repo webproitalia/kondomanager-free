@@ -12,6 +12,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Rieseguibile: un aggiornamento interrotto a metà ripassa di qui, e la tabella può esserci già.
+        if (Schema::hasTable('fascicoli_bilancio')) {
+            return;
+        }
+
         Schema::create('fascicoli_bilancio', function (Blueprint $table) {
             $table->id();
             $table->foreignId('esercizio_id')->unique()->constrained('esercizi')->cascadeOnDelete();
