@@ -320,7 +320,14 @@ class ImmobileAnagraficaController extends Controller
 
         try {
             DB::beginTransaction();
-            $this->ripassaLeGuardie($immobile, $data, (int) $titolarita->id);
+            $righe = $this->ripassaLeGuardie($immobile, $data, (int) $titolarita->id);
+
+            // La modifica di una riga passa anche se la somma delle quote del ruolo resta sopra 100, purché non la peggiori
+            // (`GuardieTitolarita::sforoQuoteInModifica()`, Web Pro Italia, 13/11/2026): è la strada per rimettere a posto
+            // un'unità con due proprietari al 100, una riga alla volta. Ma finché resta sopra 100 il lavoro non è finito, e
+            // lo si dice a chi ha appena salvato. Si calcola qui, sulle righe lette sotto lock e prima di scrivere: se la
+            // persona cambia la riga viene riscritta con un altro id, e dopo non si saprebbe più quale escludere.
+            $ancoraAlta = GuardieTitolarita::avvisoSommaAncoraAlta($righe, $this->rigaPerLeGuardie($data), (int) $titolarita->id);
 
             // Per **riga** (`wherePivot('id')`), non per persona: con due periodi della stessa persona
             // sulla stessa unità si tocca solo quello aperto dall'interfaccia (decisione 13).
@@ -352,7 +359,10 @@ class ImmobileAnagraficaController extends Controller
             return to_route('admin.gestionale.immobili.anagrafiche.index', [
                 'condominio' => $condominio->id,
                 'immobile'   => $immobile->id,
-            ])->with($this->flashSuccess(__('gestionale.success_update_anagrafica')));
+            ])->with($ancoraAlta !== null
+                // Un avviso e non un successo: resta a video finché non lo si chiude, e a un agente arriva fra gli avvisi.
+                ? $this->flashWarning(__('gestionale.success_update_anagrafica') . ' ' . $ancoraAlta)
+                : $this->flashSuccess(__('gestionale.success_update_anagrafica')));
 
         } catch (ValidationException $e) {
             DB::rollBack();
@@ -442,22 +452,39 @@ class ImmobileAnagraficaController extends Controller
      * nuova passerebbe su uno stato che nessuno ha controllato (la stessa persona due volte, o le quote oltre 100). La
      * riga di `immobili` è il punto in cui si mettono in fila `RegistraSubentroAction` e `AnnullaPassaggioAction`.
      *
+     * Restituisce le righe dell'unità lette sotto lock, com'erano prima della scrittura (Web Pro Italia, 13/11/2026): la
+     * modifica ci calcola l'avviso della somma ancora sopra 100.
+     *
      * @param array<string, mixed> $data
+     * @return \Illuminate\Support\Collection<int, TitolaritaImmobile>
      */
-    private function ripassaLeGuardie(Immobile $immobile, array $data, ?int $rigaInModifica): void
+    private function ripassaLeGuardie(Immobile $immobile, array $data, ?int $rigaInModifica): \Illuminate\Support\Collection
     {
         Immobile::bloccaPerScrivere([$immobile->id]);
 
-        $nuova = [
+        $righe = $immobile->titolarita()->get();
+        $errori = GuardieTitolarita::errori($righe, $this->rigaPerLeGuardie($data), $rigaInModifica);
+        if ($errori !== []) {
+            throw ValidationException::withMessages($errori);
+        }
+
+        return $righe;
+    }
+
+    /**
+     * La riga del modulo nella forma che leggono le guardie.
+     *
+     * @param array<string, mixed> $data
+     * @return array{anagrafica_id: int, tipologia: string, quota: float, data_inizio: mixed, data_fine: mixed}
+     */
+    private function rigaPerLeGuardie(array $data): array
+    {
+        return [
             'anagrafica_id' => (int) $data['anagrafica_id'],
             'tipologia'     => (string) $data['tipologia'],
             'quota'         => (float) $data['quota'],
             'data_inizio'   => $data['data_inizio'] ?? DateHelper::oggiUtente(),
             'data_fine'     => $data['data_fine'] ?? null,
         ];
-        $errori = GuardieTitolarita::errori($immobile->titolarita()->get(), $nuova, $rigaInModifica);
-        if ($errori !== []) {
-            throw ValidationException::withMessages($errori);
-        }
     }
 }

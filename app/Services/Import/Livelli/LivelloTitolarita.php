@@ -160,6 +160,18 @@ final class LivelloTitolarita implements LivelloImport
         // scheda dell'unità, dove vede cosa sta cambiando.
         $inConflitto = $this->unitaInConflitto($daScrivere, $soggetti, $unita);
 
+        // ── Più titolari dello stesso ruolo senza quota nel file (Web Pro Italia, 13/11/2026) ──
+        //
+        // Il file non porta la quota (`$t->quota` nullo) e il default dello schema è 100: con due comproprietari
+        // sulla stessa unità entravano 100 e 100, somma 200. Per il riparto non cambiava niente — il motore divide
+        // per `quota / somma_quote`, e 100 e 100 sono metà per uno — ma la guardia sulle quote («la somma per ruolo
+        // non supera 100») da lì in poi rifiutava ogni correzione sulla scheda dell'unità. Ora, **solo dove il file
+        // non dice nessuna quota**, i titolari dello stesso ruolo sulla stessa unità entrano in parti uguali che
+        // sommano 100 (50 e 50; 33,34, 33,33 e 33,33: i centesimi del resto ai primi del file). È lo stesso peso
+        // di prima scritto in modo che sommi 100, non un'interpretazione delle note: la quota vera, se sta nelle
+        // note, resta segnalata dal parser e da correggere a mano.
+        $partiUguali = $this->partiUgualiSenzaQuota($daScrivere, $soggetti, $unita, $inConflitto);
+
         foreach ($daScrivere as $t) {
             $soggetto = $soggetti[$t->soggettoRef];
             $immobile = $unita[$t->immobileRef];
@@ -208,8 +220,10 @@ final class LivelloTitolarita implements LivelloImport
                 'anagrafica_id' => $soggetto->getKey(),
                 'tipologia' => $t->ruolo->value,
                 // Lo schema ha default 100.00: la quota vera, quando esiste, sta solo nelle
-                // note del file (§17.4), e il parser la segnala invece di indovinarla.
-                'quota' => $t->quota ?? 100.00,
+                // note del file (§17.4), e il parser la segnala invece di indovinarla. Con più
+                // titolari dello stesso ruolo e nessuna quota nel file, le parti uguali di
+                // `partiUgualiSenzaQuota()` al posto di 100 a ciascuno.
+                'quota' => $t->quota ?? $partiUguali[$tripla] ?? 100.00,
                 // Solo la data: un Carbon intero su sqlite scrive anche l'ora, e il filtro SQL del risolutore
                 // e la collection devono leggere lo stesso giorno (invariante 4).
                 'data_inizio' => $esercizio->data_inizio->toDateString(),
@@ -338,6 +352,61 @@ final class LivelloTitolarita implements LivelloImport
         }
 
         return $conflitti;
+    }
+
+    /**
+     * Le parti uguali per i titolari dello stesso ruolo sulla stessa unità, **quando il file non porta nessuna quota**
+     * per quel gruppo (Web Pro Italia, 13/11/2026): tripla «immobile:anagrafica:ruolo» → quota.
+     *
+     * Entra qui solo un gruppo (unità, ruolo) con almeno due persone diverse e con la quota vuota su **tutte** le sue
+     * righe. Se anche una sola riga del gruppo dichiara la quota il gruppo resta fuori, e si scrive come prima — ciò che
+     * il file dice, e 100 dove tace: decidere che una riga vuota vale «il resto» sarebbe interpretare. Restano fuori
+     * anche i gruppi che il commit salta perché l'archivio ha già qualcuno (`$inConflitto`), e la stessa persona scritta
+     * due volte conta una.
+     *
+     * Le parti sommano esattamente 100 con due decimali, che è la precisione della colonna: i centesimi che avanzano
+     * vanno ai primi del file (tre titolari: 33,34, 33,33, 33,33).
+     *
+     * ⚠️ Un gruppo che entra è sempre scritto per intero: `unitaInConflitto()` salta l'unità se l'archivio ha già un
+     * titolare attivo di quel ruolo che il file non porta, e se li porta tutti le righe «esistono già» e non si
+     * scrivono. Per questo contare le persone del file basta.
+     *
+     * @param  list<CanonicalTitolarita>  $daScrivere
+     * @param  array<string, Model>  $soggetti
+     * @param  array<string, Model>  $unita
+     * @param  array<string, string>  $inConflitto
+     * @return array<string, float>
+     */
+    private function partiUgualiSenzaQuota(array $daScrivere, array $soggetti, array $unita, array $inConflitto): array
+    {
+        $gruppi = [];
+        foreach ($daScrivere as $t) {
+            $immobile = $unita[$t->immobileRef];
+            $gruppo = $immobile->getKey().':'.$t->ruolo->value;
+            $tripla = $immobile->getKey().':'.$soggetti[$t->soggettoRef]->getKey().':'.$t->ruolo->value;
+
+            $gruppi[$gruppo]['con_quota'] = ($gruppi[$gruppo]['con_quota'] ?? false) || $t->quota !== null;
+            $gruppi[$gruppo]['triple'][$tripla] = true;
+        }
+
+        $parti = [];
+        foreach ($gruppi as $gruppo => $g) {
+            $n = count($g['triple']);
+            if ($g['con_quota'] || $n < 2 || isset($inConflitto[$gruppo])) {
+                continue;
+            }
+
+            // In centesimi di punto, interi: 10000 / 3 = 3333 con il resto di 1, che va al primo.
+            $base = intdiv(10000, $n);
+            $resto = 10000 % $n;
+            $i = 0;
+            foreach (array_keys($g['triple']) as $tripla) {
+                $parti[$tripla] = ($base + ($i < $resto ? 1 : 0)) / 100;
+                $i++;
+            }
+        }
+
+        return $parti;
     }
 
     /**
