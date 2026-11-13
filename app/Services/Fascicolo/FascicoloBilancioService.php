@@ -73,7 +73,9 @@ class FascicoloBilancioService
         $richieste = $opzioni['sezioni'] ?? $fascicolo?->sezioni ?? self::DI_SERIE[$tipo];
         $richieste = array_values(array_intersect(array_keys(self::SEZIONI), (array) $richieste));
 
-        $pagina = array_intersect($richieste, ['spese', 'patrimoniale', 'fatture', 'nota'])
+        // Lo stato patrimoniale serve alle sezioni del consuntivo (e ai numeri sotto la nota): in un fascicolo solo
+        // preventivo non c'è niente da leggere, e si risparmia la lettura di tutti i registri.
+        $pagina = array_intersect($richieste, ['spese', 'patrimoniale', 'fatture']) || ($tipo === 'consuntivo' && in_array('nota', $richieste, true))
             ? $this->patrimoniale->costruisci($condominio, $esercizio)
             : null;
 
@@ -114,6 +116,9 @@ class FascicoloBilancioService
         }
 
         $stampe = app(PrintSettings::class);
+        $foto = $stampe->fascicolo_copertina_path
+            ? app(ArchivioDocumenti::class)->percorsoLocalePubblico($stampe->fascicolo_copertina_path)
+            : null;
 
         return [
             'tipo' => $tipo,
@@ -141,17 +146,32 @@ class FascicoloBilancioService
                 'titoli' => trim((string) $fascicolo?->titolo) !== '' ? [trim((string) $fascicolo->titolo)] : $titoli,
                 'sottotitolo' => trim((string) $fascicolo?->sottotitolo) ?: $this->sottotitoloDiSerie(array_column($sezioni, 'chiave')),
                 'studio' => trim((string) $stampe->fascicolo_studio) ?: null,
-                'foto' => $stampe->fascicolo_copertina_path
-                    ? app(ArchivioDocumenti::class)->percorsoLocalePubblico($stampe->fascicolo_copertina_path)
-                    : null,
+                'foto' => $foto,
+                // Quanto è alta la foto a tutta larghezza (210 mm): la copertina la appoggia sulla fascia in fondo.
+                'foto_altezza_mm' => self::altezzaFoto($foto),
             ],
             'colori' => self::colori(),
             'sezioni' => $sezioni,
             'dati' => $dati,
-            'numeri' => $pagina ? $this->numeri($pagina, $dati) : [],
+            'numeri' => $tipo === 'preventivo' ? $this->numeriDelPreventivo($dati) : ($pagina ? $this->numeri($pagina, $dati) : []),
             'piede' => trim($condominio->nome.' – Bilancio '.($haConsuntivo ? $anno : $annoPreventivo)),
             'stampato_il' => now()->format('d/m/Y'),
         ];
+    }
+
+    /** L'altezza in millimetri della foto di copertina stampata larga quanto il foglio; al massimo 150 (il resto si taglia). */
+    private static function altezzaFoto(?string $percorso): ?float
+    {
+        if (! $percorso || ! is_file($percorso)) {
+            return null;
+        }
+
+        $misure = @getimagesize($percorso);
+        if (! $misure || $misure[0] <= 0) {
+            return null;
+        }
+
+        return round(min(150, max(60, 210 * $misure[1] / $misure[0])), 1);
     }
 
     /** Il tipo di fascicolo: quello chiesto, altrimenti consuntivo se l'esercizio ha già dei movimenti (o è chiuso). */
@@ -649,6 +669,21 @@ class FascicoloBilancioService
         }
 
         return ['piani' => $piani];
+    }
+
+    /** In un fascicolo preventivo i numeri che contano sono due: quanto si prevede di spendere e quanto si chiede con le rate. */
+    private function numeriDelPreventivo(array $dati): array
+    {
+        $numeri = [];
+
+        if (isset($dati['preventivo']['totale'])) {
+            $numeri[] = ['voce' => 'Spese previste', 'importo' => (int) $dati['preventivo']['totale']];
+        }
+        foreach ($dati['rate']['piani'] ?? [] as $piano) {
+            $numeri[] = ['voce' => 'Totale delle rate – '.$piano['nome'], 'importo' => (int) $piano['totale']];
+        }
+
+        return $numeri;
     }
 
     /**

@@ -15,7 +15,14 @@
     $c = $colori;
     $eur = fn (?int $cent) => number_format(($cent ?? 0) / 100, 2, ',', '.');
     $eurVuoto = fn (?int $cent) => $cent === null || $cent === 0 ? '' : number_format($cent / 100, 2, ',', '.');
-    $conSegno = fn (?int $cent) => ($cent ?? 0) < 0 ? '– '.number_format(abs($cent) / 100, 2, ',', '.') : number_format(($cent ?? 0) / 100, 2, ',', '.');
+    $conSegno = fn (?int $cent) => ($cent ?? 0) < 0 ? '−'.number_format(abs($cent) / 100, 2, ',', '.') : number_format(($cent ?? 0) / 100, 2, ',', '.');
+    // Le ultime righe di una tabella lunga stanno in una tabella a parte che non si spezza, insieme al totale: così il
+    // totale non resta mai da solo in cima a una pagina. Le larghezze delle colonne si ripetono uguali nelle due.
+    $spezza = function (array $righe, int $inCoda = 3): array {
+        $taglio = max(0, count($righe) - $inCoda);
+
+        return [array_slice($righe, 0, $taglio), array_slice($righe, $taglio), $taglio];
+    };
     $chiavi = array_column($sezioni, 'chiave');
     $titoloDi = array_column($sezioni, 'titolo', 'chiave');
     $ha = fn (string $k) => in_array($k, $chiavi, true);
@@ -29,6 +36,9 @@
         return $salto;
     };
     $nomeCondominio = preg_replace('/^condominio\s+/iu', '', $condominio['nome']);
+    // La copertina: striscia in alto (11 mm), filetto, blocco a colore, foto appoggiata sulla fascia in fondo (da 265 mm).
+    $altezzaFoto = $copertina['foto'] ? ($copertina['foto_altezza_mm'] ?? 130) : 0;
+    $inizioFoto = 265 - $altezzaFoto;
 @endphp
 <!DOCTYPE html>
 <html lang="it">
@@ -44,13 +54,17 @@
         table.t th { background: {{ $c['titolo'] }}; color: #ffffff; text-align: left; padding: 4px 6px; border: 0.25mm solid {{ $c['bordo'] }}; font-size: 8.3pt; }
         table.t td { padding: 4px 6px; border: 0.25mm solid {{ $c['bordo'] }}; vertical-align: top; }
         table.t tr.z td { background: {{ $c['tenue'] }}; }
-        table.t td.n, table.t th.n { text-align: right; }
+        table.t td.n, table.t th.n { text-align: right; white-space: nowrap; }
+        /* Le tabelle lunghe sono in due pezzi (righe + coda col totale che non si spezza): larghezze fisse e nessun
+           rimpicciolimento automatico (autosize="1"), scritti sull'elemento, altrimenti mPDF dà ai due pezzi colonne e
+           caratteri diversi. Non più di due classi per tabella: oltre, mPDF non le applica tutte. */
         table.t tr.tot td { background: {{ $c['totale'] }}; font-weight: bold; }
         table.t tr.cap td { font-weight: bold; }
         table.t tr.sub td { font-weight: bold; background: {{ $c['tenue'] }}; }
         table.stretta { font-size: 7.4pt; }
-        table.stretta th { font-size: 6.9pt; padding: 3px 4px; }
-        table.stretta td { padding: 3px 4px; }
+        table.stretta th { font-size: 6.9pt; padding: 3px 3px; }
+        table.stretta td { padding: 3px 3px; }
+        table.stretta tr.tot td { font-size: 6.7pt; }
         h3 { color: {{ $c['scuro'] }}; font-size: 11.5pt; margin: 14px 0 5px 0; }
         p { margin: 0 0 6px 0; text-align: justify; line-height: 1.45; }
         ul, ol { margin: 0 0 6px 0; }
@@ -70,7 +84,7 @@
     <div style="padding: 4.6mm 0 0 14mm; color: #ffffff; font-size: 7.6pt;">{{ $copertina['sopratitolo'] }}</div>
 </div>
 <div style="position: absolute; left: 0; top: 11mm; width: 210mm; height: 1.3mm; background: {{ $c['fascia'] }};"></div>
-<div style="position: absolute; left: 0; top: 12.3mm; width: 210mm; height: {{ $copertina['foto'] ? '112.7mm' : '252.7mm' }}; background: {{ $c['copertina'] }};"></div>
+<div style="position: absolute; left: 0; top: 12.3mm; width: 210mm; height: {{ $inizioFoto - 12.3 }}mm; background: {{ $c['copertina'] }};"></div>
 <div style="position: absolute; left: 16mm; top: 26mm; width: 178mm; color: {{ $c['testo_copertina'] }};">
     <div style="font-size: 25pt; font-weight: bold; line-height: 1.15;">CONDOMINIO<br>{{ mb_strtoupper($nomeCondominio) }}</div>
     <div style="font-size: 11.5pt; margin-top: 7mm;">{{ $condominio['indirizzo'] }}@if($condominio['codice_fiscale']) – C.F. {{ $condominio['codice_fiscale'] }}@endif</div>
@@ -84,7 +98,7 @@
     </div>
 </div>
 @if($copertina['foto'])
-<div style="position: absolute; left: 0; top: 125mm; width: 210mm; height: 140mm; overflow: hidden;">
+<div style="position: absolute; left: 0; top: {{ $inizioFoto }}mm; width: 210mm; height: {{ $altezzaFoto }}mm; overflow: hidden;">
     <img src="{{ $copertina['foto'] }}" style="width: 210mm;">
 </div>
 @endif
@@ -124,12 +138,12 @@
     @else
         <p>Gentili Condòmini,</p>
         <p>la presente nota accompagna
-            @if($tipo === 'consuntivo') il rendiconto dell'esercizio {{ $esercizio['anno'] }} del {{ $condominio['nome'] }} ({{ $esercizio['dal'] }} – {{ $esercizio['al'] }})@else il bilancio preventivo {{ $esercizio['anno'] }} del {{ $condominio['nome'] }}@endif.
+            @if($tipo === 'consuntivo') il rendiconto dell'esercizio {{ $esercizio['anno'] }} del condominio {{ $nomeCondominio }} ({{ $esercizio['dal'] }} – {{ $esercizio['al'] }})@else il bilancio preventivo {{ $esercizio['anno'] }} del condominio {{ $nomeCondominio }}@endif.
             Il fascicolo comprende: {{ mb_strtolower(implode(', ', array_map(fn ($s) => $s['titolo'], array_filter($sezioni, fn ($s) => $s['chiave'] !== 'nota')))) }}.</p>
     @endif
 
     @if($numeri)
-        <h3>I numeri dell'esercizio</h3>
+        <h3>{{ $tipo === 'preventivo' ? 'I numeri del preventivo' : 'I numeri dell\'esercizio' }}</h3>
         <table class="t" style="width: 62%;">
             <tbody>
             @foreach($numeri as $i => $n)
@@ -203,13 +217,32 @@
     <bookmark content="{{ $titoloDi['condomini'] }}" level="0" />
     <div class="titolo">SITUAZIONE DEI CONDÒMINI<br><span class="sotto">rate dovute e versamenti al {{ $sc['al'] }}</span></div>
     <p class="piccolo" style="margin-top: 5px;">Saldo = totale dovuto – versato. Saldo positivo = da versare; con il segno meno = a credito.</p>
-    <table class="t {{ $nG > 3 ? 'stretta' : '' }}">
+    @php
+        [$testa, $coda, $taglio] = $spezza($sc['righe']);
+        $lG = $nG > 1 ? ($nG > 3 ? 10 : 12) : 0;
+        $lNome = 100 - 7 - 39 - ($nG > 1 ? $nG * $lG : 0);
+        $rigaCondomino = function (array $r, int $i, bool $prima) use ($nG, $lG, $lNome, $eur, $eurVuoto, $conSegno) {
+            // La larghezza su ogni cella: mPDF, anche a larghezze fisse, guarda le righe del corpo e non solo l'intestazione.
+            $w = fn (float $l) => ' style="width: '.$l.'%;"';
+            $h = '<tr class="'.($i % 2 ? 'z' : '').'"><td'.$w(7).'>'.e($r['unita']).'</td><td'.$w($lNome).'>'.e($r['persona']).'</td>';
+            if ($nG > 1) {
+                foreach ($r['per_gestione'] as $v) {
+                    $h .= '<td class="n"'.$w($lG).'>'.$eurVuoto($v).'</td>';
+                }
+            }
+
+            return $h.'<td class="n"'.$w(13).'>'.$eur($r['dovuto']).'</td><td class="n"'.$w(13).'>'.$eur($r['versato']).'</td>'
+                .'<td class="n '.($r['saldo'] < 0 ? 'neg' : '').'"'.$w(13).'>'.$conSegno($r['saldo']).'</td></tr>';
+        };
+    @endphp
+    @if($testa)
+    <table autosize="1" class="t {{ $nG > 3 ? 'stretta' : '' }}" style="table-layout: fixed;">
         <thead>
         <tr>
             <th style="width: 7%;">U.I.</th>
-            <th>Condòmino</th>
+            <th style="width: {{ $lNome }}%;">Condòmino</th>
             @if($nG > 1)
-                @foreach($sc['gestioni'] as $nome)<th class="n">{{ $nome }}</th>@endforeach
+                @foreach($sc['gestioni'] as $nome)<th class="n" style="width: {{ $lG }}%;">{{ $nome }}</th>@endforeach
             @endif
             <th class="n" style="width: 13%;">Totale dovuto</th>
             <th class="n" style="width: 13%;">Versato</th>
@@ -217,18 +250,27 @@
         </tr>
         </thead>
         <tbody>
-        @foreach($sc['righe'] as $i => $r)
-            <tr class="{{ $i % 2 ? 'z' : '' }}">
-                <td>{{ $r['unita'] }}</td>
-                <td>{{ $r['persona'] }}</td>
-                @if($nG > 1)
-                    @foreach($r['per_gestione'] as $v)<td class="n">{{ $eurVuoto($v) }}</td>@endforeach
-                @endif
-                <td class="n">{{ $eur($r['dovuto']) }}</td>
-                <td class="n">{{ $eur($r['versato']) }}</td>
-                <td class="n {{ $r['saldo'] < 0 ? 'neg' : '' }}">{{ $conSegno($r['saldo']) }}</td>
-            </tr>
-        @endforeach
+        @foreach($testa as $i => $r){!! $rigaCondomino($r, $i, false) !!}@endforeach
+        </tbody>
+    </table>
+    @endif
+    <table autosize="1" class="t {{ $nG > 3 ? 'stretta' : '' }}" style="table-layout: fixed; page-break-inside: avoid; margin-top: {{ $testa ? '0' : '7px' }};">
+        @if(! $testa)
+        <thead>
+        <tr>
+            <th style="width: 7%;">U.I.</th>
+            <th style="width: {{ $lNome }}%;">Condòmino</th>
+            @if($nG > 1)
+                @foreach($sc['gestioni'] as $nome)<th class="n" style="width: {{ $lG }}%;">{{ $nome }}</th>@endforeach
+            @endif
+            <th class="n" style="width: 13%;">Totale dovuto</th>
+            <th class="n" style="width: 13%;">Versato</th>
+            <th class="n" style="width: 13%;">Saldo</th>
+        </tr>
+        </thead>
+        @endif
+        <tbody>
+        @foreach($coda as $i => $r){!! $rigaCondomino($r, $taglio + $i, $i === 0) !!}@endforeach
         <tr class="tot">
             <td colspan="2">Totale</td>
             @if($nG > 1)
@@ -340,23 +382,36 @@
     @php $rg = $dati['registro']; @endphp
     <bookmark content="{{ $titoloDi['registro'] }}" level="0" />
     <div class="titolo">REGISTRO DI CONTABILITÀ<br><span class="sotto">movimenti di banca e contanti – {{ $esercizio['dal'] }} – {{ $esercizio['al'] }}</span></div>
-    <table class="t">
+    @php
+        [$testa, $coda, $taglio] = $spezza($rg['righe']);
+        $rigaRegistro = function (array $r, int $i, bool $prima) use ($eurVuoto, $conSegno) {
+            // La larghezza su ogni cella: mPDF, anche a larghezze fisse, guarda le righe del corpo e non solo l'intestazione.
+            $w = fn (float $l) => ' style="width: '.$l.'%;"';
+            $descrizione = e($r['descrizione']);
+            if ($r['controparte'] !== '' && ! str_contains(mb_strtolower($r['descrizione']), mb_strtolower($r['controparte']))) {
+                $descrizione .= ' – '.e($r['controparte']);
+            }
+            if ($r['stornata']) {
+                $descrizione .= ' <span class="piccolo">(stornato)</span>';
+            }
+
+            return '<tr class="'.($i % 2 ? '' : 'z').'"><td'.$w(6).'>'.e((string) $r['numero']).'</td><td'.$w(10).'>'.e((string) $r['data']).'</td><td'.$w(44).'>'.$descrizione.'</td>'
+                .'<td class="n"'.$w(13).'>'.$eurVuoto($r['entrata']).'</td><td class="n"'.$w(13).'>'.$eurVuoto($r['uscita']).'</td><td class="n"'.$w(14).'>'.$conSegno($r['saldo']).'</td></tr>';
+        };
+    @endphp
+    <table autosize="1" class="t" style="table-layout: fixed;">
         <thead>
-        <tr><th style="width: 6%;">N.</th><th style="width: 10%;">Data</th><th>Descrizione</th><th class="n" style="width: 13%;">Entrate</th><th class="n" style="width: 13%;">Uscite</th><th class="n" style="width: 14%;">Saldo</th></tr>
+        <tr><th style="width: 6%;">N.</th><th style="width: 10%;">Data</th><th style="width: 44%;">Descrizione</th><th class="n" style="width: 13%;">Entrate</th><th class="n" style="width: 13%;">Uscite</th><th class="n" style="width: 14%;">Saldo</th></tr>
         </thead>
         <tbody>
         <tr class="cap"><td></td><td>{{ $esercizio['dal'] ? substr($esercizio['dal'], 0, 6).substr($esercizio['dal'], 8) : '' }}</td><td>Saldo iniziale</td><td></td><td></td><td class="n">{{ $conSegno($rg['iniziale']) }}</td></tr>
-        @foreach($rg['righe'] as $i => $r)
-            <tr class="{{ $i % 2 ? '' : 'z' }}">
-                <td>{{ $r['numero'] }}</td>
-                <td>{{ $r['data'] }}</td>
-                <td>{{ $r['descrizione'] }}@if($r['controparte'] !== '' && ! str_contains(mb_strtolower($r['descrizione']), mb_strtolower($r['controparte']))) – {{ $r['controparte'] }}@endif @if($r['stornata'])<span class="piccolo">(stornato)</span>@endif</td>
-                <td class="n">{{ $eurVuoto($r['entrata']) }}</td>
-                <td class="n">{{ $eurVuoto($r['uscita']) }}</td>
-                <td class="n">{{ $conSegno($r['saldo']) }}</td>
-            </tr>
-        @endforeach
-        <tr class="tot"><td colspan="3">Totale movimenti e saldo finale</td><td class="n">{{ $eur($rg['entrate']) }}</td><td class="n">{{ $eur($rg['uscite']) }}</td><td class="n">{{ $conSegno($rg['finale']) }}</td></tr>
+        @foreach($testa as $i => $r){!! $rigaRegistro($r, $i, false) !!}@endforeach
+        </tbody>
+    </table>
+    <table autosize="1" class="t" style="table-layout: fixed; page-break-inside: avoid; margin-top: 0;">
+        <tbody>
+        @foreach($coda as $i => $r){!! $rigaRegistro($r, $taglio + $i, $i === 0) !!}@endforeach
+        <tr class="tot"><td colspan="3" @if(! $coda) style="width: 60%;" @endif>Totale movimenti e saldo finale</td><td class="n" @if(! $coda) style="width: 13%;" @endif>{{ $eur($rg['entrate']) }}</td><td class="n" @if(! $coda) style="width: 13%;" @endif>{{ $eur($rg['uscite']) }}</td><td class="n" @if(! $coda) style="width: 14%;" @endif>{{ $conSegno($rg['finale']) }}</td></tr>
         </tbody>
     </table>
 @endif
@@ -405,12 +460,19 @@
             <div class="spazio"></div>
         @endif
         <div class="titolo">{{ mb_strtoupper($titoloDi['rate']) }}<br><span class="sotto">{{ $pr['nome'] }}@if($pr['bozza']) – proposta, da approvare in assemblea @endif</span></div>
-        <table class="t {{ count($pr['colonne']) > 5 ? 'stretta' : '' }}">
+        @php
+            $nC = count($pr['colonne']);
+            $lC = $nC > 4 ? round(64 / $nC, 2) : 11;
+            $lNome = 100 - 6 - 11 - $nC * $lC;
+        @endphp
+        {{-- Una tabella sola, non spezzata come le altre: con molte rate mPDF la rimpicciolisce per farla stare in
+             larghezza, e una coda separata resterebbe più grande e con le colonne spostate. --}}
+        <table class="t {{ $nC > 4 ? 'stretta' : '' }}">
             <thead>
             <tr>
                 <th style="width: 6%;">U.I.</th>
-                <th>Condòmino</th>
-                @foreach($pr['colonne'] as $col)<th class="n">{{ $col['etichetta'] }}<br>{{ $col['scadenza'] }}</th>@endforeach
+                <th style="width: {{ $lNome }}%;">Condòmino</th>
+                @foreach($pr['colonne'] as $col)<th class="n" style="width: {{ $lC }}%;">{{ $col['etichetta'] }}<br>{{ $col['scadenza'] }}</th>@endforeach
                 <th class="n" style="width: 11%;">Totale</th>
             </tr>
             </thead>
