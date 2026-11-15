@@ -77,7 +77,7 @@ const headerBreadcrumbs = computed(() => [
 const pageGuides = [
     { title: 'Un documento solo', description: 'Copertina, nota esplicativa, rendiconto delle spese, situazione dei condòmini, stato patrimoniale, fatture da pagare, registro e preventivo: tutto in un PDF, da mandare con la convocazione.', icon: BookMarked, colorVariant: 'blue' as const },
     { title: 'I numeri non si scrivono', description: 'Ogni cifra viene dai registri del gestionale, la stessa delle stampe singole. Qui si scrive solo la nota e si sceglie che cosa includere.', icon: ListChecks, colorVariant: 'emerald' as const },
-    { title: 'La nota è tua', description: 'È la lettera ai condòmini chiesta dall\'art. 1130-bis c.c.: che cosa è successo nell\'anno, i rapporti in corso, le questioni aperte.', icon: PenLine, colorVariant: 'amber' as const },
+    { title: 'La nota è tua', description: 'È la nota sintetica esplicativa del rendiconto, la lettera ai condòmini: che cosa è successo nell\'anno, i rapporti in corso, le questioni aperte.', icon: PenLine, colorVariant: 'amber' as const },
 ];
 </script>
 

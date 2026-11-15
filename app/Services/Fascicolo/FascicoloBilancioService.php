@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Il FASCICOLO DI BILANCIO (Web Pro Italia, 13/11/2026): un documento solo, da mandare ai condòmini con la convocazione
- * dell'assemblea, che mette insieme ciò che l'art. 1130-bis c.c. chiede al rendiconto — registro di contabilità,
+ * dell'assemblea, che mette insieme le tre parti del rendiconto condominiale — registro di contabilità,
  * riepilogo finanziario, nota sintetica esplicativa — con il riparto, la situazione di ogni condòmino, le fatture da
  * pagare e il preventivo dell'anno dopo, dietro una copertina con il nome dello studio.
  *
