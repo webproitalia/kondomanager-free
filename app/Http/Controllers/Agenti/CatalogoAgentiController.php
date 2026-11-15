@@ -31,7 +31,7 @@ use Throwable;
  */
 class CatalogoAgentiController extends Controller
 {
-    public const VERSIONE = 'agenti-3';
+    public const VERSIONE = 'agenti-4';
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -224,7 +224,10 @@ class CatalogoAgentiController extends Controller
     {
         $ultima = substr($nome, strrpos($nome, '.') + 1);
 
-        return (str_contains($ultima, 'print') || in_array($ultima, ['download', 'modello', 'distinta', 'rapporto', 'copia-autentica', 'prospetto-oneri'], true)
+        // Dalla 1.12 le stampe si chiamano anche «stampa», «fogli», «fascicolo»… (15/11/2026: 19 letture che rispondono con un PDF o uno
+        // ZIP risultavano pagine, e un agente le leggeva come dati). Lo stesso elenco lo tiene il server MCP (`FILE_SENZA_SEGNO`).
+        return (str_contains($ultima, 'print') || in_array($ultima, ['download', 'modello', 'distinta', 'rapporto', 'copia-autentica', 'prospetto-oneri',
+            'stampa', 'pdf', 'zip', 'scarica', 'apri', 'verbale', 'documento', 'fascicolo', 'foglio', 'fogli'], true)
             || str_ends_with($uri, '.pdf')) ?: null;
     }
 

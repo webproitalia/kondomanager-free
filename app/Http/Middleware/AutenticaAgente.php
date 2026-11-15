@@ -66,7 +66,7 @@ class AutenticaAgente
     /** Dati che il layout condivide su ogni pagina: per un agente sono rumore, si tolgono dalla busta. */
     private const CONDIVISI = [
         'name', 'version', 'is_demo', 'funzioni', 'locale', 'paginazione', 'auth', 'flash', 'csrf_token',
-        'back_url', 'inbox_count', 'system_update', 'errors', 'ziggy', 'sidebarOpen',
+        'back_url', 'inbox_count', 'system_update', 'errors', 'ziggy', 'sidebarOpen', 'allegati_in_attesa',
     ];
 
     private const AVVISI_FLASH = [
@@ -319,6 +319,11 @@ class AutenticaAgente
             }
 
             return $this->json(array_replace($base, ['tipo' => 'dati', 'dati' => $dati]), $stato);
+        }
+
+        // Un rifiuto scritto in testo semplice (la 1.12 lo fa nelle lettere e nelle ricevute): il testo è il motivo, e un agente lo deve leggere.
+        if ($stato >= 400 && str_contains($tipo, 'text/plain') && trim((string) $risposta->getContent()) !== '') {
+            return $this->json(array_replace($base, ['tipo' => 'errore', 'messaggio' => Str::limit(trim((string) $risposta->getContent()), 1000)]), $stato);
         }
 
         // Una pagina HTML o un errore senza JSON: per un agente non vale niente, ne resta lo stato.

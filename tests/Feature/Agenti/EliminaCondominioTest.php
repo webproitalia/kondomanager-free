@@ -295,3 +295,14 @@ it('⚠️ se il contatore delle richieste inciampa, la richiesta passa lo stess
 
     $this->withToken($testo)->getJson('/condomini')->assertOk();
 });
+
+it('un rifiuto scritto in testo semplice arriva all\'agente con il suo motivo, e finisce nel registro', function () {
+    \Illuminate\Support\Facades\Route::middleware('web')->post('/prova-rifiuto-in-testo', fn () => response('Manca il canale di invio per 3 persone.', 422, ['Content-Type' => 'text/plain; charset=UTF-8']))
+        ->name('prova.rifiuto-in-testo');
+    $testo = chiaveAgente($this->utente);
+
+    $this->withToken($testo)->postJson('/prova-rifiuto-in-testo')
+        ->assertStatus(422)->assertJson(['ok' => false, 'messaggio' => 'Manca il canale di invio per 3 persone.']);
+
+    expect(AzioneAgente::latest('id')->first()->motivo)->toBe('Manca il canale di invio per 3 persone.');
+});
