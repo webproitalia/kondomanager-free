@@ -116,6 +116,9 @@ class FascicoloBilancioController extends Controller
 
         $dati = $this->servizio->costruisci($condominio, $esercizio, $fascicolo, $opzioni);
         $dati['senza_firma'] = true;
+        // Dalla 1.12 ogni stampa dice il suo gruppo di carta dello studio. Il fascicolo di bilancio ha la sua copertina a tutta pagina e le sue
+        // testate: la carta intestata o la testata a campi sotto le pagine si sovrapporrebbero. Per questo nessuna carta, come il modello F24.
+        $dati['gruppo_carta'] = \App\Services\PDF\GruppoCarta::NESSUNO;
 
         $config = [
             'default_font' => 'inter',

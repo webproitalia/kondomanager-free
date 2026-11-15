@@ -39,10 +39,15 @@ FROM php:8.4.27-fpm-bookworm AS base
 # vanno con `--auto-remove`: questo strato pesa 60 MB invece di 200. La catena di compilazione
 # dell'immagine ufficiale (gcc, make: $PHPIZE_DEPS, 314 MB) invece resta: sta in uno strato
 # dell'immagine di base, e cancellare lì dentro da uno strato successivo non toglie un byte.
+# GD con JPEG, WebP e FreeType (Web Pro Italia, 15/11/2026): senza, il logo, la firma e la carta intestata in JPG non
+# si possono riscrivere al caricamento («No JPEG support in this PHP build») e le foto degli allegati in JPG o WebP non
+# si leggono. Le librerie di runtime (libjpeg, libwebp, libfreetype) le tiene la riga con ldd qui sotto.
 RUN savedAptMark="$(apt-mark showmanual)" \
     && apt-get update && apt-get install -y --no-install-recommends \
         nginx supervisor curl unzip zip \
         libpng-dev libonig-dev libxml2-dev libzip-dev libicu-dev \
+        libjpeg62-turbo-dev libwebp-dev libfreetype6-dev \
+    && docker-php-ext-configure gd --with-jpeg --with-webp --with-freetype \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql mbstring exif pcntl bcmath gd zip intl opcache \
     && apt-mark auto '.*' > /dev/null \
     && apt-mark manual $savedAptMark nginx supervisor curl unzip zip > /dev/null \
