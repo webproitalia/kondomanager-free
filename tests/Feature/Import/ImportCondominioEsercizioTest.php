@@ -251,7 +251,29 @@ it('chiede cosa fare quando l\'esercizio con lo stesso periodo esiste già', fun
         ->and(Esercizio::count())->toBe(1);
 });
 
-it('segnala l\'esercizio che si accavalla senza però bloccarlo', function () {
+// ⚠️ **Fino al 15/11/2026 qui c'era «segnala l'esercizio che si accavalla senza però bloccarlo»**, e descriveva il
+// difetto: il secondo lotto apriva un altro esercizio accanto a quello aperto, con il solo avviso di sovrapposizione.
+// Ora, con un esercizio aperto in archivio, il secondo non si apre da solo: si chiede (Web Pro Italia). Il principio
+// che quel test difendeva — un avviso non ferma niente — resta, ed è il secondo caso qui sotto.
+it('con un esercizio già aperto, quello del file non si apre da solo: aspetta una decisione', function () {
+    $ctx = contesto()
+        ->conCanonico(LivelloCondominio::CHIAVE, canonicoCondominio())
+        ->conCanonico(LivelloEsercizi::CHIAVE, canonicoEsercizio('2024-11-01', '2025-10-31'));
+    (new ImportRunner)->esegui($ctx);
+
+    $ctx2 = contesto()
+        ->conCanonico(LivelloCondominio::CHIAVE, canonicoCondominio())
+        ->conCanonico(LivelloEsercizi::CHIAVE, canonicoEsercizio('2025-06-01', '2026-05-31', '2025/2026'));
+
+    $esiti = (new ImportRunner)->esegui($ctx2, ['condominio:00321760282' => 'salta']);
+
+    expect($esiti['esercizi']->riuscito())->toBeFalse()
+        ->and($esiti['esercizi']->rilievi[0]->codice)->toBe('esercizi.altro_aperto')
+        ->and($esiti['esercizi']->rilievi[0]->chiaveDecisione)->toBe('esercizi:2025/2026')
+        ->and(Esercizio::count())->toBe(1);
+});
+
+it('scelto «crea il nuovo esercizio», segnala l\'accavallamento senza però bloccarlo', function () {
     // Un avviso non deve fermare niente. È il difetto che ho introdotto scrivendo `EsitoCommit`
     // e che questo test esiste per non far tornare: bastava tenere avvisi e rilievi nello
     // stesso elenco perché un'informazione utile diventasse un muro.
@@ -264,12 +286,11 @@ it('segnala l\'esercizio che si accavalla senza però bloccarlo', function () {
         ->conCanonico(LivelloCondominio::CHIAVE, canonicoCondominio())
         ->conCanonico(LivelloEsercizi::CHIAVE, canonicoEsercizio('2025-06-01', '2026-05-31', '2025/2026'));
 
-    $esiti = (new ImportRunner)->esegui($ctx2, ['condominio:00321760282' => 'salta']);
+    $esiti = (new ImportRunner)->esegui($ctx2, ['condominio:00321760282' => 'salta', 'esercizi:2025/2026' => 'crea_nuovo']);
 
     expect($esiti['esercizi']->riuscito())->toBeTrue()
         ->and($esiti['esercizi']->creati)->toBe(1)
-        ->and($esiti['esercizi']->avvisi)->toHaveCount(1)
-        ->and($esiti['esercizi']->avvisi[0]->codice)->toBe('esercizi.sovrapposto')
+        ->and(array_map(fn ($a) => $a->codice, $esiti['esercizi']->avvisi))->toBe(['esercizi.sovrapposto', 'esercizi.due_aperti'])
         ->and(Esercizio::count())->toBe(2);
 });
 

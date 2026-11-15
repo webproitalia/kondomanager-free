@@ -37,6 +37,8 @@ const props = defineProps<{
       voci: {
         chiave_decisione: string; cosa: string; nome: string;
         esistente: string; motivo: string; scelte: string[];
+        /** Solo per l'esercizio aperto: la domanda in parole, con i due periodi. */
+        spiegazione?: string;
       }[];
     };
     titolarita: {
@@ -48,7 +50,12 @@ const props = defineProps<{
       da_dividere: { chiave: string; nome: string; pezzi: string[] }[];
     };
     unita: { totale: number; gia_presenti?: number | null; nuove?: number | null; in_archivio?: number | null; elenco: { chiave: string; nome: string }[] };
-    tabelle: { nome: string; partecipanti: number; somma: number; parziale: boolean; parti_uguali: boolean }[];
+    tabelle: {
+      nome: string; partecipanti: number; somma: number; parziale: boolean; parti_uguali: boolean;
+      /** Che cosa trova in archivio: «diversa» resta quella dell'archivio, e `differenze` dice che cosa cambia. */
+      in_archivio?: 'nuova' | 'uguale' | 'diversa';
+      differenze?: string[];
+    }[];
     saldi: null | {
       righe: number; totale_riferimento: string | null; somma_righe: string;
       arrotondamenti: string; scarto: string | null; quadra: boolean;
@@ -59,6 +66,8 @@ const props = defineProps<{
       da_titolari_cessati: number; importo_cessati: string;
       /** Quanti saldi dichiarano l'esercizio d'origine, e quali esercizi scritti non sono quello del file (si cercano in archivio). */
       con_esercizio_origine?: number; esercizi_origine_da_cercare?: string[];
+      /** Le posizioni che il condominio ha già; null se non c'è niente con cui confrontarle. */
+      in_archivio?: null | { uguali: number; diversi: number; nuove: number; differenze: string[] };
     };
     totale_record: number;
   };
@@ -113,6 +122,7 @@ const MOTIVI: Record<string, string> = {
   codice_fiscale: 'con lo stesso codice fiscale',
   periodo: 'sullo stesso periodo',
   nome: 'con lo stesso nome',
+  aperto: 'ancora aperto',
 };
 
 function motivoInParole(motivo: string): string {
@@ -121,8 +131,16 @@ function motivoInParole(motivo: string): string {
 
 function etichettaScelta(scelta: string, cosa: string): string {
   if (scelta === 'unisci') return 'Unisci';
+  if (scelta === 'crea_nuovo') return 'Crea il nuovo esercizio';
   return cosa === 'esercizio' ? 'Usa quello che c\'è già' : 'Lascia com\'è';
 }
+
+// «cambia» passa all'altra scelta della voce: non sempre è «unisci», per l'esercizio aperto è «crea il nuovo».
+function altraScelta(c: { chiave_decisione: string; scelte: string[] }): string {
+  return c.scelte.find((s) => s !== props.decisioni[c.chiave_decisione]) ?? c.scelte[0];
+}
+
+const tabelleDiverse = computed(() => props.anteprima.tabelle.filter((t) => t.in_archivio === 'diversa').length);
 
 // Il campione non è un limite: è un'anteprima, e «e altre 19» senza modo di vederle è una
 // frase che informa e basta. Il taglio vive qui — la schermata riceve l'elenco intero — così
@@ -232,6 +250,7 @@ const puoConfermare = computed(
             <p v-if="c.motivo === 'nome'" class="mt-1 text-xs text-muted-foreground">
               Sul solo nome ci si sbaglia: due «Rossi Mario» esistono davvero. Controlla prima di unire.
             </p>
+            <p v-if="c.spiegazione" class="mt-1 text-xs text-muted-foreground">{{ c.spiegazione }}</p>
 
             <div v-if="!props.decisioni[c.chiave_decisione]" class="mt-2 flex flex-wrap gap-2">
               <Button
@@ -250,7 +269,7 @@ const puoConfermare = computed(
               <button
                 v-if="c.scelte.length > 1"
                 class="underline"
-                @click="decidi(c.chiave_decisione, props.decisioni[c.chiave_decisione] === 'unisci' ? 'salta' : 'unisci')"
+                @click="decidi(c.chiave_decisione, altraScelta(c))"
               >
                 cambia
               </button>
@@ -413,6 +432,18 @@ const puoConfermare = computed(
             </div>
           </div>
 
+          <div v-if="props.anteprima.saldi.in_archivio && (props.anteprima.saldi.in_archivio.uguali || props.anteprima.saldi.in_archivio.diversi)" class="text-sm">
+            <p>
+              Ci sono già {{ props.anteprima.saldi.in_archivio.uguali + props.anteprima.saldi.in_archivio.diversi }} di
+              queste posizioni: {{ props.anteprima.saldi.in_archivio.uguali }} uguali al file,
+              <strong :class="props.anteprima.saldi.in_archivio.diversi ? 'text-amber-700' : ''">{{ props.anteprima.saldi.in_archivio.diversi }} con un importo diverso</strong>.
+              <template v-if="props.anteprima.saldi.in_archivio.diversi">Non le sovrascrivo: resta l'importo dell'archivio.</template>
+            </p>
+            <ul v-if="props.anteprima.saldi.in_archivio.differenze.length" class="ml-4 list-disc text-xs text-amber-700">
+              <li v-for="(d, i) in props.anteprima.saldi.in_archivio.differenze" :key="i">{{ d }}</li>
+            </ul>
+          </div>
+
           <p v-if="props.anteprima.saldi.verificabile" class="text-xs text-muted-foreground">
             Il totale non te l'ho chiesto: è scritto dentro il file che hai caricato.
             Se non tornasse, non ti farei proseguire.
@@ -527,12 +558,23 @@ const puoConfermare = computed(
             <CardDescription>{{ props.anteprima.tabelle.length }} tabelle</CardDescription>
           </CardHeader>
           <CardContent class="space-y-1 text-sm">
-            <div v-for="t in props.anteprima.tabelle" :key="t.nome" class="flex flex-wrap items-center gap-2">
-              <span>{{ t.nome }}</span>
-              <span class="text-xs text-muted-foreground">{{ t.partecipanti }} unità · {{ t.somma }}</span>
-              <Badge v-if="t.parziale" variant="outline">parziale</Badge>
-              <Badge v-if="t.parti_uguali" variant="outline">parti uguali</Badge>
+            <div v-for="t in props.anteprima.tabelle" :key="t.nome">
+              <div class="flex flex-wrap items-center gap-2">
+                <span>{{ t.nome }}</span>
+                <span class="text-xs text-muted-foreground">{{ t.partecipanti }} unità · {{ t.somma }}</span>
+                <Badge v-if="t.parziale" variant="outline">parziale</Badge>
+                <Badge v-if="t.parti_uguali" variant="outline">parti uguali</Badge>
+                <Badge v-if="t.in_archivio === 'uguale'" variant="secondary">c'è già, uguale</Badge>
+                <Badge v-else-if="t.in_archivio === 'diversa'" variant="outline" class="border-amber-400 text-amber-700">c'è già, diversa</Badge>
+              </div>
+              <ul v-if="t.in_archivio === 'diversa' && t.differenze?.length" class="ml-4 list-disc text-xs text-amber-700">
+                <li v-for="(d, i) in t.differenze" :key="i">{{ d }}</li>
+              </ul>
             </div>
+            <p v-if="tabelleDiverse" class="pt-1 text-xs text-amber-700">
+              Le tabelle che ci sono già non le sovrascrivo: resta quella dell'archivio. Se è giusta quella del file,
+              correggila a mano dopo.
+            </p>
             <p class="pt-1 text-xs text-muted-foreground">
               «Parziale» e «parti uguali» sono modi normali di ripartire, non errori.
             </p>

@@ -261,6 +261,25 @@ final class LivelloUnita implements LivelloImport
             return ['gia_presenti' => 0, 'nuove' => count($unita), 'in_archivio' => 0];
         }
 
+        $trovate = count($this->abbinamenti($condominio, $unita));
+
+        return ['gia_presenti' => $trovate, 'nuove' => count($unita) - $trovate, 'in_archivio' => $inArchivio];
+    }
+
+    /**
+     * Per l'anteprima: **quale** unità d'archivio il commit riuserebbe per ciascuna unità del file. Serve a
+     * confrontare con il file le tabelle e i saldi che il condominio ha già (Web Pro Italia, 15/11/2026): per sapere
+     * se il valore di «B1/1» è cambiato bisogna sapere qual è «B1/1» in archivio. Stessa regola del commit.
+     *
+     * @param  array<string, CanonicalImmobile>  $unita
+     * @return array<string, Immobile>  chiave dell'unità nel file → unità in archivio; le nuove non ci sono
+     */
+    public function abbinamenti(Condominio $condominio, array $unita): array
+    {
+        if (! Immobile::where('condominio_id', $condominio->id)->exists()) {
+            return [];
+        }
+
         $ripetuti = [];
         foreach ($unita as $d) {
             $k = mb_strtoupper(trim($d->palazzina)).'|'.mb_strtoupper($d->interno ?? '');
@@ -269,9 +288,9 @@ final class LivelloUnita implements LivelloImport
 
         $palazzine = Palazzina::where('condominio_id', $condominio->id)->get()->keyBy('name');
         $presi = [];
-        $trovate = 0;
+        $abbinate = [];
 
-        foreach ($unita as $dati) {
+        foreach ($unita as $chiave => $dati) {
             $nome = trim($dati->palazzina);
             // Una palazzina che non esiste ancora la creerebbe il commit: per l'anteprima vuol dire «unità nuova».
             if ($nome !== '' && ! $palazzine->has($nome)) {
@@ -283,11 +302,11 @@ final class LivelloUnita implements LivelloImport
 
             if ($esistente !== null) {
                 $presi[] = $esistente->id;
-                $trovate++;
+                $abbinate[$chiave] = $esistente;
             }
         }
 
-        return ['gia_presenti' => $trovate, 'nuove' => count($unita) - $trovate, 'in_archivio' => $inArchivio];
+        return $abbinate;
     }
 
     /**

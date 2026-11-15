@@ -224,8 +224,10 @@ it('ogni codice di avviso che il motore produce è nel catalogo', function () {
     // vengono dalle due revisioni avversariali che hanno chiuso la beta.5. Il trentottesimo, della
     // 1.12.0-beta.4: l'esercizio d'origine scritto nel modello manuale che fra gli esercizi del
     // condominio non c'è.
-    // Il trentanovesimo dall'11/11/2026 (Web Pro Italia): «unità nuove fra quelle che c'erano già».
-    expect(array_unique($sorgente))->toHaveCount(39);
+    // Web Pro Italia: dall'11/11/2026 «unità nuove fra quelle che c'erano già»; dal 15/11/2026, sopra un condominio
+    // che c'era già, «usato l'esercizio aperto», «due esercizi aperti», «tabella diversa da quella in archivio»,
+    // «saldi diversi da quelli in archivio». 38 + 5 = 43.
+    expect(array_unique($sorgente))->toHaveCount(43);
 
     $catalogo = array_keys(CatalogoControlli::voci());
     $fuori = array_values(array_diff(array_unique($sorgente), $catalogo));

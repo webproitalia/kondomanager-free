@@ -2795,7 +2795,8 @@ final class FermataDopoScrivi
     /** L'esercizio aperto del condominio, con la regola della pagina dei saldi e della porta (`HasEsercizio::getEsercizioCorrente`): il primo con lo stato «aperto». */
     private static function esercizioAperto(int $condominioId): ?int
     {
-        return \App\Models\Condominio::find($condominioId)?->esercizi()->where('stato', 'aperto')->first()?->id;
+        // `orderBy('id')` come `getEsercizioCorrente` dal 15/11/2026: senza, su MySQL il «primo» seguiva l'indice, non l'id.
+        return \App\Models\Condominio::find($condominioId)?->esercizi()->where('stato', 'aperto')->orderBy('id')->first()?->id;
     }
 
     /** Il motivo del cancello per la parte che risale: corto, con le due cifre. */

@@ -9,6 +9,7 @@ use App\Services\CondominioService;
 use App\Services\Import\Canonical\CanonicalEsercizio;
 use App\Services\Import\EsitoCommit;
 use App\Services\Import\ImportContext;
+use App\Services\Import\ImportVerificaService;
 use App\Services\Import\LivelloImport;
 use App\Services\Import\PrerequisitoMancante;
 use App\Services\Import\Rilievo;
@@ -93,10 +94,7 @@ final class LivelloEsercizi implements LivelloImport
             return $this->commitStraordinario($ctx, $dati, $condominio);
         }
 
-        $esistente = Esercizio::where('condominio_id', $condominio->id)
-            ->whereDate('data_inizio', $dati->dataInizio->toDateString())
-            ->whereDate('data_fine', $dati->dataFine->toDateString())
-            ->first();
+        $esistente = $this->stessoPeriodo($condominio, $dati);
 
         if ($esistente !== null) {
             return $this->risolviDuplicato($ctx, $dati, $esistente);
@@ -110,9 +108,7 @@ final class LivelloEsercizi implements LivelloImport
         // periodo diverso da quello del file, e i saldi finirebbero nell'anno sbagliato senza
         // che niente lo segnali. Quindi si blocca e si chiede all'amministratore di decidere
         // sul **file**, dove l'informazione giusta ce l'ha lui.
-        $omonimo = Esercizio::where('condominio_id', $condominio->id)
-            ->where('nome', $dati->etichetta)
-            ->first();
+        $omonimo = $this->omonimo($condominio, $dati);
 
         if ($omonimo !== null) {
             return EsitoCommit::bloccato(Rilievo::errore(
@@ -130,6 +126,39 @@ final class LivelloEsercizi implements LivelloImport
                 .'quale dei due periodi è quello giusto: se è quello del file, correggi l\'esercizio '
                 .'già in archivio; se è quello in archivio, l\'importazione di questo non serve.',
             ));
+        }
+
+        // ⚠️ **Un esercizio aperto c'è già: un secondo non si apre da solo** (Web Pro Italia, 15/11/2026).
+        //
+        // Fino a qui un file con un periodo diverso creava un altro esercizio **aperto** accanto a quello che
+        // c'era, con un avviso di sovrapposizione e basta. Ma la regola di tutto il prodotto è «al più un
+        // esercizio aperto per condominio» (`CreateEsercizioRequest`, `ImportVerificaService::applicaDestinazione`),
+        // e con due aperti i movimenti di tutti i giorni finiscono in uno dei due. Capitava a chi crea il
+        // condominio a mano (che nasce con «Esercizio anno …») e poi importa un consuntivo di Danea.
+        //
+        // Non lo decidiamo noi: è una domanda, posta nell'anteprima prima della conferma (`apertoDaDecidere()`,
+        // la stessa regola). «salta» = usa l'esercizio aperto che c'è; «crea_nuovo» = apri anche quello del file.
+        $aperto = ImportVerificaService::esercizioApertoDi($condominio->id);
+
+        if ($aperto !== null) {
+            $decisione = $ctx->decisione(self::CHIAVE.':'.$dati->etichetta);
+
+            if ($decisione === null) {
+                return EsitoCommit::inAttesaDiDecisione(Rilievo::daDecidere(
+                    'esercizi.altro_aperto',
+                    self::spiegazioneAperto($dati, $aperto),
+                    'Scegli «usa quello che c\'è già» per mettere i dati del file nell\'esercizio aperto, oppure '
+                    .'«crea il nuovo esercizio» per aprire anche quello del file: in quel caso gli esercizi aperti '
+                    .'diventano due, e il gestionale continua a lavorare su quello aperto per primo finché non lo chiudi.',
+                    chiaveDecisione: self::CHIAVE.':'.$dati->etichetta,
+                ));
+            }
+
+            // Qualunque risposta che non sia «crea_nuovo» vuol dire «usa quello che c'è»: è la strada che non
+            // apre niente, e una risposta inattesa non deve aprire un esercizio.
+            if ($decisione !== 'crea_nuovo') {
+                return $this->usaQuelloAperto($ctx, $dati, $aperto);
+            }
         }
 
         // Calcolate **prima** della creazione: dopo, l'esercizio appena scritto combacerebbe
@@ -159,7 +188,128 @@ final class LivelloEsercizi implements LivelloImport
         $ctx->risolvi(self::GESTIONE, $gestione);
         $ctx->registra(self::CHIAVE, ImportBatchItem::AZIONE_CREATO, $esercizio);
 
+        // Aperto anche questo, per scelta dell'amministratore: si dice su quale dei due lavorerà il gestionale,
+        // con la stessa regola che il gestionale usa (`HasEsercizio::getEsercizioCorrente`).
+        if ($aperto !== null) {
+            $corrente = ImportVerificaService::esercizioApertoDi($condominio->id);
+
+            $avvisi[] = Rilievo::avviso(
+                'esercizi.due_aperti',
+                sprintf(
+                    'Ora «%s» ha due esercizi aperti: «%s» (%s) e «%s» (%s). Il gestionale continua a lavorare su «%s», aperto per primo.',
+                    $condominio->nome,
+                    $aperto->nome,
+                    self::periodo($aperto->data_inizio, $aperto->data_fine),
+                    $esercizio->nome,
+                    self::periodo($esercizio->data_inizio, $esercizio->data_fine),
+                    $corrente?->nome,
+                ),
+                'Per lavorare su «'.$esercizio->nome.'» chiudi l\'altro da «Esercizi», quando è a posto: con un esercizio '
+                .'aperto solo non c\'è dubbio su dove finiscono incassi, spese e saldi.',
+            );
+        }
+
         return new EsitoCommit(creati: 1, avvisi: $avvisi);
+    }
+
+    /**
+     * Le cose che esistono già, chieste **una volta sola** — dal commit e dall'anteprima, che devono dare la
+     * stessa risposta. È la regola di `RicercaEsistenti` per il condominio e le persone, qui per l'esercizio.
+     */
+    private function stessoPeriodo(Condominio $condominio, CanonicalEsercizio $dati): ?Esercizio
+    {
+        return Esercizio::where('condominio_id', $condominio->id)
+            ->whereDate('data_inizio', $dati->dataInizio->toDateString())
+            ->whereDate('data_fine', $dati->dataFine->toDateString())
+            ->first();
+    }
+
+    private function omonimo(Condominio $condominio, CanonicalEsercizio $dati): ?Esercizio
+    {
+        return Esercizio::where('condominio_id', $condominio->id)
+            ->where('nome', $dati->etichetta)
+            ->first();
+    }
+
+    /**
+     * Per l'anteprima: l'esercizio aperto su cui il commit chiederebbe «usa questo o crea il nuovo?», o `null`
+     * se la domanda non si pone. Stesso ordine dei controlli di `commit()`: uno straordinario va in una gestione,
+     * lo stesso periodo è un duplicato (con la sua domanda), lo stesso nome con un altro periodo è un errore.
+     */
+    public function apertoDaDecidere(Condominio $condominio, CanonicalEsercizio $dati): ?Esercizio
+    {
+        if ($dati->eStraordinario() || $this->stessoPeriodo($condominio, $dati) !== null || $this->omonimo($condominio, $dati) !== null) {
+            return null;
+        }
+
+        return ImportVerificaService::esercizioApertoDi($condominio->id);
+    }
+
+    /**
+     * Per l'anteprima: l'esercizio **già in archivio** in cui il commit scriverebbe, con le decisioni prese fin
+     * qui. `null` se ne creerebbe uno nuovo, se si fermerebbe, o se manca ancora una risposta.
+     *
+     * @param  string|null  $decisione  la risposta alla domanda `esercizi:<etichetta>`
+     */
+    public function esistenteCheUserebbe(Condominio $condominio, CanonicalEsercizio $dati, ?string $decisione): ?Esercizio
+    {
+        if ($dati->eStraordinario()) {
+            return $this->ospiteStraordinario($condominio, $dati);
+        }
+
+        $esistente = $this->stessoPeriodo($condominio, $dati);
+
+        if ($esistente !== null) {
+            return $decisione === null ? null : $esistente;
+        }
+
+        $aperto = $this->apertoDaDecidere($condominio, $dati);
+
+        return $aperto !== null && $decisione !== null && $decisione !== 'crea_nuovo' ? $aperto : null;
+    }
+
+    /** La frase della domanda: serve uguale al commit, che la pone, e all'anteprima, che la mostra. */
+    public static function spiegazioneAperto(CanonicalEsercizio $dati, Esercizio $aperto): string
+    {
+        return sprintf(
+            'Il condominio ha già un esercizio aperto, «%s» (%s), e il file porta l\'esercizio «%s» (%s).',
+            $aperto->nome,
+            self::periodo($aperto->data_inizio, $aperto->data_fine),
+            $dati->etichetta,
+            self::periodo($dati->dataInizio, $dati->dataFine),
+        );
+    }
+
+    private static function periodo($dal, $al): string
+    {
+        return 'dal '.$dal?->format('d/m/Y').' al '.$al?->format('d/m/Y');
+    }
+
+    /**
+     * «Usa quello che c'è già»: i dati del file entrano nell'esercizio aperto, come quando si sceglie a mano la
+     * destinazione (`ImportVerificaService::applicaDestinazione`). La gestione si garantisce come nel duplicato:
+     * senza, i saldi si fermerebbero.
+     */
+    private function usaQuelloAperto(ImportContext $ctx, CanonicalEsercizio $dati, Esercizio $aperto): EsitoCommit
+    {
+        $gestione = app(CondominioService::class)->createDefaultGestione($aperto->condominio, $aperto);
+
+        $ctx->risolvi(self::CHIAVE, $aperto);
+        $ctx->risolvi(self::GESTIONE, $gestione);
+        $ctx->registra(self::CHIAVE, ImportBatchItem::AZIONE_SALTATO, $aperto);
+
+        return new EsitoCommit(saltati: 1, avvisi: [Rilievo::avviso(
+            'esercizi.usato_quello_aperto',
+            sprintf(
+                'Il file porta l\'esercizio «%s» (%s): come hai scelto, i dati sono entrati nell\'esercizio aperto «%s» (%s).',
+                $dati->etichetta,
+                self::periodo($dati->dataInizio, $dati->dataFine),
+                $aperto->nome,
+                self::periodo($aperto->data_inizio, $aperto->data_fine),
+            ),
+            'Le titolarità partono dalla data di inizio di «'.$aperto->nome.'» e i saldi di apertura sono i suoi. '
+            .'Controlla che sia l\'esercizio giusto prima di emettere il primo piano rate.',
+        )]);
     }
 
     /**
@@ -173,7 +323,7 @@ final class LivelloEsercizi implements LivelloImport
      *
      * **Perché non si crea un secondo esercizio**, che è quello che succedeva prima: sarebbe un
      * secondo esercizio **aperto** sullo stesso condominio, e l'invariante «al più uno aperto» è
-     * quella su cui poggia `HasEsercizio::getEsercizioCorrente()`, che fa `->first()`. Misurato
+     * quella su cui poggia `HasEsercizio::getEsercizioCorrente()`, che ne sceglie uno solo. Misurato
      * prima della correzione: due esercizi accavallati e **una sola** gestione ordinaria
      * agganciata a entrambi, con la parola «Straordinario» finita in una descrizione testuale.
      *
@@ -182,13 +332,7 @@ final class LivelloEsercizi implements LivelloImport
      */
     private function commitStraordinario(ImportContext $ctx, CanonicalEsercizio $dati, Condominio $condominio): EsitoCommit
     {
-        $ospite = Esercizio::where('condominio_id', $condominio->id)
-            ->whereDate('data_inizio', '<=', $dati->dataFine->toDateString())
-            ->whereDate('data_fine', '>=', $dati->dataInizio->toDateString())
-            // A parità di sovrapposizione vince quello aperto: è quello su cui si sta lavorando.
-            ->orderByRaw("CASE WHEN stato = 'aperto' THEN 0 ELSE 1 END")
-            ->orderBy('data_inizio', 'desc')
-            ->first();
+        $ospite = $this->ospiteStraordinario($condominio, $dati);
 
         if ($ospite === null) {
             return EsitoCommit::bloccato(Rilievo::errore(
@@ -231,6 +375,18 @@ final class LivelloEsercizi implements LivelloImport
             .'nel tuo gestionale sono due esercizi distinti. Controlla che le spese siano finite '
             .'nella gestione giusta: la separazione è quella che il rendiconto deve mostrare.',
         )]);
+    }
+
+    /** L'esercizio che ospita uno straordinario: quello che ne copre il periodo, l'aperto prima degli altri. */
+    private function ospiteStraordinario(Condominio $condominio, CanonicalEsercizio $dati): ?Esercizio
+    {
+        return Esercizio::where('condominio_id', $condominio->id)
+            ->whereDate('data_inizio', '<=', $dati->dataFine->toDateString())
+            ->whereDate('data_fine', '>=', $dati->dataInizio->toDateString())
+            // A parità di sovrapposizione vince quello aperto: è quello su cui si sta lavorando.
+            ->orderByRaw("CASE WHEN stato = 'aperto' THEN 0 ELSE 1 END")
+            ->orderBy('data_inizio', 'desc')
+            ->first();
     }
 
     private function risolviDuplicato(ImportContext $ctx, CanonicalEsercizio $dati, Esercizio $esistente): EsitoCommit

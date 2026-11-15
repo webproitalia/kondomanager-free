@@ -417,9 +417,12 @@ final class ImportVerificaService
      */
     public static function esercizioApertoDi(int $condominioId): ?Esercizio
     {
+        // ⚠️ Lo stesso ordine di `HasEsercizio::getEsercizioCorrente()`, il primo aperto (Web Pro Italia,
+        // 15/11/2026). Qui c'era «quello che inizia più tardi», e il gestionale prendeva il primo: con due
+        // esercizi aperti l'importazione scriveva in uno e il Wallet ne mostrava un altro.
         return Esercizio::where('condominio_id', $condominioId)
             ->where('stato', 'aperto')
-            ->orderBy('data_inizio', 'desc')
+            ->orderBy('id')
             ->first();
     }
 

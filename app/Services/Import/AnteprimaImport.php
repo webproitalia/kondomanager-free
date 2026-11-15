@@ -16,6 +16,12 @@ use App\Services\Import\Livelli\LivelloTabelle;
 use App\Services\Import\Livelli\LivelloTitolarita;
 use App\Services\Import\Livelli\LivelloUnita;
 use App\Helpers\MoneyHelper;
+use App\Models\Anagrafica;
+use App\Models\Condominio;
+use App\Models\Gestione;
+use App\Models\Immobile;
+use App\Services\Import\Canonical\CanonicalEsercizio;
+use App\Services\Import\Canonical\CanonicalImmobile;
 
 /**
  * Traduce i dati canonici nella forma che la schermata di conferma mostra — S4 (§14.1).
@@ -35,20 +41,64 @@ final class AnteprimaImport
 {
     /**
      * @param  array<string, mixed>  $canonici
+     * @param  array<string, mixed>|null  $decisioni  quelle già prese sul lotto. Con queste l'anteprima confronta
+     *         anche tabelle e saldi con l'archivio (le decisioni dicono in quale esercizio andrebbero i saldi); senza —
+     *         il conteggio delle domande aperte, il rapporto dopo il commit — il confronto non serve e non si fa,
+     *         perché costa una ricerca per ogni unità
      * @return array<string, mixed>
      */
-    public function costruisci(array $canonici): array
+    public function costruisci(array $canonici, ?array $decisioni = null): array
     {
+        $archivio = $decisioni === null ? null : $this->archivio($canonici);
+
         return [
             'condominio' => $this->condominio($canonici),
             'collisioni' => $this->collisioni($canonici),
             'titolarita' => $this->titolarita($canonici),
             'persone' => $this->persone($canonici),
             'unita' => $this->unita($canonici),
-            'tabelle' => $this->tabelle($canonici),
-            'saldi' => $this->saldi($canonici),
+            'tabelle' => $this->tabelle($canonici, $archivio),
+            'saldi' => $this->saldi($canonici, $archivio, $decisioni ?? []),
             'totale_record' => $this->totaleRecord($canonici),
         ];
+    }
+
+    /**
+     * Il condominio di arrivo, **se esiste già**, con le sue unità abbinate a quelle del file — chiesto una volta sola
+     * per le tabelle e per i saldi, che si confrontano con ciò che c'è (Web Pro Italia, 15/11/2026).
+     *
+     * Le unità che il commit creerebbe stanno nella mappa senza chiave primaria: così le ricerche del commit, rifatte
+     * qui, le trovano come le troverebbe lui, e nessuna le scambia per un'unità che c'è già.
+     *
+     * @param  array<string, mixed>  $canonici
+     * @return array{condominio: Condominio, unita: array<string, Immobile>}|null
+     */
+    private function archivio(array $canonici): ?array
+    {
+        $condominio = $canonici[LivelloCondominio::CHIAVE] ?? null;
+
+        if (! $condominio instanceof CanonicalCondominio
+            || (($canonici[LivelloTabelle::CHIAVE] ?? []) === [] && ! ($canonici[LivelloSaldi::CHIAVE] ?? null) instanceof CanonicalSaldiApertura)
+        ) {
+            return null;
+        }
+
+        $esistente = (new RicercaEsistenti)->condominio($condominio);
+
+        if ($esistente === null) {
+            return null;
+        }
+
+        /** @var array<string, CanonicalImmobile> $unita */
+        $unita = $canonici[LivelloUnita::CHIAVE] ?? [];
+        $abbinate = app(LivelloUnita::class)->abbinamenti($esistente, $unita);
+        $mappa = [];
+
+        foreach ($unita as $chiave => $u) {
+            $mappa[$chiave] = $abbinate[$chiave] ?? (new Immobile)->forceFill(['nome' => $u->denominazione()]);
+        }
+
+        return ['condominio' => $esistente, 'unita' => $mappa];
     }
 
     /**
@@ -107,6 +157,28 @@ final class AnteprimaImport
                     // «unisci» non c'è: due esercizi sullo stesso periodo sdoppierebbero i saldi,
                     // e il livello accetta solo «salta». Offrire l'altra porterebbe al muro.
                     'scelte' => ['salta'],
+                ];
+            }
+
+            // Un **altro** esercizio aperto (Web Pro Italia, 15/11/2026): il livello non ne apre un secondo da
+            // solo, chiede. La domanda va posta qui, prima della conferma, o l'importazione si fermerebbe a
+            // «Esercizi» con una scelta che nessuna schermata offre.
+            $aperto = $esistente === null && $condominioEsistente !== null
+                ? app(LivelloEsercizi::class)->apertoDaDecidere($condominioEsistente, $esercizio)
+                : null;
+
+            if ($aperto !== null) {
+                $voci[] = [
+                    'chiave_decisione' => LivelloEsercizi::CHIAVE.':'.$esercizio->etichetta,
+                    'cosa' => 'esercizio',
+                    'nome' => $esercizio->etichetta,
+                    'esistente' => $aperto->nome,
+                    'motivo' => RicercaEsistenti::PER_APERTO,
+                    // «salta» = usa l'esercizio aperto che c'è; «crea_nuovo» = apri anche quello del file.
+                    'scelte' => ['salta', 'crea_nuovo'],
+                    'spiegazione' => LivelloEsercizi::spiegazioneAperto($esercizio, $aperto)
+                        .' «Usa quello che c\'è già» mette i dati del file in «'.$aperto->nome.'»; «crea il nuovo '
+                        .'esercizio» apre anche «'.$esercizio->etichetta.'», e il gestionale continua a lavorare su «'.$aperto->nome.'» finché non lo chiudi.',
                 ];
             }
         }
@@ -272,19 +344,35 @@ final class AnteprimaImport
     /**
      * @param  array<string, mixed>  $canonici
      */
-    private function tabelle(array $canonici): array
+    private function tabelle(array $canonici, ?array $archivio = null): array
     {
         /** @var array<string, CanonicalTabella> $tabelle */
         $tabelle = $canonici[LivelloTabelle::CHIAVE] ?? [];
         $totaleUnita = count($canonici[LivelloUnita::CHIAVE] ?? []);
 
-        return array_values(array_map(fn (CanonicalTabella $t) => [
-            'nome' => $t->nome,
-            'partecipanti' => $t->partecipanti(),
-            'somma' => round($t->somma(), 4),
-            'parziale' => $t->partecipanti() < $totaleUnita,
-            'parti_uguali' => $t->isPartiUguali(),
-        ], $tabelle));
+        // Le tabelle che il condominio ha già: il commit le salta, e se sono diverse dal file restano quelle
+        // dell'archivio. Va detto qui, prima di confermare, con che cosa è diverso.
+        $confronto = $archivio === null || $tabelle === []
+            ? []
+            : app(LivelloTabelle::class)->confronto($archivio['condominio'], $tabelle, $archivio['unita']);
+
+        $righe = [];
+
+        foreach ($tabelle as $chiave => $t) {
+            $righe[] = [
+                'nome' => $t->nome,
+                'partecipanti' => $t->partecipanti(),
+                'somma' => round($t->somma(), 4),
+                'parziale' => $t->partecipanti() < $totaleUnita,
+                'parti_uguali' => $t->isPartiUguali(),
+                // «nuova» entra; «uguale» c'è già com'è nel file; «diversa» c'è già con altri valori, resta quella
+                // dell'archivio e `differenze` dice che cosa cambia.
+                'in_archivio' => $confronto[$chiave]['stato'] ?? 'nuova',
+                'differenze' => $confronto[$chiave]['differenze'] ?? [],
+            ];
+        }
+
+        return $righe;
     }
 
     /**
@@ -292,7 +380,7 @@ final class AnteprimaImport
      *
      * @param  array<string, mixed>  $canonici
      */
-    private function saldi(array $canonici): ?array
+    private function saldi(array $canonici, ?array $archivio = null, array $decisioni = []): ?array
     {
         /** @var CanonicalSaldiApertura|null $saldi */
         $saldi = $canonici[LivelloSaldi::CHIAVE] ?? null;
@@ -328,7 +416,69 @@ final class AnteprimaImport
             'importo_cessati' => MoneyHelper::format(
                 array_sum(array_map(fn (CanonicalSaldo $s) => $s->importoCents, $cessati)),
             ),
+            'in_archivio' => $this->saldiInArchivio($saldi, $canonici, $archivio, $decisioni),
         ];
+    }
+
+    /**
+     * I saldi del file che il condominio ha già (Web Pro Italia, 15/11/2026): quanti uguali, quanti con un importo
+     * diverso — che restano quelli dell'archivio — e quali. `null` quando non c'è niente con cui confrontarli (il
+     * condominio o l'esercizio di arrivo nascono con questa importazione) o quando manca ancora la risposta su
+     * quale esercizio usare.
+     *
+     * @param  array<string, mixed>  $canonici
+     * @param  array<string, mixed>  $decisioni
+     * @return array{uguali: int, diversi: int, nuove: int, differenze: list<string>}|null
+     */
+    private function saldiInArchivio(CanonicalSaldiApertura $saldi, array $canonici, ?array $archivio, array $decisioni): ?array
+    {
+        $esercizio = $canonici[LivelloEsercizi::CHIAVE] ?? null;
+
+        if ($archivio === null || ! $esercizio instanceof CanonicalEsercizio) {
+            return null;
+        }
+
+        $condominio = $archivio['condominio'];
+        $usato = app(LivelloEsercizi::class)->esistenteCheUserebbe(
+            $condominio,
+            $esercizio,
+            $decisioni[LivelloEsercizi::CHIAVE.':'.$esercizio->etichetta] ?? null,
+        );
+
+        if ($usato === null) {
+            return null;
+        }
+
+        // La gestione che `CondominioService::createDefaultGestione()` riuserebbe: la prima del condominio di quel tipo.
+        $gestione = Gestione::where('condominio_id', $condominio->id)
+            ->where('tipo', $esercizio->eStraordinario() ? 'straordinaria' : 'ordinaria')
+            ->first();
+
+        $ricerca = new RicercaEsistenti;
+        $soggetti = [];
+
+        /** @var CanonicalSoggetto $s */
+        foreach ($canonici[LivelloSoggetti::CHIAVE] ?? [] as $chiave => $s) {
+            $esistente = $ricerca->soggetto($s);
+
+            if ($esistente === null) {
+                $soggetti[$chiave] = (new Anagrafica)->forceFill(['nome' => $s->nome]);
+
+                continue;
+            }
+
+            // Una copia, che non si salva mai: con «unisci» la persona prende il nome del file, con «lascia com'è»
+            // tiene il suo, ed è su quel nome che il commit cerca a chi è intestato il saldo.
+            $copia = clone $esistente;
+
+            if (($decisioni[LivelloSoggetti::CHIAVE.':'.$chiave] ?? null) === 'unisci') {
+                $copia->nome = $s->nome;
+            }
+
+            $soggetti[$chiave] = $copia;
+        }
+
+        return app(LivelloSaldi::class)->confronto($saldi, $usato, $gestione, $archivio['unita'], $soggetti);
     }
 
     /**
