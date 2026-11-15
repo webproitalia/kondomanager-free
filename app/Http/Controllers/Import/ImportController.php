@@ -30,7 +30,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Support\Agenti\DiscoInProva;
 use App\Support\LimiteCaricamento;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * L'importazione dati — le schermate S1 e S2 del §14.1.
@@ -468,7 +470,8 @@ class ImportController extends Controller
         $aperti = Esercizio::query()
             ->whereIn('condominio_id', array_column($condomini, 'id'))
             ->where('stato', 'aperto')
-            ->orderBy('data_inizio', 'desc')
+            // Per id, come `HasEsercizio::getEsercizioCorrente()` dal 15/11/2026: il primo aperto.
+            ->orderBy('id')
             ->get(['id', 'condominio_id', 'nome', 'data_inizio', 'data_fine']);
 
         $esercizi = [];
@@ -573,7 +576,7 @@ class ImportController extends Controller
     {
         $batch = $this->lotto($uuid, ['files']);
         $letto = $this->verifica->verifica($batch);
-        $anteprima = $this->anteprima->costruisci($letto['canonici']);
+        $anteprima = $this->anteprima->costruisci($letto['canonici'], $batch->decisioni ?? []);
         $aperte = $this->collisioniAperte($anteprima, $batch);
 
         return Inertia::render('import/ImportAnteprima', [
@@ -711,9 +714,101 @@ class ImportController extends Controller
         $esiti = $this->runner->esegui($ctx, $batch->decisioni ?? []);
 
         $batch->refresh();
-        $batch->update(['rapporto' => $this->rapporto($esiti, $letto['esiti'], $letto['canonici'])]);
+        $rapporto = $this->rapporto($esiti, $letto['esiti'], $letto['canonici']);
+        $batch->update(['rapporto' => $rapporto]);
 
-        return redirect()->route('import.esito', $batch->uuid);
+        // ⚠️ **La risposta dice com'è andata, e la prova dice com'andrebbe** (Web Pro Italia, 15/11/2026).
+        //
+        // Fino a qui la conferma rimandava all'esito senza una parola, sempre uguale: per un agente — che legge la
+        // risposta, non la pagina — «rimanda all'esito, nessun errore» voleva dire «è andata bene», anche quando un
+        // livello si era fermato. E la prova (`X-Kondo-Prova: 1`, che esegue tutto e poi annulla) rispondeva lo
+        // stesso «ok»: l'agente chiedeva «andrà bene?», gli si diceva di sì, confermava e l'importazione si fermava.
+        //
+        // Ora l'esito si dice qui, con le stesse frasi nei due casi: un livello fermato è un errore (l'agente riceve
+        // «non riuscito»), i livelli saltati e gli avvisi nati scrivendo si elencano. La prova rimanda
+        // all'anteprima: il suo esito non esiste, e la pagina dell'esito mostrerebbe un lotto mai confermato.
+        $prova = Storage::disk(ImportUploadService::DISCO) instanceof DiscoInProva;
+        [$tipo, $messaggio, $avvisi] = $this->esitoInParole($rapporto, $prova);
+
+        $risposta = redirect()
+            ->route($prova ? 'import.anteprima' : 'import.esito', $batch->uuid)
+            ->with($this->flashMessage($tipo, $messaggio));
+
+        return $avvisi === null ? $risposta : $risposta->with('warning', $avvisi);
+    }
+
+    /**
+     * Com'è andata la conferma, in parole: il tipo dell'avviso, la frase, e gli avvisi nati scrivendo.
+     *
+     * Le stesse frasi per la conferma vera e per la prova, al passato e al condizionale: chi prova deve leggere
+     * esattamente ciò che leggerebbe confermando.
+     *
+     * @param  array<string, mixed>  $rapporto
+     * @return array{0: string, 1: string, 2: string|null}
+     */
+    private function esitoInParole(array $rapporto, bool $prova): array
+    {
+        $livelli = $rapporto['livelli'] ?? [];
+        $fermo = collect($livelli)->first(fn (array $l) => ! $l['riuscito'] && ! $l['saltato']);
+        $entrati = collect($livelli)->filter(fn (array $l) => $l['riuscito']);
+        $saltati = collect($livelli)->filter(fn (array $l) => $l['saltato'])->pluck('etichetta');
+        $creati = $entrati->sum('creati');
+        $nuovi = match ($creati) {
+            0 => 'nessun record nuovo',
+            1 => '1 record nuovo',
+            default => $creati.' record nuovi',
+        };
+        $fine = $prova ? ' Era una prova: non è entrato niente.' : '';
+
+        $avvisi = collect($livelli)
+            ->flatMap(fn (array $l) => collect($l['avvisi'] ?? [])
+                ->where('origine', 'scrittura')
+                ->map(fn (array $a) => '«'.$l['etichetta'].'»: '.$a['messaggio']))
+            ->values();
+
+        $testoAvvisi = $avvisi->isEmpty() ? null : sprintf(
+            '%s: %s',
+            $avvisi->count() === 1 ? 'Un avviso' : $avvisi->count().' avvisi',
+            $avvisi->implode(' | '),
+        );
+
+        $prima = $entrati->isEmpty() ? '' : sprintf(
+            ' Prima di quel passo %s %s, con %s; da lì in poi niente.',
+            $prova ? 'passerebbero' : 'sono passati',
+            $entrati->map(fn (array $l) => '«'.$l['etichetta'].'»')->implode(', '),
+            $nuovi,
+        );
+
+        if ($fermo !== null) {
+            $problema = $fermo['prerequisiti_mancanti'][0] ?? null;
+            $rilievo = $fermo['rilievi'][0] ?? null;
+            $motivo = $problema !== null
+                ? trim($problema['cosa_manca'].' '.$problema['rimedio'])
+                : trim(($rilievo['messaggio'] ?? '').' '.($rilievo['rimedio'] ?? ''));
+            $altri = count($fermo['rilievi']) + count($fermo['prerequisiti_mancanti']) - 1;
+
+            return ['error', sprintf(
+                '%s «%s». %s%s%s%s',
+                $prova ? 'Prova: l\'importazione si fermerebbe a' : 'L\'importazione si è fermata a',
+                $fermo['etichetta'],
+                $motivo,
+                $altri > 0 ? sprintf(' (E %s su questo passo.)', $altri === 1 ? 'un altro problema' : 'altri '.$altri.' problemi') : '',
+                $prima,
+                $prova ? $fine : ' Il rapporto completo è nell\'esito.',
+            ), $testoAvvisi];
+        }
+
+        return ['success', sprintf(
+            '%s %s.%s%s',
+            $prova ? 'Prova: l\'importazione andrebbe in fondo, con' : 'Importazione completata, con',
+            $nuovi,
+            $saltati->isEmpty() ? '' : sprintf(
+                ' %s, perché nei file non ci sono i dati: %s.',
+                $prova ? 'Salterebbe' : 'Ha saltato',
+                $saltati->map(fn ($e) => '«'.$e.'»')->implode(', '),
+            ),
+            $fine,
+        ), $testoAvvisi];
     }
 
     /**

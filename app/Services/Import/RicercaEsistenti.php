@@ -39,6 +39,9 @@ final class RicercaEsistenti
 
     public const PER_PERIODO = 'periodo';
 
+    /** Non lo stesso esercizio: un **altro**, ancora aperto, accanto al quale il file ne aprirebbe un secondo. */
+    public const PER_APERTO = 'aperto';
+
     public function soggetto(CanonicalSoggetto $dati): ?Anagrafica
     {
         if ($dati->haCodiceFiscale()) {

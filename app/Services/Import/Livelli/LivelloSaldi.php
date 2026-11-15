@@ -206,16 +206,22 @@ final class LivelloSaldi implements LivelloImport
         $saltati = 0;
         /** @var list<string> $incoerenti */
         $incoerenti = [];
+        /** @var list<string> $diversi le posizioni già in archivio con un altro importo */
+        $diversi = [];
 
         foreach ($daScrivere as [$saldo, $immobile, $anagrafica]) {
-            $esistente = Saldo::where('esercizio_id', $esercizio->id)
-                ->where('immobile_id', $immobile->getKey())
-                ->where('gestione_id', $gestione?->id)
-                ->where('anagrafica_id', $anagrafica?->getKey())
-                ->first();
+            $esistente = $this->saldoEsistente($esercizio, $gestione, $immobile, $anagrafica);
 
+            // ⚠️ **Già in archivio: si salta, ma se l'importo è un altro si dice** (Web Pro Italia, 15/11/2026).
+            // Prima finiva in `saltati` e basta, cioè «era già a posto», anche quando il file diceva un'altra
+            // cifra. Non si sovrascrive: un saldo può essere già entrato in un piano rate (`is_applicato`), e
+            // l'annullamento non saprebbe rimettere l'importo di prima.
             if ($esistente !== null) {
                 $saltati++;
+
+                if ((int) $esistente->saldo_iniziale !== $saldo->importoCents) {
+                    $diversi[] = $this->differenza($esistente, $saldo, $immobile, $anagrafica);
+                }
 
                 continue;
             }
@@ -288,7 +294,108 @@ final class LivelloSaldi implements LivelloImport
             );
         }
 
+        if ($diversi !== []) {
+            $avvisi[] = Rilievo::avviso(
+                'saldi.diversi_in_archivio',
+                sprintf(
+                    '%s: %s.',
+                    count($diversi) === 1
+                        ? 'Un saldo c\'era già in archivio con un importo diverso da quello del file, e l\'ho lasciato com\'è'
+                        : count($diversi).' saldi c\'erano già in archivio con un importo diverso da quello del file, e li ho lasciati come sono',
+                    self::elenco($diversi),
+                ),
+                'L\'importazione non sovrascrive un saldo che esiste già. Se l\'importo giusto è quello del file, '
+                .'correggilo dai saldi iniziali del condominio prima di emettere il primo piano rate; se il saldo è '
+                .'già entrato in un piano rate, la correzione va fatta con un movimento.',
+            );
+        }
+
         return new EsitoCommit(creati: $creati, saltati: $saltati, avvisi: $avvisi);
+    }
+
+    /**
+     * Per l'anteprima (Web Pro Italia, 15/11/2026): quante posizioni del file ci sono già in archivio, uguali o con
+     * un importo diverso, e quali. Le regole sono quelle del commit — come si trovano unità e persone, come si
+     * sommano le righe della stessa posizione, come si cerca il saldo esistente — perché l'anteprima deve dire ciò
+     * che la conferma farà. Le righe che il commit fermerebbe con un errore contano fra le nuove: a dirlo ci pensano
+     * già quell'errore e la prova della conferma.
+     *
+     * @param  array<string, Model>  $unita  chiave dell'unità nel file → unità; quelle nuove senza chiave primaria
+     * @param  array<string, Model>  $soggetti  chiave della persona nel file → persona, con il nome che avrà dopo
+     *         l'importazione; quelle nuove senza chiave primaria
+     * @return array{uguali: int, diversi: int, nuove: int, differenze: list<string>}
+     */
+    public function confronto(CanonicalSaldiApertura $dati, Esercizio $esercizio, ?Gestione $gestione, array $unita, array $soggetti): array
+    {
+        $scartati = [];
+        $avvisiScartati = [];
+        $posizioni = [];
+        $nuove = 0;
+
+        foreach ($dati->righe as $saldo) {
+            $immobile = $this->risolviUnita($saldo, $unita, $scartati);
+            $anagrafica = $immobile === null || $saldo->isSolidale()
+                ? null
+                : $this->risolviSoggetto($saldo, $soggetti, $scartati, $avvisiScartati, false);
+
+            // Un'unità o una persona che in archivio non c'è ancora: il saldo è nuovo per forza.
+            if ($immobile?->getKey() === null || (! $saldo->isSolidale() && $anagrafica?->getKey() === null)) {
+                $nuove++;
+
+                continue;
+            }
+
+            $posizioni[] = [$saldo, $immobile, $anagrafica];
+        }
+
+        $uguali = 0;
+        $differenze = [];
+
+        foreach ($this->accorpaPerPosizione($posizioni, $avvisiScartati) as [$saldo, $immobile, $anagrafica]) {
+            $esistente = $gestione === null ? null : $this->saldoEsistente($esercizio, $gestione, $immobile, $anagrafica);
+
+            if ($esistente === null) {
+                $nuove++;
+            } elseif ((int) $esistente->saldo_iniziale === $saldo->importoCents) {
+                $uguali++;
+            } else {
+                $differenze[] = $this->differenza($esistente, $saldo, $immobile, $anagrafica);
+            }
+        }
+
+        return ['uguali' => $uguali, 'diversi' => count($differenze), 'nuove' => $nuove, 'differenze' => $differenze];
+    }
+
+    /** Il saldo che il commit trova già in archivio per questa posizione: la stessa ricerca per lui e per l'anteprima. */
+    private function saldoEsistente(Esercizio $esercizio, ?Gestione $gestione, Model $immobile, ?Model $anagrafica): ?Saldo
+    {
+        return Saldo::where('esercizio_id', $esercizio->id)
+            ->where('immobile_id', $immobile->getKey())
+            ->where('gestione_id', $gestione?->id)
+            ->where('anagrafica_id', $anagrafica?->getKey())
+            ->first();
+    }
+
+    /** «"ROSSI MARIO" su "appartamento B1/1": in archivio € 120,00, nel file € 150,00», con le virgolette basse. */
+    private function differenza(Saldo $esistente, CanonicalSaldo $saldo, Model $immobile, ?Model $anagrafica): string
+    {
+        return sprintf(
+            '%s: in archivio %s, nel file %s',
+            $anagrafica === null
+                ? sprintf('saldo dell\'unità «%s», in solido', $immobile->nome)
+                : sprintf('«%s» su «%s»', $anagrafica->nome, $immobile->nome),
+            MoneyHelper::format((int) $esistente->saldo_iniziale),
+            MoneyHelper::format($saldo->importoCents),
+        );
+    }
+
+    /** Al più venti posizioni: oltre, il conteggio. L'elenco intero sta nell'anteprima. */
+    private static function elenco(array $voci): string
+    {
+        $mostrate = array_slice($voci, 0, 20);
+        $resto = count($voci) - count($mostrate);
+
+        return implode('; ', $mostrate).($resto > 0 ? sprintf('; e altri %d', $resto) : '');
     }
 
     /**

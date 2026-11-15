@@ -223,7 +223,9 @@ it('ogni codice di avviso che il motore produce è nel catalogo', function () {
     // ultimi tre — «foglio non riconosciuto», «righe fuse su una posizione» e «tabelle omonime» —
     // vengono dalle due revisioni avversariali che hanno chiuso la beta.5.
     // 38 dall'11/11/2026 (Web Pro Italia): «unità nuove fra quelle che c'erano già».
-    expect(array_unique($sorgente))->toHaveCount(38);
+    // 42 dal 15/11/2026 (Web Pro Italia): sopra un condominio che c'era già, «usato l'esercizio aperto», «due
+    // esercizi aperti», «tabella diversa da quella in archivio», «saldi diversi da quelli in archivio».
+    expect(array_unique($sorgente))->toHaveCount(42);
 
     $catalogo = array_keys(CatalogoControlli::voci());
     $fuori = array_values(array_diff(array_unique($sorgente), $catalogo));

@@ -44,8 +44,16 @@ trait HasEsercizio
      */
     protected function getEsercizioCorrente(Condominio $condominio)
     {
+        // ⚠️ **Con un ordine esplicito: il primo aperto** (Web Pro Italia, 15/11/2026). La regola è «al più un
+        // esercizio aperto», ma l'importazione fino a oggi ne apriva un secondo da sola, e con due aperti il solo
+        // `first()` prendeva quello che il database restituiva per primo — su MySQL, probabilmente, nell'ordine
+        // dell'indice (condominio, nome) — mentre l'importazione prendeva quello che inizia più tardi. Ora è il
+        // primo aperto per id, cioè quello aperto da più tempo: è ciò che il Wallet e le sue prove davano già per
+        // inteso («il primo con lo stato aperto»), e `ImportVerificaService::esercizioApertoDi()` fa lo stesso.
+        // Con un esercizio aperto solo non cambia niente.
         return $condominio->esercizi()
             ->where('stato', 'aperto')
+            ->orderBy('id')
             ->first();
     }
 }

@@ -231,6 +231,33 @@ final class CatalogoControlli
                     .'una correzione in archivio.',
             ),
 
+            // ── Sopra un condominio che c'era già (Web Pro Italia, 15/11/2026) ──────────────────
+            'esercizi.usato_quello_aperto' => new VoceCatalogo(
+                rotta: 'admin.gestionale.index',
+                etichettaAzione: 'Vai al condominio',
+                perche: 'I dati sono entrati nell\'esercizio aperto e non in quello del file, come hai '
+                    .'scelto: che fosse il periodo giusto lo sai tu.',
+            ),
+            'esercizi.due_aperti' => new VoceCatalogo(
+                rotta: 'admin.gestionale.index',
+                etichettaAzione: 'Vai al condominio',
+                perche: 'Quale dei due esercizi aperti chiudere, e quando, è una scelta contabile: il '
+                    .'file non la dice.',
+            ),
+            'tabella.diversa_in_archivio' => new VoceCatalogo(
+                rotta: $tabelle,
+                etichettaAzione: 'Vai alle tabelle',
+                perche: 'La tabella in archivio e quella del file hanno valori diversi, e quale delle '
+                    .'due sia giusta lo dice solo il tuo archivio vecchio: l\'importazione non '
+                    .'sovrascrive.',
+            ),
+            'saldi.diversi_in_archivio' => new VoceCatalogo(
+                rotta: $saldi,
+                etichettaAzione: 'Vai ai saldi',
+                perche: 'Il saldo in archivio e quello del file hanno importi diversi, e quale dei due '
+                    .'sia giusto lo sai tu: l\'importazione non sovrascrive.',
+            ),
+
             // ── Il modello compilato a mano ─────────────────────────────────────────────────
             //
             // Nessuno di questi ha un verificatore, e non per pigrizia: sono tutti giudizi su un
