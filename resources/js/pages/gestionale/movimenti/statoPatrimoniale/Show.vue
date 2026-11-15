@@ -14,7 +14,9 @@ import type { Building } from '@/types/buildings';
 import type { Esercizio } from '@/types/gestionale/esercizi';
 
 /* ─── I tipi rispecchiano StatoPatrimonialePaginaService::costruisci() — tutto in centesimi ─── */
-interface Voce { id: number; codice: string; nome: string; tipo: string; categoria: string; ruolo: string | null; saldo: number }
+// `accantonato`: solo sulle righe delle banche che hanno accantonato in un fondo (Web Pro Italia, 15/11/2026), altrimenti null o assente.
+interface Accantonato { totale: number; fondi: { fondo: string; tipo: string; importo: number }[]; sul_conto: number; nota: string }
+interface Voce { id: number; codice: string; nome: string; tipo: string; categoria: string; ruolo: string | null; saldo: number; accantonato?: Accantonato | null }
 interface Gruppo { gruppo: string; ordine: number; voci: Voce[]; totale: number }
 type Esito = 'quadra' | 'non_quadra' | 'segnalazione';
 interface Controllo { id: string; nome: string; titolo: string; sinistra: number; destra: number; segno?: string; esito: Esito; nota: string; rimedio: string | null; azione: string | null; azione_parametro?: string | null }
@@ -270,7 +272,11 @@ const pageGuides = [
                                                     <td class="pt-2 pb-1 px-2 text-right tabular-nums font-semibold text-slate-700 whitespace-nowrap">{{ euro(g.totale) }}</td>
                                                 </tr>
                                                 <tr v-for="v in g.voci" :key="v.id" class="border-b border-slate-100">
-                                                    <td colspan="2" class="py-1.5 px-2 text-slate-700 break-words"><Link :href="hrefMastrino(v.id)" class="underline decoration-dotted decoration-slate-300 underline-offset-4 hover:text-primary hover:decoration-primary" title="Apri il mastrino: tutti i movimenti di questo conto"><span class="text-slate-400 tabular-nums mr-2">{{ v.codice }}</span>{{ v.nome }}</Link></td>
+                                                    <td colspan="2" class="py-1.5 px-2 text-slate-700 break-words"><Link :href="hrefMastrino(v.id)" class="underline decoration-dotted decoration-slate-300 underline-offset-4 hover:text-primary hover:decoration-primary" title="Apri il mastrino: tutti i movimenti di questo conto"><span class="text-slate-400 tabular-nums mr-2">{{ v.codice }}</span>{{ v.nome }}</Link>
+                                                        <!-- Web Pro Italia (15/11/2026): la banca qui scende a ogni accantonamento in un fondo, il registro e l'estratto
+                                                             conto no. La riga dice quanto è nei fondi e quanto c'è sul conto intero; la frase la scrive il server. -->
+                                                        <div v-if="v.accantonato" data-riga="accantonato" class="mt-0.5 text-[11px] leading-snug text-slate-500">{{ v.accantonato.nota }}</div>
+                                                    </td>
                                                     <td class="py-1.5 px-2 text-right tabular-nums whitespace-nowrap align-top" :class="importo(v.saldo)">{{ euro(v.saldo) }}</td>
                                                 </tr>
                                             </template>

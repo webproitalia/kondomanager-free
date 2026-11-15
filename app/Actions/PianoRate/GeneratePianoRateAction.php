@@ -14,11 +14,13 @@ use App\Models\Tabella;
 use App\Exceptions\Gestionale\DestinatariCambiatiException;
 use App\Exceptions\Gestionale\FatturaRettificataNelPianoException;
 use App\Exceptions\Gestionale\FatturaStornataNelPianoException;
+use App\Exceptions\Gestionale\NessunaQuotaCalcolataException;
 use App\Exceptions\Gestionale\ScopertiNonAccettatiException;
 use App\Exceptions\Gestionale\SpesaNegativaNelPianoException;
 use App\Models\Anagrafica;
 use App\Models\Esercizio;
 use App\Services\Riparto\CompetenzaDelPiano;
+use App\Services\Riparto\MancanzeDelRiparto;
 use App\Services\Riparto\SpeseNegativeNelPiano;
 use App\Services\CalcoloQuoteService;
 use App\Services\Gestionale\InboxService;
@@ -402,18 +404,11 @@ class GeneratePianoRateAction
                 'gestione_id'   => $gestione->id,
             ]);
 
-            $dettaglio = $pianoRate->tipo === 'straordinario'
-                ? "Per i piani straordinari verificare che ogni fattura collegata abbia importo finanziato (> 0) e "
-                    . "componenti straordinari validi: righe imprevisto/ad personam per le fatture correnti, "
-                    . "oppure una copertura di tipo 'sopravvenienza' agganciata a un capitolo con tabella millesimale "
-                    . "per le fatture pregresse."
-                : "Verificare che (1) le tabelle millesimali abbiano i millesimi inseriti per ogni immobile, "
-                    . "(2) ogni immobile abbia almeno un condòmino attivo associato, "
-                    . "(3) ogni voce di spesa sia collegata a una tabella millesimale.";
-
-            throw new \RuntimeException(
-                "Impossibile generare il piano rate: nessuna quota calcolata. " . $dettaglio
-            );
+            // Web Pro Italia (15/11/2026): il rifiuto dice che cosa manca e dove — la voce senza tabella, la tabella senza millesimi,
+            // l'unità senza un titolare per il ruolo richiesto — con i nomi, da ciò che il motore ha registrato fra gli scoperti. Prima
+            // diceva le tre cause possibili, sempre le stesse. Qui gli scoperti ci sono solo se accettati (il cancello qui sopra si è
+            // già fermato altrimenti): nessuna quota vuol dire che lo erano tutte.
+            throw new NessunaQuotaCalcolataException($pianoRate, app(MancanzeDelRiparto::class)->perGliScoperti($scoperti, $pianoRate));
         }
         // =========================================================================
 

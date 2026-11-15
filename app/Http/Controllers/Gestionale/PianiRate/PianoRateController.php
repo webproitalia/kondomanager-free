@@ -6,8 +6,10 @@ use Illuminate\Validation\Rule;
 use App\Enums\NaturaGestione;
 use App\Actions\PianoRate\GeneratePianoRateAction;
 use App\Exceptions\Gestionale\DestinatariCambiatiException;
+use App\Exceptions\Gestionale\NessunaQuotaCalcolataException;
 use App\Exceptions\Gestionale\ScopertiNonAccettatiException;
 use App\Exceptions\Gestionale\SpesaNegativaNelPianoException;
+use App\Exceptions\Gestionale\VociOltreIlPreventivoException;
 use App\Enums\StatoPianoRate;
 use App\Enums\VisibilityStatus;
 use App\Events\Gestionale\PianoRateStatusUpdated;
@@ -46,6 +48,7 @@ use Inertia\Response;
 use App\Services\Riparto\AvvisoSpeseNegative;
 use App\Services\Riparto\RisolutoreTitolari;
 use App\Services\Riparto\SpeseNegativeNelPiano;
+use App\Services\Riparto\VociFraPiuPiani;
 
 class PianoRateController extends Controller
 {
@@ -438,6 +441,13 @@ class PianoRateController extends Controller
                 }
             }
 
+            // Web Pro Italia (15/11/2026): una voce divisa fra più piani non si chiede due volte. Con le voci appena scritte, per ognuna
+            // che tiene anche un altro piano valido della gestione, nello stesso esercizio, la somma non supera il fabbisogno
+            // (`VociFraPiuPiani`). Anche senza generare: un piano nato così chiederebbe la voce due volte alla prima generazione.
+            if ($tipoPiano !== 'straordinario') {
+                app(VociFraPiuPiani::class)->controlla($pianoRate, $esercizio, 'creazione');
+            }
+
             // 5. Ricorrenza
             if (!empty($validated['recurrence_enabled'])) {
                 $this->pianoRateCreatorService->creaRicorrenza($pianoRate, $validated);
@@ -513,18 +523,39 @@ class PianoRateController extends Controller
 
         } catch (ScopertiNonAccettatiException $e) {
             DB::rollBack();
-            return back()->withInput()->with('scoperti_warning', $e->getScoperti());
+            return $this->alModulo($condominio, $esercizio)->withInput()->with('scoperti_warning', $e->getScoperti());
         } catch (DestinatariCambiatiException $e) {
             DB::rollBack();
-            return back()->withInput()->with('destinatari_warning', $e->getCambiamenti());
+            return $this->alModulo($condominio, $esercizio)->withInput()->with('destinatari_warning', $e->getCambiamenti());
         } catch (SpesaNegativaNelPianoException $e) {
             DB::rollBack();
-            return back()->withInput()->with($this->flashError($e->getMessage()));
+            return $this->alModulo($condominio, $esercizio)->withInput()->with($this->flashError($e->getMessage()));
+        } catch (VociOltreIlPreventivoException|NessunaQuotaCalcolataException $e) {
+            // Il messaggio per la pagina, e ogni voce (o ogni caso da correggere) fra gli errori, una per riga: un agente li corregge
+            // uno alla volta. Le chiavi (`capitoli.{id}`, `quote.{causa}`) non sono campi del modulo, che mostra il messaggio.
+            DB::rollBack();
+            return $this->alModulo($condominio, $esercizio)->withInput()->withErrors($e->errori())->with($this->flashError($e->getMessage()));
         } catch (\Throwable $e) {
             DB::rollBack();
             Log::error("Errore store piano rate", ['msg' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            return back()->withInput()->with($this->flashError($e->getMessage()));
+            return $this->alModulo($condominio, $esercizio)->withInput()->with($this->flashError($e->getMessage()));
         }
+    }
+
+    /**
+     * Indietro, al modulo di creazione se la richiesta non dice da dove viene. `back()` da solo, senza la pagina di provenienza, rimanda
+     * alla home: è ciò che riceveva un agente AI (che chiama la rotta senza aprire il modulo) quando la creazione si fermava, con il
+     * rifiuto perso per strada (Web Pro Italia, 15/11/2026).
+     */
+    private function alModulo(Condominio $condominio, Esercizio $esercizio): RedirectResponse
+    {
+        return back(302, [], route('admin.gestionale.esercizi.piani-rate.create', ['condominio' => $condominio->id, 'esercizio' => $esercizio->id]));
+    }
+
+    /** Indietro, alla pagina del piano se la richiesta non dice da dove viene (vedi `alModulo`). */
+    private function alPiano(Condominio $condominio, Esercizio $esercizio, PianoRate $pianoRate): RedirectResponse
+    {
+        return back(302, [], route('admin.gestionale.esercizi.piani-rate.show', ['condominio' => $condominio->id, 'esercizio' => $esercizio->id, 'pianoRate' => $pianoRate->id]));
     }
     
     /**
@@ -688,7 +719,7 @@ class PianoRateController extends Controller
         return Inertia::render('gestionale/pianiRate/PianiRateShow', [
             'condominio' => $condominio,
             'esercizio' => $esercizio, 
-            'pianoRate' => (new PianoRateResource($pianoRate))->conQuoteNonAssegnate(),
+            'pianoRate' => (new PianoRateResource($pianoRate))->conQuoteNonAssegnate()->conCopertura(),
             'ratePure' => $ratePure, 
             'quotePerAnagrafica' => $this->pianoRateQuoteService->quotePerAnagrafica($pianoRate),
             'quotePerImmobile' => $this->pianoRateQuoteService->quotePerImmobile($pianoRate),
@@ -1061,16 +1092,16 @@ class PianoRateController extends Controller
         $notaDestinatari    = $request->string('nota_destinatari')->trim()->value() ?: null;
 
         if ($pianoRate->haIncassiRegistrati()) {
-            return back()->with($this->flashError("Impossibile modificare: ci sono incassi registrati, o crediti già usati o rimborsati."));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError("Impossibile modificare: ci sono incassi registrati, o crediti già usati o rimborsati."));
         }
         
         if ($pianoRate->rate()->whereHas('rateQuote', fn($q) => $q->whereNotNull('scrittura_contabile_id'))->exists()) {
-            return back()->with($this->flashError("Annulla le emissioni prima di modificare le voci."));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError("Annulla le emissioni prima di modificare le voci."));
         }
 
         // Decisione 38 (1.11.0-beta.42): togliere una voce rigenera il piano, e un piano conguagliato da un passaggio non si riscrive.
         if (($fraseConguagliato = $pianoRate->fraseConguagliato('Togliere una voce e ricalcolarlo', 'togli la voce')) !== null) {
-            return back()->with($this->flashError($fraseConguagliato));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError($fraseConguagliato));
         }
 
         // ⚠️ Il saldo NETTO, non la semplice esistenza di righe storiche — beta.73.
@@ -1098,7 +1129,7 @@ class PianoRateController extends Controller
                 ? "Questa voce ha ricevuto € {$importo} netti da altre voci con Sposta Spesa, in questo piano rate. "
                 : "Questa voce ha ceduto € {$importo} netti ad altre voci con Sposta Spesa, in questo piano rate. ";
 
-            return back()->with($this->flashError(
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError(
                 $messaggio . "Storna i movimenti dallo storico (icona dell'orologio) prima di rimuoverla."
             ));
         }
@@ -1142,21 +1173,25 @@ class PianoRateController extends Controller
             }
             
             DB::commit();
-            return back()->with($this->flashSuccess("Voce rimossa e ricalcolata."));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashSuccess("Voce rimossa e ricalcolata."));
             
         } catch (DestinatariCambiatiException $e) {
             // Il rollback annulla anche il detach: la voce è ancora nel piano finché non c'è la presa d'atto.
             DB::rollBack();
-            return back()
+            return $this->alPiano($condominio, $esercizio, $pianoRate)
                 ->with('destinatari_warning', $e->getCambiamenti())
                 ->with('destinatari_warning_detach', (int) $capitoloId);
         } catch (SpesaNegativaNelPianoException $e) {
             // Il rollback annulla anche il detach: la voce resta nel piano.
             DB::rollBack();
-            return back()->with($this->flashError($e->getMessage()));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError($e->getMessage()));
+        } catch (NessunaQuotaCalcolataException $e) {
+            // Tolta la voce, quelle che restano non hanno nessuno a cui andare: il rollback la rimette nel piano, e il rifiuto dice che cosa manca.
+            DB::rollBack();
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->withErrors($e->errori())->with($this->flashError($e->getMessage()));
         } catch (\Throwable $e) {
             DB::rollBack();
-            return back()->with($this->flashError("Errore durante la rimozione: " . $e->getMessage()));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError("Errore durante la rimozione: " . $e->getMessage()));
         }
     }
 

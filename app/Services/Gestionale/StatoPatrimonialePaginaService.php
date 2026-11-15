@@ -77,12 +77,16 @@ class StatoPatrimonialePaginaService
 
         $vociPerRuolo = fn (array $voci, string $ruolo) => (int) collect($voci)->where('ruolo', $ruolo)->sum('saldo');
 
+        // La riga di una banca dice quanto del conto vero sta nei fondi (Web Pro Italia, 15/11/2026): qui e nel suo mastrino la banca
+        // scende a ogni accantonamento, nel registro di contabilità e nell'estratto conto no. Il calcolo resta quello che è.
+        $vociAttivo = $this->conAccantonato($foto['attivo']['voci'], $this->accantonatoNeiFondi($condominio, $al));
+
         return [
             'data' => $al,
             'dal' => $dal,
             'stato_esercizio' => $stato,
             'situazione' => [
-                'attivo' => ['gruppi' => $this->raggruppa($foto['attivo']['voci'], 'attivo'), 'totale' => $foto['attivo']['totale']],
+                'attivo' => ['gruppi' => $this->raggruppa($vociAttivo, 'attivo'), 'totale' => $foto['attivo']['totale']],
                 'passivo' => ['gruppi' => $this->raggruppa($foto['passivo']['voci'], 'passivo'), 'totale' => $foto['passivo']['totale']],
                 'costi_voci' => $foto['costi_voci'],
                 'ricavi_voci' => $foto['ricavi_voci'],
@@ -413,6 +417,95 @@ class StatoPatrimonialePaginaService
                 'azione_parametro' => $negative === [] ? null : ($cnSenzaApertura ? (string) $negative[0]['cassa_id'] : $negative[0]['cassa']),
             ],
         ];
+    }
+
+    /**
+     * Quanto ogni banca (o cassa contanti) ha accantonato nei fondi, fino alla data, con i giroconti (`RegistraGirocontoAction`).
+     *
+     * IL CALCOLO È VOLUTO E NON CAMBIA. Un fondo è una partizione dell'unico conto corrente (D15): un giroconto banca → fondo scrive
+     * AVERE sul conto della banca e DARE su quello del fondo. Lo stato patrimoniale e il mastrino leggono i conti, quindi la riga della
+     * banca scende e quella del fondo sale: la banca è la parte LIBERA del conto. Il registro di contabilità conta il denaro che entra e
+     * che esce davvero (art. 1130 n. 7 c.c.) e lascia fuori la riga della banca di un giroconto verso un fondo, che è la banca che parla
+     * con sé stessa (`RegistroContabilitaService::queryBase`): lì, come nell'estratto conto della banca, il conto resta intero. Le due
+     * cifre sono giuste tutte e due e non coincidono: chi le confronta deve vedere da dove viene la differenza, e questa la dice.
+     *
+     * La regola è quella del registro, perché la differenza sia esattamente la sua: le righe di una cassa reale in una scrittura che ha
+     * una riga sorella su una cassa `fondo` o `virtuale`. Il taglio è quello della fotografia (la data, `< giorno dopo`). Positivo =
+     * accantonato nel fondo; negativo = arrivato dal fondo più di quanto ci sia andato.
+     *
+     * @see docs/registri_contabili.md (la banca, i fondi e i due numeri dello stesso conto)
+     *
+     * @return array<int, array{totale: int, fondi: list<array{fondo: string, tipo: string, importo: int}>}> conto contabile della cassa reale => accantonato
+     */
+    private function accantonatoNeiFondi(Condominio $condominio, string $al): array
+    {
+        $righe = DB::table('righe_scritture as rs')
+            ->join('scritture_contabili as sc', function ($join) {
+                $join->on('rs.scrittura_id', '=', 'sc.id')->whereNull('sc.deleted_at');
+            })
+            ->join('casse as ca', 'ca.id', '=', 'rs.cassa_id')
+            ->join('righe_scritture as rs2', function ($join) {
+                $join->on('rs2.scrittura_id', '=', 'rs.scrittura_id')->whereColumn('rs2.id', '!=', 'rs.id');
+            })
+            ->join('casse as ca2', 'ca2.id', '=', 'rs2.cassa_id')
+            ->where('sc.condominio_id', $condominio->id)
+            ->where('sc.data_competenza', '<', Carbon::parse($al)->addDay()->format('Y-m-d'))
+            ->whereIn('ca.tipo', ['banca', 'contanti'])
+            ->whereIn('ca2.tipo', ['fondo', 'virtuale'])
+            ->groupBy('rs.conto_contabile_id', 'ca2.id', 'ca2.nome', 'ca2.tipo')
+            ->orderBy('ca2.id')
+            ->select(['rs.conto_contabile_id', 'ca2.nome as fondo', 'ca2.tipo',
+                DB::raw("SUM(CASE WHEN rs.tipo_riga = 'avere' THEN rs.importo ELSE -rs.importo END) as netto")])
+            ->get();
+
+        $perConto = [];
+        foreach ($righe as $r) {
+            if ((int) $r->netto === 0) {
+                continue;
+            }
+            $conto = (int) $r->conto_contabile_id;
+            $perConto[$conto] ??= ['totale' => 0, 'fondi' => []];
+            $perConto[$conto]['totale'] += (int) $r->netto;
+            $perConto[$conto]['fondi'][] = ['fondo' => (string) $r->fondo, 'tipo' => (string) $r->tipo, 'importo' => (int) $r->netto];
+        }
+
+        return $perConto;
+    }
+
+    /**
+     * Le voci dell'attivo, con `accantonato` sulle righe delle banche che hanno accantonato nei fondi (null sulle altre): il totale, i
+     * fondi, quanto c'è sul conto intero e la frase che lo spiega. Nessun totale cambia.
+     *
+     * @param  array<int, array<string, mixed>>  $voci
+     * @param  array<int, array{totale: int, fondi: list<array{fondo: string, tipo: string, importo: int}>}>  $accantonato
+     * @return array<int, array<string, mixed>>
+     */
+    private function conAccantonato(array $voci, array $accantonato): array
+    {
+        $fmt = fn (int $c) => '€ '.number_format($c / 100, 2, ',', '.');
+        // «nel fondo «Lavori»», «dalla cassa virtuale «Spese»»; con più fondi la cifra di ognuno.
+        $dove = function (array $fondi, bool $da) use ($fmt): string {
+            $parti = array_map(fn ($f) => ($f['tipo'] === 'virtuale' ? ($da ? 'dalla cassa virtuale' : 'nella cassa virtuale') : ($da ? 'dal fondo' : 'nel fondo'))
+                .' «'.$f['fondo'].'»'.(count($fondi) > 1 ? ' ('.$fmt(abs($f['importo'])).')' : ''), $fondi);
+
+            return count($parti) > 1 ? implode(', ', array_slice($parti, 0, -1)).' e '.end($parti) : $parti[0];
+        };
+
+        return array_map(function (array $v) use ($accantonato, $fmt, $dove) {
+            $a = $accantonato[(int) $v['id']] ?? null;
+            if ($a === null || $a['totale'] === 0 || $v['categoria'] !== 'liquidita') {
+                return $v + ['accantonato' => null];
+            }
+            $sulConto = (int) $v['saldo'] + $a['totale'];
+            $nota = $a['totale'] > 0
+                ? sprintf('Sul conto ci sono %s, di cui %s accantonati %s: questa riga è la parte libera, e %s fra la liquidità. L\'estratto conto della banca e il registro di contabilità, che non conta un accantonamento come uscita, mostrano il conto intero.',
+                    $fmt($sulConto), $fmt($a['totale']), $dove($a['fondi'], false),
+                    count($a['fondi']) > 1 ? 'ognuno ha la sua riga' : ($a['fondi'][0]['tipo'] === 'virtuale' ? 'la cassa virtuale ha la sua riga' : 'il fondo ha la sua riga'))
+                : sprintf('Su questo conto sono arrivati %s %s più di quanti ce ne siano stati accantonati: questa riga li conta, il registro di contabilità no (un giroconto da un fondo non è un\'entrata), e lì il conto mostra %s.',
+                    $dove($a['fondi'], true), $fmt(-$a['totale']), $fmt($sulConto));
+
+            return $v + ['accantonato' => ['totale' => $a['totale'], 'fondi' => $a['fondi'], 'sul_conto' => $sulConto, 'nota' => $nota]];
+        }, $voci);
     }
 
     private function raggruppa(array $voci, string $lato): array

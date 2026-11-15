@@ -315,8 +315,6 @@ function b60eGiaVersato(array $s): void
         'origine' => 'migrazione', 'descrizione' => 'Accantonamento di prima']);
 }
 
-const B60E_NESSUNA_QUOTA = 'Impossibile generare il piano rate: nessuna quota calcolata. Verificare che (1) le tabelle millesimali abbiano i millesimi inseriti per ogni immobile, (2) ogni immobile abbia almeno un condòmino attivo associato, (3) ogni voce di spesa sia collegata a una tabella millesimale.';
-
 const B60E_VOCI_DEL_2026 = 'Impossibile generare il piano rate: tutte le voci di questa gestione sono già nel piano «Preventivo 2026» dell\'esercizio «Esercizio 2026», attivo sulla stessa gestione, e un piano creato senza scegliere le voci prende solo quelle che nessun altro piano attivo della gestione ha già, di qualunque esercizio. Sulla gestione usata in più esercizi il programma non tiene ancora separati i piani di esercizi diversi.';
 
 it('Coda 75, decisione 166 — il piano del 2027 creato senza scegliere le voci, quando sono tutte nel piano del 2026: il rifiuto dice la causa e nomina il piano, e nessuna cifra cambia', function (array $ordine) {
@@ -344,11 +342,13 @@ it('Coda 75, decisione 166 — il piano del 2027 creato senza generarlo e poi ge
         ->and($p27->rate()->count())->toBe(0);
 })->with(B60E_ORDINI);
 
-it('controprova — decisione 166: le voci tutte in un altro piano dello stesso esercizio: il rifiuto resta quello di prima', function (array $ordine) {
+it('controprova — decisione 166: le voci tutte in un altro piano dello stesso esercizio: il rifiuto non è quello della 166', function (array $ordine) {
     $s = b60eScenario($this, $ordine);
     b60ePiano($this, $s, '2026');
 
-    expect(b60eErrore(b60eCrea($this, $s, '2026', 'Integrativo 2026', null)))->toBe(B60E_NESSUNA_QUOTA);
+    // Web Pro Italia (15/11/2026): il rifiuto di prima era quello generico (millesimi, titolari, tabelle), che qui non c'entravano;
+    // «nessuna quota calcolata» ora dice la causa vera (`MancanzeDelRiparto`). La decisione 166 resta fuori, come prima.
+    expect(b60eErrore(b60eCrea($this, $s, '2026', 'Integrativo 2026', null)))->toBe('Impossibile generare il piano rate «Integrativo 2026»: nessuna quota calcolata, perché nessuna spesa del piano ha qualcuno a cui andare. Il piano non ha voci, perché tutte le voci della gestione sono già in un altro piano attivo: «Preventivo 2026». Scegli le voci del piano, ciascuna con la sua parte, oppure togli le voci dall\'altro piano. Poi genera di nuovo il piano.');
 })->with(B60E_ORDINI);
 
 it('Coda 75, decisione 166 — il già versato e la stessa voce nel piano del 2026: il piano del 2027 si ferma, e il messaggio dice il fatto senza proporre di disattivare un piano né di alzare la voce; nessuna cifra cambia', function (array $ordine) {
@@ -364,16 +364,19 @@ it('Coda 75, decisione 166 — il già versato e la stessa voce nel piano del 20
         ->and(b60eChiesto($p26, $s))->toBe(['ugo' => 40000, 'bice' => 70000]);
 })->with(B60E_ORDINI);
 
-it('controprova — decisione 166: il già versato e due piani dello stesso esercizio sulla stessa voce: il messaggio resta quello di prima', function (array $ordine) {
+it('controprova — decisione 166: il già versato e due piani dello stesso esercizio sulla stessa voce: il rifiuto non è quello della 166', function (array $ordine) {
     $s = b60eScenario($this, $ordine);
     b60eGiaVersato($s);
     b60ePiano($this, $s, '2026');
 
+    // Web Pro Italia (15/11/2026): due piani dello stesso esercizio che superano la voce si fermano già alla creazione, per ogni voce e non
+    // solo per quelle con il già versato, con il rifiuto di `VociFraPiuPiani` (prima era la guardia del già versato, alla generazione). La
+    // decisione 166 continua a non toccarlo.
     expect(b60eErrore(b60eCrea($this, $s, '2026', 'Integrativo 2026', ['spesa' => '1.200,00'])))
-        ->toBe('Impossibile generare: la voce di spesa "Spese generali" ha un già-versato registrato, ma la somma degli importi richiesti dai piani rate attivi su questa voce (€ 2.400,00) supera il suo budget (€ 1.200,00). Aggiorna prima l\'importo della voce al fabbisogno reale, oppure disattiva uno dei piani rate in conflitto: altrimenti il già versato verrebbe conteggiato più volte e parte della spesa non verrebbe mai richiesta ai condòmini.');
+        ->toBe('Il piano «Integrativo 2026» non si crea: una sua voce, insieme agli altri piani, supererebbe il fabbisogno, e ai condòmini si chiederebbe due volte la stessa spesa (contano i piani validi della stessa gestione nell\'esercizio «Esercizio 2026», in bozza o approvati). «Spese generali»: preventivo € 1.200,00; un altro piano le dà già € 1.200,00 («Preventivo 2026» € 1.200,00); questo piano chiede € 1.200,00: in tutto € 2.400,00, € 1.200,00 oltre. Qui niente: gli altri piani la coprono già tutta. Per dividere una voce fra più piani scrivi in ognuno solo la sua parte; se invece la voce costa di più, alza prima il suo preventivo nel piano dei conti. Poi rimanda il modulo.');
 })->with(B60E_ORDINI);
 
-it('controprova — decisione 166: il già versato, un piano del 2026 e due del 2027 che già fra loro superano la voce: il messaggio resta quello di prima', function (array $ordine) {
+it('controprova — decisione 166: il già versato, un piano del 2026 e due del 2027 che già fra loro superano la voce: il rifiuto non è quello della 166', function (array $ordine) {
     $s = b60eScenario($this, $ordine);
     b60eGiaVersato($s);
     // € 600,00 nel 2027 e € 600,00 nel 2026: insieme € 1.200,00, la voce basta e tutti e due si generano.
@@ -381,9 +384,11 @@ it('controprova — decisione 166: il già versato, un piano del 2026 e due del 
     b60eCrea($this, $s, '2026', 'Preventivo 2026', ['spesa' => '600,00'])->assertSessionHasNoErrors();
     expect(PianoRate::where('condominio_id', $s['c']->id)->whereIn('nome', ['Primo 2027', 'Preventivo 2026'])->count())->toBe(2);
 
-    // Conto a mano: nel solo 2027 € 600,00 + € 700,00 = € 1.300,00 superano già € 1.200,00; con il 2026 la somma è € 1.900,00.
+    // Conto a mano: nel solo 2027 € 600,00 + € 700,00 = € 1.300,00 superano già € 1.200,00. Web Pro Italia (15/11/2026): il rifiuto è
+    // quello di `VociFraPiuPiani`, alla creazione, che conta i piani dello stesso esercizio (prima era la guardia del già versato, con i
+    // € 1.900,00 di tutti gli esercizi). La decisione 166 continua a non toccarlo.
     expect(b60eErrore(b60eCrea($this, $s, '2027', 'Secondo 2027', ['spesa' => '700,00'])))
-        ->toBe('Impossibile generare: la voce di spesa "Spese generali" ha un già-versato registrato, ma la somma degli importi richiesti dai piani rate attivi su questa voce (€ 1.900,00) supera il suo budget (€ 1.200,00). Aggiorna prima l\'importo della voce al fabbisogno reale, oppure disattiva uno dei piani rate in conflitto: altrimenti il già versato verrebbe conteggiato più volte e parte della spesa non verrebbe mai richiesta ai condòmini.');
+        ->toBe('Il piano «Secondo 2027» non si crea: una sua voce, insieme agli altri piani, supererebbe il fabbisogno, e ai condòmini si chiederebbe due volte la stessa spesa (contano i piani validi della stessa gestione nell\'esercizio «Esercizio 2027», in bozza o approvati). «Spese generali»: preventivo € 1.200,00; un altro piano le dà già € 600,00 («Primo 2027» € 600,00); questo piano chiede € 700,00: in tutto € 1.300,00, € 100,00 oltre. Qui al massimo € 600,00. Per dividere una voce fra più piani scrivi in ognuno solo la sua parte; se invece la voce costa di più, alza prima il suo preventivo nel piano dei conti. Poi rimanda il modulo.');
 })->with(B60E_ORDINI);
 
 it('Coda 75, decisione 166 — le voci in due piani del 2026, una per piano: il rifiuto del piano del 2027 senza voci scelte li nomina tutti e due', function (array $ordine) {
@@ -480,9 +485,10 @@ it('controprova — decisione 166: una voce nuova, non in altri piani, accanto a
     $p27 = b60eSenzaVoci2027($this, $s);
     be52Voce($this, $s, $s['pc'], 'Varie', 'spesa', '0,00');
 
-    // «Varie» (€ 0,00) non è in nessun piano: non tutte le voci sono impegnate, e il rifiuto è quello di sempre.
+    // «Varie» (€ 0,00) non è in nessun piano: non tutte le voci sono impegnate, e il rifiuto non è quello della 166. Web Pro Italia
+    // (15/11/2026): «nessuna quota calcolata» dice la causa vera, la voce a zero (`MancanzeDelRiparto`), al posto dei tre controlli generici.
     $r = $this->actingAs($this->user)->from('/piano')->post(route('admin.gestionale.esercizi.piani-rate.regenerate', [$s['c'], $s['es']['2027'], $p27]));
-    expect(b60eErrore($r))->toBe('Errore durante il ricalcolo: '.B60E_NESSUNA_QUOTA)
+    expect(b60eErrore($r))->toBe('Impossibile generare il piano rate «Preventivo 2027»: nessuna quota calcolata, perché nessuna spesa del piano ha qualcuno a cui andare. 1 voce senza importo: «Varie». Scrivi il preventivo della voce nel piano dei conti, o un importo nel piano. Poi genera di nuovo il piano.')
         ->and($p27->rate()->count())->toBe(0);
 })->with(B60E_ORDINI);
 

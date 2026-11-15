@@ -75,6 +75,12 @@ class AutenticaAgente
     ];
 
     /**
+     * Gli avvisi che sono un cancello: la scrittura si è fermata e aspetta una presa d'atto. L'agente li riceve con una frase che dice
+     * che cosa manca e come procedere (la pagina li mostra in un riquadro, che l'agente non vede), e la risposta non è `ok`.
+     */
+    private const CANCELLI = ['scoperti_warning', 'destinatari_warning'];
+
+    /**
      * Rotte che un agente può usare solo se la sua chiave ha un permesso in più, acceso dall'amministratore in
      * Impostazioni → Agenti AI (15/11/2026). `condomini.destroy` resta vietata: questa è l'altra porta, quella che
      * chiede di riscrivere il nome e salva una copia prima di cancellare.
@@ -282,7 +288,9 @@ class AutenticaAgente
 
             $errori = $sessione?->get('errors');
             $errori = $errori instanceof \Illuminate\Support\ViewErrorBag ? $errori->getBag('default')->toArray() : ($errori['default']['messages'] ?? null);
-            $haErrori = ! empty($errori) || collect($avvisi)->contains(fn ($a) => in_array($a['tipo'], ['error', 'danger'], true));
+            // I due cancelli del piano rate (quote scoperte, destinatari cambiati) fermano la scrittura e chiedono una decisione: non
+            // sono un esito riuscito. Fino al 15/11/2026 arrivavano con `ok: true` e senza una frase, e l'agente credeva il piano creato.
+            $haErrori = ! empty($errori) || collect($avvisi)->contains(fn ($a) => in_array($a['tipo'], ['error', 'danger', ...self::CANCELLI], true));
 
             return $this->json(array_replace($base, [
                 'ok'        => ! $haErrori,
@@ -332,7 +340,11 @@ class AutenticaAgente
                 continue;
             }
 
-            if (is_array($valore) && isset($valore['message'])) {
+            if (in_array($chiave, self::CANCELLI, true) && is_array($valore)) {
+                $avvisi[] = ['tipo' => $chiave, 'testo' => $chiave === 'scoperti_warning'
+                    ? \App\Exceptions\Gestionale\ScopertiNonAccettatiException::fraseDegliScoperti($valore)
+                    : \App\Exceptions\Gestionale\DestinatariCambiatiException::fraseDeiCambiamenti($valore), 'dati' => $valore];
+            } elseif (is_array($valore) && isset($valore['message'])) {
                 $avvisi[] = ['tipo' => $valore['type'] ?? $chiave, 'testo' => is_string($valore['message']) ? $valore['message'] : json_encode($valore['message'])];
             } elseif (is_string($valore)) {
                 $avvisi[] = ['tipo' => $chiave === 'message' ? 'info' : $chiave, 'testo' => $valore];
@@ -388,7 +400,7 @@ class AutenticaAgente
         $motivo = $dati['messaggio'] ?? null;
 
         if (! is_string($motivo) || $motivo === '') {
-            $rosso = collect($dati['avvisi'] ?? [])->first(fn ($a) => in_array($a['tipo'] ?? '', ['error', 'danger'], true) && is_string($a['testo'] ?? null));
+            $rosso = collect($dati['avvisi'] ?? [])->first(fn ($a) => in_array($a['tipo'] ?? '', ['error', 'danger', ...self::CANCELLI], true) && is_string($a['testo'] ?? null));
             $primo = collect($errori)->flatten()->first(fn ($v) => is_string($v));
             $motivo = $rosso['testo'] ?? $primo;
         }

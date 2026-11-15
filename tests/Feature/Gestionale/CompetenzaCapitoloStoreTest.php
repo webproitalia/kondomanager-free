@@ -131,10 +131,13 @@ it('verifica S6, R1 — su una gestione STRAORDINARIA i tratti per voce sono rif
 it('la competenza già dichiarata sulla voce si ripropone al piano nuovo (fetch-capitoli-gestione: competenza_dichiarata dal piano più recente, dal capitolo padre se la voce non ne ha) e si legge sulla pagina della fattura (conti.*.competenza_piano)', function () {
     // Piano madre: la stagione su Gas (foglia1), niente su Pulizie; Manutenzione caldaia (foglia2) eredita dal padre
     // se il padre dichiara: qui il padre non dichiara, quindi foglia2 resta senza.
+    // Web Pro Italia (15/11/2026): il piano madre chiede una parte delle due foglie, e l'integrativa qui sotto il resto. Prima le chiedeva per
+    // intero, e l'integrativa (la «Selezione rapida» del padre) le chiedeva di nuovo intere: la stessa spesa due volte, che `VociFraPiuPiani`
+    // ora ferma. Qui si guarda la competenza, non le cifre.
     $stagione = [['dal' => '2026-01-01', 'al' => '2026-04-15'], ['dal' => '2026-10-15', 'al' => '2026-12-31']];
     $this->actingAs($this->user)->post($this->rotta, ccCorpo([
         'nome' => 'Preventivo 2026', 'gestione_id' => $this->gestione->id,
-        'capitoli_config' => [['id' => $this->foglia1->id, 'importo' => '5.000,00', 'note' => ''], ['id' => $this->foglia2->id, 'importo' => '1.000,00', 'note' => ''], ['id' => $this->pulizie->id, 'importo' => '2.000,00', 'note' => '']],
+        'capitoli_config' => [['id' => $this->foglia1->id, 'importo' => '4.000,00', 'note' => ''], ['id' => $this->foglia2->id, 'importo' => '600,00', 'note' => ''], ['id' => $this->pulizie->id, 'importo' => '2.000,00', 'note' => '']],
         'competenze_capitoli' => [['conto_id' => $this->foglia1->id, 'tratti' => $stagione]],
     ]))->assertRedirect()->assertSessionHasNoErrors();
 

@@ -8,13 +8,16 @@ use App\Actions\PianoRate\SyncOrphanChaptersAction;
 use App\Enums\StatoPianoRate;
 use App\Events\Gestionale\PianoRateStatusUpdated;
 use App\Exceptions\Gestionale\DestinatariCambiatiException;
+use App\Exceptions\Gestionale\NessunaQuotaCalcolataException;
 use App\Exceptions\Gestionale\ScopertiNonAccettatiException;
 use App\Exceptions\Gestionale\SpesaNegativaNelPianoException;
+use App\Exceptions\Gestionale\VociOltreIlPreventivoException;
 use App\Http\Controllers\Controller;
 use App\Models\Condominio;
 use App\Models\Immobile;
 use App\Models\Esercizio;
 use App\Models\Gestionale\PianoRate;
+use App\Services\Riparto\VociFraPiuPiani;
 use App\Traits\HandleFlashMessages;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,7 +68,7 @@ class PianoRateGenerationController extends Controller
             // con il rifiuto dell'emissione si vede.
             $daSeguire = $pianoRate->passaggiDaSeguire();
 
-            return back()->with($this->flashError(
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError(
                 "Impossibile ricalcolare: ci sono rate con incassi registrati, o crediti già usati in compensazione o rimborsati. Annulla prima quei movimenti."
                 // Beta.51 (§6.3): fra i passaggi da seguire ci sono anche quelli annullati dopo il ricalcolo, e per loro il ricalcolo non «terrà
                 // conto» di niente: riporterà le quote alla titolarità di prima.
@@ -79,7 +82,7 @@ class PianoRateGenerationController extends Controller
             ->exists();
 
         if ($haEmissioni) {
-            return back()->with($this->flashError(
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError(
                 "Impossibile ricalcolare: ci sono rate già emesse in contabilità. Annulla prima le emissioni."
             ));
         }
@@ -87,7 +90,7 @@ class PianoRateGenerationController extends Controller
         // Decisione 38 (1.11.0-beta.42, rilievo R2): un passaggio ha già conguagliato il piano. Ricalcolarlo darebbe a chi è
         // entrato i suoi giorni nel riparto e anche la coppia, e pagherebbe due volte.
         if (($fraseConguagliato = $pianoRate->fraseConguagliato('Ricalcolarlo', 'ricalcola il piano')) !== null) {
-            return back()->with($this->flashError($fraseConguagliato));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError($fraseConguagliato));
         }
 
         // La scadenza della rata dei saldi (rata 0) si può cambiare qui, con il ricalcolo (Web Pro Italia, 13/11/2026):
@@ -105,12 +108,12 @@ class PianoRateGenerationController extends Controller
             $cambiaDataRataZero = $nuovaDataRataZero !== $pianoRate->data_rata_zero?->toDateString();
 
             if ($cambiaDataRataZero && $pianoRate->stato === StatoPianoRate::APPROVATO) {
-                return back()->with($this->flashError(
+                return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError(
                     "La scadenza della rata dei saldi si cambia con il piano in bozza: riporta il piano in bozza e ricalcola."
                 ));
             }
             if ($cambiaDataRataZero && $nuovaDataRataZero !== null && $pianoRate->metodo_distribuzione !== 'rata_zero') {
-                return back()->with($this->flashError(
+                return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError(
                     "Questo piano non mette i saldi in una rata separata (rata zero): non c'è una scadenza della rata dei saldi da indicare."
                 ));
             }
@@ -142,6 +145,10 @@ class PianoRateGenerationController extends Controller
                 // Le voci scritte adesso non hanno una copia che il piano tenga da prima: se il fermo le trova negative lo dice come voci.
                 $appenaSincronizzate = array_values(array_diff($this->vociDelPiano($pianoRate), $vociPrima));
             }
+
+            // Web Pro Italia (15/11/2026): con le voci di adesso (e quelle che «Sincronizza» ha appena aggiunto), nessuna voce che il
+            // piano tiene insieme a un altro piano valido della gestione, nello stesso esercizio, supera il fabbisogno (`VociFraPiuPiani`).
+            app(VociFraPiuPiani::class)->controlla($pianoRate, $esercizio, $nuoviCapitoli > 0 ? 'sincronizzazione' : 'ricalcolo');
 
             // 4. Reset e Rigenerazione Inbox
             $vecchioStato = $pianoRate->stato;
@@ -189,29 +196,43 @@ class PianoRateGenerationController extends Controller
                 // legge chiude la pagina convinto di aver risolto, e la voce resta scoperta.
                 // Finché la sincronizzazione non sa raggiungere i sotto-conti, che è lavoro
                 // sul percorso del denaro e sta fuori dalla beta.51, almeno lo diciamo.
-                return back()->with($this->flashError(
+                return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError(
                     "Ricalcolo eseguito, ma nessuna delle voci selezionate è stata inclusa nel piano: "
                     . "la sincronizzazione automatica raggiunge solo i capitoli di primo livello. "
                     . "Per includere un sotto-conto, elimina il piano e ricrealo selezionando la voce."
                 ));
             }
 
-            return back()->with($this->flashSuccess($msg));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashSuccess($msg));
 
         } catch (ScopertiNonAccettatiException $e) {
             DB::rollBack();
-            return back()->with('scoperti_warning', $e->getScoperti());
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with('scoperti_warning', $e->getScoperti());
         } catch (DestinatariCambiatiException $e) {
             DB::rollBack();
-            return back()->with('destinatari_warning', $e->getCambiamenti());
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with('destinatari_warning', $e->getCambiamenti());
         } catch (SpesaNegativaNelPianoException $e) {
             DB::rollBack();
-            return back()->with($this->flashError($e->getMessage()));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError($e->getMessage()));
+        } catch (VociOltreIlPreventivoException|NessunaQuotaCalcolataException $e) {
+            // Il messaggio per la pagina, e ogni voce (o ogni caso da correggere) fra gli errori, una per riga, per un agente.
+            DB::rollBack();
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->withErrors($e->errori())->with($this->flashError($e->getMessage()));
         } catch (\Throwable $e) {
             DB::rollBack();
             Log::error("Errore rigenerazione piano rate", ['error' => $e->getMessage()]);
-            return back()->with($this->flashError("Errore durante il ricalcolo: " . $e->getMessage()));
+            return $this->alPiano($condominio, $esercizio, $pianoRate)->with($this->flashError("Errore durante il ricalcolo: " . $e->getMessage()));
         }
+    }
+
+    /**
+     * Indietro, alla pagina del piano se la richiesta non dice da dove viene. `back()` da solo, senza la pagina di provenienza, rimanda
+     * alla home: è ciò che riceveva un agente AI (che chiama la rotta senza aprire la pagina) quando il ricalcolo si fermava
+     * (Web Pro Italia, 15/11/2026).
+     */
+    private function alPiano(Condominio $condominio, Esercizio $esercizio, PianoRate $pianoRate): RedirectResponse
+    {
+        return back(302, [], route('admin.gestionale.esercizi.piani-rate.show', ['condominio' => $condominio->id, 'esercizio' => $esercizio->id, 'pianoRate' => $pianoRate->id]));
     }
 
     /** @return list<int> gli id delle voci che stanno nella pivot del piano */
