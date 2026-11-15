@@ -9,9 +9,9 @@ use App\Services\Riparto\VociFraPiuPiani;
 use RuntimeException;
 
 /**
- * Il piano, insieme agli altri piani validi della stessa gestione e dello stesso esercizio, chiederebbe a una voce più del suo
- * fabbisogno: la stessa spesa due volte (`VociFraPiuPiani`, Web Pro Italia 15/11/2026). Niente è stato scritto: la creazione e il
- * ricalcolo si annullano.
+ * Il piano, insieme agli altri piani validi e non ancora emessi della stessa gestione e dello stesso esercizio, chiederebbe a una
+ * voce più del suo fabbisogno: la stessa spesa due volte (`VociFraPiuPiani`, Web Pro Italia 15/11/2026). Niente è stato scritto: la
+ * creazione e il ricalcolo si annullano.
  *
  * Il messaggio è un capoverso solo, come gli altri rifiuti del piano: la pagina lo mostra così com'è. Nomina ogni voce (al più
  * dieci, le altre si contano) con il preventivo, quanto le danno gli altri piani e quali, quanto chiede questo e quanto al massimo
@@ -39,7 +39,8 @@ class VociOltreIlPreventivoException extends RuntimeException
             default => sprintf('Il piano «%s» non si ricalcola', $pianoRate->nome),
         };
         $testa .= ($n === 1 ? ': una sua voce, insieme agli altri piani, supererebbe' : sprintf(': %d sue voci, insieme agli altri piani, supererebbero', $n)).' il fabbisogno';
-        $testa .= sprintf(', e ai condòmini si chiederebbe due volte la stessa spesa (contano i piani validi della stessa gestione%s, in bozza o approvati).',
+        // Un piano già emesso non conta (`VociFraPiuPiani`, la regola in testa): la frase dice quali piani contano.
+        $testa .= sprintf(', e ai condòmini si chiederebbe due volte la stessa spesa (contano i piani validi della stessa gestione%s, in bozza o approvati, non ancora emessi).',
             $esercizio !== null ? ' nell\'esercizio «'.$esercizio->nome.'»' : '');
 
         $frasi = [];

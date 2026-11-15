@@ -14,7 +14,9 @@
  * I test con ⚠️ falliscono senza la correzione; le controprove sono verdi prima e dopo, e dicono che cosa la regola non deve bloccare.
  *
  * Cosa resta scoperto: «Sposta spesa» fra due piani (lo spostamento resta dentro un piano, e non si controlla); i piani straordinari, che
- * non hanno voci ma fatture.
+ * non hanno voci ma fatture; un piano nuovo accanto a un piano già emesso (sopra la 1.12, 15/11/2026: la 1.12 ci passa per rifare un piano
+ * emesso e per una spesa in più sulla stessa voce, e il programma non sa distinguerli da un saldo scritto per intero accanto a un acconto
+ * emesso; non si ferma, e la pagina del piano lo dice in rosso).
  */
 
 use App\Models\Esercizio;
@@ -73,7 +75,7 @@ it('⚠️ un secondo piano che con il primo supera il preventivo della voce non
 
     $r->assertRedirect('/crea')->assertSessionHasErrors('capitoli.'.$s['spesa']->id);
     expect(PianoRate::where('nome', 'Saldo 2026')->exists())->toBeFalse('il piano non doveva nascere')
-        ->and(vfpMessaggio($r))->toBe('Il piano «Saldo 2026» non si crea: una sua voce, insieme agli altri piani, supererebbe il fabbisogno, e ai condòmini si chiederebbe due volte la stessa spesa (contano i piani validi della stessa gestione nell\'esercizio «Esercizio 2026», in bozza o approvati). «Spese generali»: preventivo € 1.200,00; un altro piano le dà già € 700,00 («Acconto 2026» € 700,00); questo piano chiede € 600,00: in tutto € 1.300,00, € 100,00 oltre. Qui al massimo € 500,00. Per dividere una voce fra più piani scrivi in ognuno solo la sua parte; se invece la voce costa di più, alza prima il suo preventivo nel piano dei conti. Poi rimanda il modulo.')
+        ->and(vfpMessaggio($r))->toBe('Il piano «Saldo 2026» non si crea: una sua voce, insieme agli altri piani, supererebbe il fabbisogno, e ai condòmini si chiederebbe due volte la stessa spesa (contano i piani validi della stessa gestione nell\'esercizio «Esercizio 2026», in bozza o approvati, non ancora emessi). «Spese generali»: preventivo € 1.200,00; un altro piano le dà già € 700,00 («Acconto 2026» € 700,00); questo piano chiede € 600,00: in tutto € 1.300,00, € 100,00 oltre. Qui al massimo € 500,00. Per dividere una voce fra più piani scrivi in ognuno solo la sua parte; se invece la voce costa di più, alza prima il suo preventivo nel piano dei conti. Poi rimanda il modulo.')
         ->and(session('errors')->get('capitoli.'.$s['spesa']->id)[0])->toStartWith('«Spese generali»: preventivo € 1.200,00; un altro piano le dà già € 700,00');
 });
 
@@ -155,6 +157,32 @@ it('controprova — un piano non attivo non tiene la voce', function () {
     PianoRate::where('nome', 'Vecchio')->update(['attivo' => false]);
 
     vfpCrea($this, $s, 'Nuovo', [[$s['spesa'], '']])->assertSessionHasNoErrors();
+});
+
+it('controprova — accanto a un piano già emesso un piano nuovo sulla stessa voce si crea, e la sua pagina dice in rosso la somma; fra i piani non emessi la regola resta', function () {
+    $s = b52tScenario($this);
+    b52tSqliteJson();
+    vfpCrea($this, $s, 'Preventivo 2026', [[$s['spesa'], '']])->assertSessionHasNoErrors();
+    $preventivo = PianoRate::where('nome', 'Preventivo 2026')->firstOrFail();
+    // Approvato ed emesso: la 1.12 non lo ricalcola più né gli toglie la voce, e per cambiarlo, o per una spesa in più sulla voce, gli mette
+    // accanto un piano nuovo (`RiepilogoPerCompetenzaTest`, «Pulizie straordinarie dell'ordinaria» in `DeliberatoRicostruitoTest`).
+    $this->actingAs($this->user)->put(route('admin.gestionale.piani-rate.update-stato', [$s['c'], $s['e'], $preventivo]), ['approvato' => true, 'data_delibera_assemblea' => '2026-01-02'])
+        ->assertSessionHasNoErrors();
+    $this->actingAs($this->user)->post(route('admin.gestionale.piani-rate.emetti', [$s['c'], $preventivo]), [
+        'rate_ids' => $preventivo->rate()->pluck('id')->all(), 'data_emissione' => '2026-01-31', 'invia_notifiche' => false])->assertSessionHasNoErrors();
+    expect($preventivo->fresh()->haRateEmesse())->toBeTrue();
+
+    vfpCrea($this, $s, 'Spese generali in più', [[$s['spesa'], '1.200,00']])->assertSessionHasNoErrors();
+
+    $nuovo = PianoRate::where('nome', 'Spese generali in più')->firstOrFail();
+    $pagina = $this->actingAs($this->user)->get(route('admin.gestionale.esercizi.piani-rate.show', [$s['c'], $s['e'], $nuovo]))->assertOk()->viewData('page')['props'];
+    expect(collect($pagina['pianoRate']['capitoli'])->firstWhere('id', $s['spesa']->id)['copertura']['frase'])
+        ->toBe('Anche nel piano «Preventivo 2026» (€ 1.200,00). In tutto € 2.400,00 su un preventivo di € 1.200,00: € 1.200,00 oltre, cioè chiesti due volte ai condòmini.');
+
+    // Un terzo piano accanto al secondo, che non è emesso: la somma dei due supera il preventivo, e si ferma.
+    $r = vfpCrea($this, $s, 'Rata in più', [[$s['spesa'], '100,00']]);
+    $r->assertSessionHasErrors('capitoli.'.$s['spesa']->id);
+    expect(vfpMessaggio($r))->toContain('«Spese generali»: preventivo € 1.200,00; un altro piano le dà già € 1.200,00 («Spese generali in più» € 1.200,00); questo piano chiede € 100,00');
 });
 
 it('⚠️ il ricalcolo di due piani che si sovrappongono già si ferma e dice come uscirne; togliere la voce da uno dei due resta possibile', function () {

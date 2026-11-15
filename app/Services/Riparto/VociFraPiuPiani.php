@@ -29,11 +29,20 @@ use Illuminate\Support\Facades\DB;
  *   copertura guarda lo stato: qui un piano conta solo se valgono tutte e due. Gli straordinari non hanno voci (hanno fatture).
  * - **Stesso esercizio**: il programma usa la stessa gestione ordinaria su più esercizi (`CondominioService::createDefaultGestione`),
  *   e ogni anno il suo piano chiede di nuovo la voce intera. L'esercizio di un piano è quello con cui è nato o è stato generato
- *   (`CompetenzaDelPiano::esercizioDelPiano`, che lo deduce per i piani vecchi).
+ *   (`CompetenzaDelPiano::esercizioDelPiano`, che lo deduce per i piani vecchi), anche quando lo si ricalcola dalla pagina di un altro
+ *   esercizio: dalla 1.12 l'elenco dei piani di un esercizio mostra anche quelli delle gestioni agganciate, e la generazione lascia il
+ *   piano nel suo (`GeneratePianoRateAction`). Solo il piano che non ha ancora un esercizio salvato prende quello della pagina.
  * - **Quanto dà un piano a una voce** è quanto il motore le addebita (`CalcoloQuoteService::processaConti`): l'importo del piano o,
  *   vuoto, quello della voce; l'importo scritto su un capitolo si divide fra i suoi sottoconti in proporzione, con il resto
- *   all'ultimo; un piano senza voci prende le voci che nessun altro piano attivo della gestione ha. Si confronta voce per voce,
- *   al livello a cui il motore ripartisce: un capitolo in un piano e un suo sottoconto in un altro sono la stessa spesa.
+ *   all'ultimo; un piano senza voci prende le voci che nessun altro piano attivo **dello stesso esercizio** ha (Coda 438, decisione
+ *   183.2: il piano del 2027 senza voci prende anche quelle del piano del 2026). Si confronta voce per voce, al livello a cui il
+ *   motore ripartisce: un capitolo in un piano e un suo sottoconto in un altro sono la stessa spesa.
+ * - **Un piano già emesso non ferma gli altri** (le sue rate sono in contabilità, `PianoRate::haRateEmesse`). È il caso dubbio, e si
+ *   lascia passare (sopra la 1.12, 15/11/2026): la 1.12 non ricalcola un piano emesso né gli toglie una voce («Annulla prima le
+ *   emissioni»), e per cambiarlo se ne fa uno nuovo, che chiede la stessa voce finché il vecchio non si toglie; oppure gli si mette
+ *   accanto un piano per una spesa in più sulla stessa voce (le pulizie straordinarie), e il rendiconto mette il deliberato accanto
+ *   al preventivo. Il programma non sa quale dei due casi è, né se è invece un saldo scritto per intero accanto a un acconto emesso:
+ *   il rifiuto qui non c'è, e la pagina del piano lo dice in rosso (la copertura conta anche i piani emessi).
  * - **«Sposta spesa» non conta**: è uno spostamento voluto dentro lo stesso piano, con il suo motivo nello storico, e il totale del
  *   piano non cambia. Le voci si confrontano con gli importi di prima degli spostamenti.
  * - **La tolleranza è il centesimo, non l'euro.** La scheda della voce (`ContoResource`) e il cruscotto chiamano «oltre» una
@@ -43,14 +52,16 @@ use Illuminate\Support\Facades\DB;
  *   capitolo fra i sottoconti: si tollera un centesimo per ogni piano che arriva alla voce così, e nessuno per gli altri.
  *
  * QUANDO. Alla creazione del piano e al ricalcolo (anche con le voci che «Sincronizza» aggiunge), per le voci che il piano tiene
- * insieme ad almeno un altro piano valido: la somma è il pagamento doppio da fermare. Un piano da solo che chiede a una voce più del
- * preventivo non si ferma qui: il programma lo permette da sempre e lo mostra (la riga «Parziale» della pagina del piano: «il piano
- * chiede … più del preventivo»), e un piano tiene gli importi che ha copiato anche se dopo il preventivo cambia (lo «snapshot» di
- * `SyncOrphanChaptersAction`). Ma un secondo piano su quella voce non si aggiunge, perché la somma la supera. La rimozione di una voce
- * non toglie niente a nessuno e non si controlla: è anzi la strada per correggere due piani che si sovrappongono.
+ * insieme ad almeno un altro piano valido e non ancora emesso: la somma è il pagamento doppio da fermare. Le voci con un «già versato»
+ * che vale nell'esercizio del piano restano alla guardia della 1.12 (`CalcoloQuoteService::guardiaSovraFinanziamentoGiaVersato`), che
+ * dice la stessa cosa con le cifre del già versato. Un piano da solo che chiede a una voce più del preventivo non si ferma qui: il
+ * programma lo permette da sempre e lo mostra (la riga «Parziale» della pagina del piano: «il piano chiede … più del preventivo»), e un
+ * piano tiene gli importi che ha copiato anche se dopo il preventivo cambia (lo «snapshot» di `SyncOrphanChaptersAction`). Ma un
+ * secondo piano su quella voce non si aggiunge, perché la somma la supera. La rimozione di una voce non toglie niente a nessuno e non
+ * si controlla: è anzi la strada per correggere due piani che si sovrappongono.
  *
- * DOVE SI VEDE. La pagina del piano mostra, sotto ogni voce tenuta anche da un altro piano, gli altri piani, la somma e se torna
- * (`copertura`, letta da `PianoRateResource`).
+ * DOVE SI VEDE. La pagina del piano mostra, sotto ogni voce tenuta anche da un altro piano, gli altri piani (anche quelli emessi, che
+ * non fermano), la somma e se torna (`copertura`, letta da `PianoRateResource`).
  */
 class VociFraPiuPiani
 {
@@ -86,13 +97,13 @@ class VociFraPiuPiani
 
     /**
      * Le voci del piano che, con gli altri piani validi della stessa gestione e dello stesso esercizio, superano il fabbisogno. Solo
-     * quelle che tiene anche un altro piano (vedi QUANDO, in testa).
+     * quelle che tiene anche un altro piano non ancora emesso (vedi QUANDO, in testa): un piano emesso non ferma gli altri.
      *
      * @return list<array{voce_id: int, voce: string, preventivo: int, speso: int, tetto: int, questo: int, spostato: int, altri: list<array{id: int, nome: string, importo: int}>, totale: int, oltre: int}>
      */
     public function eccedenze(PianoRate $piano, ?Esercizio $esercizio = null): array
     {
-        $quadro = $this->quadro($piano, $esercizio);
+        $quadro = $this->quadro($piano, $esercizio, conIPianiEmessi: false);
         $eccedenze = [];
         $mioEsercizio = $this->esercizioDi($piano, $esercizio)?->id;
 
@@ -121,7 +132,7 @@ class VociFraPiuPiani
      */
     public function copertura(PianoRate $piano, ?Esercizio $esercizio = null): array
     {
-        $quadro = $this->quadro($piano, $esercizio);
+        $quadro = $this->quadro($piano, $esercizio, conIPianiEmessi: true);
         $perRiga = [];
 
         foreach ($quadro['raggiunte'] as $rigaContoId => $voci) {
@@ -170,9 +181,10 @@ class VociFraPiuPiani
     /**
      * Il quadro della gestione visto dal piano: per ogni voce che il piano raggiunge, quanto le dà lui, quanto gli altri, il fabbisogno.
      *
+     * @param  bool  $conIPianiEmessi  la pagina li conta (la somma è quella che i condòmini pagano), il rifiuto no (vedi la regola, in testa)
      * @return array{voci: array<int, array<string, mixed>>, raggiunte: array<int, list<int>>}
      */
-    private function quadro(PianoRate $piano, ?Esercizio $esercizio): array
+    private function quadro(PianoRate $piano, ?Esercizio $esercizio, bool $conIPianiEmessi): array
     {
         $vuoto = ['voci' => [], 'raggiunte' => []];
         if ($piano->tipo === 'straordinario' || $piano->gestione_id === null) {
@@ -201,17 +213,24 @@ class VociFraPiuPiani
         $mappe = [];
         $mappeDivise = [];
         $raggiunteDelPiano = [];
+        $attiviDelMioEsercizio = null;
         foreach ($piani as $p) {
-            if ((int) $p->id !== (int) $piano->id && $this->esercizioDi($p, null)?->id !== $mioEsercizio) {
+            $questo = (int) $p->id === (int) $piano->id;
+            if (! $questo && $this->esercizioDi($p, null)?->id !== $mioEsercizio) {
                 continue;
             }
-            // Il piano senza voci scelte prende quelle che nessun altro piano attivo della gestione ha, di qualunque esercizio: è la
-            // regola del motore (`CalcoloQuoteService::calcolaPerGestione`, `$contiImpegnatiIds`), qui ripetuta così com'è.
+            if (! $questo && ! $conIPianiEmessi && $p->haRateEmesse()) {
+                continue;
+            }
+            // Il piano senza voci scelte prende quelle che nessun altro piano attivo del suo esercizio ha: è la regola del motore
+            // (`CalcoloQuoteService::calcolaPerGestione`, `$contiImpegnatiIds`, Coda 438 decisione 183.2), qui ripetuta così com'è. Gli altri
+            // piani attivi in qualunque stato, anche emessi: il motore li conta tutti, e una voce che uno di loro ha non arriva a questo.
             $impegnate = [];
             if (($righe->get($p->id) ?? collect())->isEmpty()) {
-                $impegnate = DB::table('piano_rate_capitoli')->join('piani_rate', 'piani_rate.id', '=', 'piano_rate_capitoli.piano_rate_id')
-                    ->where('piani_rate.gestione_id', $p->gestione_id)->where('piani_rate.attivo', true)->where('piani_rate.id', '!=', $p->id)
-                    ->pluck('piano_rate_capitoli.conto_id')->map(fn ($id) => (int) $id)->flip()->all();
+                $attiviDelMioEsercizio ??= $this->attiviDellEsercizio($piano, $mioEsercizio);
+                $impegnate = DB::table('piano_rate_capitoli')
+                    ->whereIn('piano_rate_id', array_values(array_diff($attiviDelMioEsercizio, [(int) $p->id])) ?: [0])
+                    ->pluck('conto_id')->map(fn ($id) => (int) $id)->flip()->all();
             }
             $raggiunte = [];
             $divise = [];
@@ -466,10 +485,31 @@ class VociFraPiuPiani
         return $netto;
     }
 
-    /** L'esercizio del piano: quello passato dal chiamante per il piano che si crea o si ricalcola, altrimenti il suo. */
+    /**
+     * L'esercizio del piano: quello che ha salvato; se non ne ha uno, quello della pagina da cui si crea o si ricalcola, altrimenti quello
+     * dedotto. Un piano del 2026 ricalcolato dall'elenco del 2027 resta del 2026, come nella generazione (`GeneratePianoRateAction`, Coda 438):
+     * con l'esercizio della pagina si confronterebbe con i piani del 2027, che chiedono di nuovo la voce intera.
+     */
     private function esercizioDi(PianoRate $piano, ?Esercizio $esercizio): ?Esercizio
     {
+        if ($piano->esercizio_id !== null && ($suo = Esercizio::find($piano->esercizio_id)) !== null) {
+            return $suo;
+        }
+
         return $esercizio ?? $this->competenza->esercizioDelPiano($piano);
+    }
+
+    /**
+     * I piani attivi della gestione del piano che sono del suo esercizio, in qualunque stato e anche straordinari: quelli che per il motore
+     * impegnano le voci di un piano senza voci scelte (`CalcoloQuoteService::altriPianiAttiviDelloStessoEsercizio`). Con il piano stesso.
+     *
+     * @return list<int>
+     */
+    private function attiviDellEsercizio(PianoRate $piano, ?int $esercizioId): array
+    {
+        return PianoRate::where('gestione_id', $piano->gestione_id)->where('attivo', true)->orderBy('id')->get()
+            ->filter(fn (PianoRate $p) => (int) $p->id === (int) $piano->id || $this->esercizioDi($p, null)?->id === $esercizioId)
+            ->map(fn (PianoRate $p) => (int) $p->id)->values()->all();
     }
 
     /** La riga sotto la voce, nella pagina del piano. */

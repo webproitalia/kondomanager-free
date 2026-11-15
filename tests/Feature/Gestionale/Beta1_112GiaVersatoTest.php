@@ -640,9 +640,10 @@ it('controprova — AD3: un integrativo nato senza voci, e poi una voce nuova a 
     expect(DB::table('piano_rate_capitoli')->where('piano_rate_id', $integrativo->id)->count())->toBe(0);
     be52Voce($this, $s, $s['pc'], 'Varie', 'spesa', '0,00');
 
-    // «Varie» (€ 0,00) non è in nessun piano: non tutte le voci sono impegnate, e il rifiuto è quello delle tre verifiche.
+    // «Varie» (€ 0,00) non è in nessun piano: non tutte le voci sono impegnate, e il rifiuto è quello di «nessuna quota calcolata».
+    // Web Pro Italia (15/11/2026): «nessuna quota calcolata» dice la causa vera (`MancanzeDelRiparto`) al posto delle tre verifiche generiche.
     expect(g112Errore(g112Ricalcola($this, $s, $integrativo, '2026')))
-        ->toBe('Errore durante il ricalcolo: '.'Impossibile generare il piano rate: nessuna quota calcolata. Verificare che (1) le tabelle millesimali abbiano i millesimi inseriti per ogni immobile, (2) ogni immobile abbia almeno un condòmino attivo associato, (3) ogni voce di spesa sia collegata a una tabella millesimale.');
+        ->toBe('Impossibile generare il piano rate «Integrativo 2026»: nessuna quota calcolata, perché nessuna spesa del piano ha qualcuno a cui andare. 1 voce senza importo: «Varie». Scrivi il preventivo della voce nel piano dei conti, o un importo nel piano. Poi genera di nuovo il piano.');
 });
 
 it('Coda 438 — righe della stessa voce con esercizi diversi (scritte fuori dalla pagina): il badge del piano del 2026 toglie solo quelle che valgono nel 2026', function () {
