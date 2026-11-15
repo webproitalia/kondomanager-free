@@ -34,13 +34,16 @@ beforeEach(function () {
     b52tSqliteJson();
 });
 
-/** Il secondo piano della voce: una rata, con le voci scelte (`capitoli_config`). */
+/**
+ * Il secondo piano della voce: una rata, con le voci scelte (`capitoli_config`). Con la voce chiesta due volte per intero è un dato di prima, che dal
+ * 15/11/2026 la pagina non crea più: lo si ricostruisce con `b52tComePrima`, perché è proprio la riga di quel dato che qui si guarda.
+ */
 function b53rcSecondoPiano($test, array $s, array $config, string $nome = 'Integrativo 2026')
 {
-    return b52tPiano($test, $s, [
+    return b52tComePrima($s, fn () => b52tPiano($test, $s, [
         'capitoli_ids' => array_column($config, 'id'), 'capitoli_config' => $config,
         'numero_rate' => 1, 'data_prima_scadenza' => '2026-06-05', 'accetta_scoperti' => true, 'nota_scoperti' => 'Piano di prova',
-    ], $nome);
+    ], $nome));
 }
 
 /**

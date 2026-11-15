@@ -137,10 +137,11 @@ function b53snV3($test): array
     $s = b53snBase($test);
     $s['rimborso'] = b52tVoce($test, $s, 'Rimborso vecchio', 'spesa', '240,00', $s['tabella']);
     $s['piano'] = b52tPiano($test, $s, [], 'Ordinario 2026');
-    $s['secondo'] = b52tPiano($test, $s, [
+    // La voce addebitata due volte è un dato di prima: dal 15/11/2026 la pagina non lo crea più (`b52tComePrima`).
+    $s['secondo'] = b52tComePrima($s, fn () => b52tPiano($test, $s, [
         'capitoli_ids' => [$s['rimborso']->id], 'capitoli_config' => [['id' => $s['rimborso']->id, 'importo' => '240,00', 'note' => '']],
         'numero_rate' => 1, 'data_prima_scadenza' => '2026-06-05', 'accetta_scoperti' => true, 'nota_scoperti' => 'Piano di prova',
-    ], 'Integrativo 2026');
+    ], 'Integrativo 2026'));
     b53snRiscrivi($s['rimborso'], -24000, [$s['piano']]);
     $s['rimborso'] = $s['rimborso']->fresh();
     $s['piano'] = $s['piano']->fresh();
@@ -403,11 +404,13 @@ function b53bvScenario($test, array $righe, bool $approva = true, array $altri =
     if ($approva) {
         b52tApprova($test, $s, $s['b']);
     }
+    // Gli altri piani e «Ordinario 2026» possono tenere le voci di «Preventivo B» per intero: un dato di prima, che dal 15/11/2026 la pagina non
+    // crea più (`b52tComePrima`).
     foreach ($altri as $nome => $r) {
-        $s['altri'][$nome] = $crea($nome, $r);
+        $s['altri'][$nome] = b52tComePrima($s, fn () => $crea($nome, $r));
         b52tApprova($test, $s, $s['altri'][$nome]);
     }
-    $s['piano'] = b52tPiano($test, $s, ['capitoli_ids' => [$s['generali']->id], 'capitoli_config' => [['id' => $s['generali']->id, 'importo' => '', 'note' => '']]], 'Ordinario 2026');
+    $s['piano'] = b52tComePrima($s, fn () => b52tPiano($test, $s, ['capitoli_ids' => [$s['generali']->id], 'capitoli_config' => [['id' => $s['generali']->id, 'importo' => '', 'note' => '']]], 'Ordinario 2026'));
     b53snRiscrivi($s['rimborso'], -10000);
     $s['rimborso'] = $s['rimborso']->fresh();
     $s['b'] = $s['b']->fresh();

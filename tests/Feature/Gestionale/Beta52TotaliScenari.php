@@ -121,6 +121,23 @@ function b52tPiano($test, array $s, array $extra = [], string $nome = 'Preventiv
     return PianoRate::where('gestione_id', $s['g']->id)->where('nome', $nome)->firstOrFail();
 }
 
+/**
+ * Web Pro Italia (15/11/2026): due piani della stessa gestione che insieme chiedono a una voce più del suo fabbisogno non si creano più dalla
+ * pagina (`VociFraPiuPiani`). Gli scenari che li vogliono — i dati lasciati dalle versioni di prima, con la voce chiesta due volte — li
+ * ricostruiscono così: i piani già attivi della gestione restano spenti (`attivo = false`) mentre `$fa` crea l'altro, e poi si riaccendono. Le
+ * righe e le quote sono quelle che la pagina scriveva prima.
+ */
+function b52tComePrima(array $s, callable $fa): mixed
+{
+    $ids = PianoRate::where('gestione_id', $s['g']->id)->where('attivo', true)->pluck('id')->all();
+    DB::table('piani_rate')->whereIn('id', $ids ?: [0])->update(['attivo' => false]);
+    try {
+        return $fa();
+    } finally {
+        DB::table('piani_rate')->whereIn('id', $ids ?: [0])->update(['attivo' => true]);
+    }
+}
+
 /** Somma delle quote generate, per persona (centesimi), in ordine alfabetico di nome. */
 function b52tSommeQuote(PianoRate $piano): array
 {

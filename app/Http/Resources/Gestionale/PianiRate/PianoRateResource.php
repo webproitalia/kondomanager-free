@@ -22,6 +22,20 @@ class PianoRateResource extends JsonResource
         return $this;
     }
 
+    /**
+     * Per ogni voce che il piano tiene insieme a un altro piano valido della gestione, nello stesso esercizio: gli altri piani, la
+     * somma e se torna (`VociFraPiuPiani::copertura`, Web Pro Italia 15/11/2026). Solo la pagina del piano: l'elenco dei piani no.
+     * L'esercizio è quello del piano, non quello della pagina: la stessa gestione si apre da più esercizi.
+     */
+    private bool $conCopertura = false;
+
+    public function conCopertura(): static
+    {
+        $this->conCopertura = true;
+
+        return $this;
+    }
+
     public function toArray(Request $request): array
     {
         $isStraordinario = $this->tipo === 'straordinario';
@@ -130,7 +144,11 @@ class PianoRateResource extends JsonResource
                     });
                 })
                 : $this->whenLoaded('capitoli', function() use ($nonAssegnatePerConto, $chiaviPerConto) {
-                    return $this->capitoli->map(function ($c) use ($nonAssegnatePerConto, $chiaviPerConto) {
+                    $copertura = $this->conCopertura
+                        ? app(\App\Services\Riparto\VociFraPiuPiani::class)->copertura($this->resource)
+                        : [];
+
+                    return $this->capitoli->map(function ($c) use ($nonAssegnatePerConto, $chiaviPerConto, $copertura) {
 
                         $isParent = $c->sottoconti->isNotEmpty();
 
@@ -157,6 +175,12 @@ class PianoRateResource extends JsonResource
                             'figli_names'       => $isParent ? $sottocontiSnapshot->pluck('nome')->join(', ') : '',
                             'tipo'              => $c->segno($this->created_at) < 0 ? 'entrata' : 'spesa',
                         ];
+
+                        // La voce tenuta anche da altri piani della gestione, nello stesso esercizio: quali, quanto, e se la somma torna.
+                        // Null se la tiene solo questo piano.
+                        if ($this->conCopertura) {
+                            $voce['copertura'] = $copertura[(int) $c->id] ?? null;
+                        }
 
                         // La cifra per voce la legge la pagina del piano; l'elenco non la riceve (come la colonna `quote_non_assegnate`).
                         if ($this->conQuoteNonAssegnate) {

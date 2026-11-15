@@ -3,11 +3,9 @@
 namespace App\Services;
 
 use App\Models\Condominio;
-use App\Models\Gestionale\Conto;
 use App\Models\Gestionale\PianoRate;
 use App\Models\Gestione;
 use Recurr\Rule;
-use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class PianoRateCreatorService
@@ -138,46 +136,10 @@ class PianoRateCreatorService
         ]);
     }
 
-    /**
-     * Verifica che i capitoli selezionati non siano già presenti in altri piani rate ATTIVI.
+    /*
+     * Qui c'era `convalidaCapitoliUnici()`, che nessuno chiamava (Web Pro Italia, 15/11/2026): vietava del tutto una voce in due piani
+     * attivi della gestione, e chiamarlo avrebbe bloccato anche l'acconto e il saldo divisi sulla stessa voce, che è un uso voluto. La
+     * regola giusta — la somma di tutti i piani validi della gestione, nello stesso esercizio, non supera il fabbisogno della voce — sta
+     * in `App\Services\Riparto\VociFraPiuPiani`, chiamata alla creazione e al ricalcolo.
      */
-    public function convalidaCapitoliUnici(int $gestioneId, array $capitoliIds): void
-    {
-        if (empty($capitoliIds)) return;
-
-        // 1. Controllo se esiste un piano globale attivo (senza capitoli in pivot)
-        $globale = PianoRate::where('gestione_id', $gestioneId)
-            ->where('attivo', true)
-            ->whereDoesntHave('capitoli')
-            ->exists();
-
-        if ($globale) {
-            throw new RuntimeException("Esiste già un piano rate attivo che include tutte le spese. Impossibile creare piani parziali.");
-        }
-
-        // 2. Controllo Overlap Gerarchico
-        // Recuperiamo TUTTI i conti già impegnati in piani attivi per questa gestione
-        $contiImpegnatiIds = DB::table('piano_rate_capitoli')
-            ->join('piani_rate', 'piano_rate_capitoli.piano_rate_id', '=', 'piani_rate.id')
-            ->where('piani_rate.gestione_id', $gestioneId)
-            ->where('piani_rate.attivo', true)
-            ->pluck('conto_id')
-            ->toArray();
-
-        foreach ($capitoliIds as $id) {
-            $conto = Conto::with(['parent', 'sottoconti'])->findOrFail($id);
-            
-            // Calcoliamo l'intero ramo (Lui + Antenati + Discendenti)
-            $ramo = array_merge([$id], $conto->getAllChildrenIds(), $conto->getAllAncestorsIds());
-
-            // Se uno qualsiasi di questi ID è già impegnato, abbiamo un conflitto
-            $intersezione = array_intersect($ramo, $contiImpegnatiIds);
-
-            if (!empty($intersezione)) {
-                // Recuperiamo il nome del primo conflitto per l'errore
-                $nomeConflitto = Conto::where('id', reset($intersezione))->value('nome');
-                throw new RuntimeException("Conflitto gerarchico: la voce '{$conto->nome}' è legata a '{$nomeConflitto}', che è già presente in un altro piano.");
-            }
-        }
-    }
 }

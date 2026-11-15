@@ -203,6 +203,9 @@ class RegistraGirocontoAction
                 'idempotency_key' => $validated['idempotency_key'] ?? null,
             ]);
 
+            // Banca → fondo: la riga AVERE della banca la fa scendere nello stato patrimoniale e nel mastrino (la banca è la parte
+            // libera del conto), non nel registro di contabilità, che non conta un accantonamento come uscita. Voluto: la pagina dello
+            // stato patrimoniale lo dice sotto la riga della banca (docs/registri_contabili.md, Web Pro Italia 15/11/2026).
             $scrittura->righe()->create([
                 'conto_contabile_id' => $destinazione->contoContabile->id,
                 'cassa_id' => $destinazione->id,

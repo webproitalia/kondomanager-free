@@ -1590,6 +1590,12 @@ const printRipartoCapitoli = () => {
                                 <p v-if="(capitolo.non_assegnati_cents ?? 0) !== 0" data-riga="non-assegnati" class="text-[10px] text-amber-700 leading-tight max-w-md dark:text-amber-400">
                                     {{ rigaNonAssegnati(capitolo) }}
                                 </p>
+                                <!-- Web Pro Italia (15/11/2026): la voce tenuta anche da altri piani della gestione, nello stesso esercizio — quali, la
+                                     somma e se torna. La frase la scrive il server (`VociFraPiuPiani::copertura`), con la stessa regola del rifiuto. -->
+                                <p v-if="capitolo.copertura" data-riga="altri-piani" class="text-[10px] leading-tight max-w-md"
+                                   :class="capitolo.copertura.esito === 'oltre' ? 'text-rose-700 font-semibold dark:text-rose-400' : 'text-slate-600 dark:text-neutral-400'">
+                                    {{ capitolo.copertura.frase }}
+                                </p>
                                 <p v-if="isVoceRicevente(capitolo.id)" class="text-[10px] text-amber-600 leading-tight flex items-center gap-1 dark:text-amber-400">
                                     Include fondi spostati da altre voci 
                                     <span class="inline-flex items-center gap-0.5 whitespace-nowrap opacity-80">(vedi storico <History class="w-2.5 h-2.5" />)</span>

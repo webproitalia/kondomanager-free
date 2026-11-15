@@ -235,7 +235,7 @@
     @foreach($s[$lato]['gruppi'] as $g)
         <tr class="gruppo"><td colspan="2">{{ $g['gruppo'] }}</td><td class="n">{{ $fmt($g['totale']) }}</td></tr>
         @foreach($g['voci'] as $v)
-        <tr><td colspan="2"><span class="cod">{{ $v['codice'] }}</span> {{ $v['nome'] }}</td><td class="n {{ $v['saldo'] < 0 ? 'neg' : '' }}">{{ $fmt($v['saldo']) }}</td></tr>
+        <tr><td colspan="2"><span class="cod">{{ $v['codice'] }}</span> {{ $v['nome'] }}@if(! empty($v['accantonato']))<br><span class="d">{{ $v['accantonato']['nota'] }}</span>@endif</td><td class="n {{ $v['saldo'] < 0 ? 'neg' : '' }}">{{ $fmt($v['saldo']) }}</td></tr>
         @endforeach
     @endforeach
     @if($lato === 'attivo' && $s['liquidita_non_contabilizzata'] !== 0)
