@@ -40,11 +40,14 @@ use Throwable;
  *     I file (PDF, XML, Excel) passano come sono.
  *  5. con `X-Kondo-Prova: 1` esegue una scrittura dentro una transazione che poi annulla, con posta, notifiche e
  *     code finte: dice se andrebbe a buon fine e con quali avvisi, senza lasciare traccia nel database.
- *  6. registra ogni scrittura (metodo, percorso, rotta, esito; mai i dati) in `agenti_azioni`.
+ *  6. registra in `agenti_azioni` ogni scrittura e ogni richiesta rifiutata, letture comprese (metodo, percorso,
+ *     rotta, esito e, se è un rifiuto, la frase del rifiuto e i nomi dei campi sbagliati; mai i dati inviati).
  *
  * Cosa un agente NON può fare, qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e
  * permessi, impostazioni (chiavi degli agenti comprese), backup e ripristino, aggiornamenti, installazione, log,
  * cancellazione di un condominio o di un esercizio, e ogni rotta che chiede di ridigitare la password.
+ * Un'eccezione, dal 15/11/2026: eliminare un condominio con tutto il suo contenuto (`condomini.elimina-tutto`), ma
+ * solo con una chiave a cui l'amministratore ha acceso il permesso. Vedi `CON_PERMESSO`.
  */
 class AutenticaAgente
 {
@@ -69,6 +72,15 @@ class AutenticaAgente
     private const AVVISI_FLASH = [
         'message', 'success', 'error', 'warning', 'info', 'scoperti_warning', 'destinatari_warning',
         'suggerimento_crediti', 'esito_emissione', 'passaggio_registrato',
+    ];
+
+    /**
+     * Rotte che un agente può usare solo se la sua chiave ha un permesso in più, acceso dall'amministratore in
+     * Impostazioni → Agenti AI (15/11/2026). `condomini.destroy` resta vietata: questa è l'altra porta, quella che
+     * chiede di riscrivere il nome e salva una copia prima di cancellare.
+     */
+    public const CON_PERMESSO = [
+        'condomini.elimina-tutto' => 'puo_eliminare',
     ];
 
     public const RICHIESTE_AL_MINUTO = 240;
@@ -97,19 +109,32 @@ class AutenticaAgente
         $rotta = $request->route();
         $nome = $rotta?->getName() ?? '';
 
-        if ($this->vietata($nome) || in_array('password.recente', $rotta?->gatherMiddleware() ?? [], true)) {
-            return $this->errore(403, 'Questa funzione non è disponibile agli agenti: va fatta da una persona nel gestionale.', ['rotta' => $nome]);
-        }
-
         $scrive = ! in_array($request->method(), ['GET', 'HEAD', 'OPTIONS'], true);
         $prova = $scrive && filter_var($request->header('X-Kondo-Prova', false), FILTER_VALIDATE_BOOLEAN);
 
-        if ($scrive && $chiave->sola_lettura) {
-            return $this->errore(403, 'Questa chiave è di sola lettura: può consultare, non modificare.', ['rotta' => $nome]);
+        // Un rifiuto dato qui, prima ancora di entrare nel gestionale, finisce nel registro come gli altri.
+        $rifiuta = function (int $stato, string $messaggio) use ($chiave, $request, $nome, $prova, $inizio): JsonResponse {
+            $this->registra($chiave, $request, $nome, $stato, $prova, $inizio, $messaggio);
+
+            return $this->errore($stato, $messaggio, ['rotta' => $nome]);
+        };
+
+        if ($this->vietata($nome) || in_array('password.recente', $rotta?->gatherMiddleware() ?? [], true)) {
+            return $rifiuta(403, 'Questa funzione non è disponibile agli agenti: va fatta da una persona nel gestionale.');
         }
 
-        if (! RateLimiter::attempt('agente:'.$chiave->id, (int) config('agenti.richieste_al_minuto', self::RICHIESTE_AL_MINUTO), fn () => true, 60)) {
-            return $this->errore(429, 'Troppe richieste in un minuto: riprova tra poco.');
+        if ($scrive && $chiave->sola_lettura) {
+            return $rifiuta(403, 'Questa chiave è di sola lettura: può consultare, non modificare.');
+        }
+
+        $permesso = self::CON_PERMESSO[$nome] ?? null;
+
+        if ($permesso !== null && ! $chiave->{$permesso}) {
+            return $rifiuta(403, 'Questa chiave non ha il permesso di eliminare un condominio. Lo accende l\'amministratore in Impostazioni → Agenti AI: dillo alla persona per cui lavori.');
+        }
+
+        if (! $this->entroIlLimite($chiave)) {
+            return $rifiuta(429, 'Troppe richieste in un minuto: riprova tra poco.');
         }
 
         // Sessione in memoria e niente cookie del browser: vedi il punto 2.
@@ -136,8 +161,9 @@ class AutenticaAgente
 
         $busta = $this->busta($request, $risposta, $prova);
 
-        if ($scrive) {
-            $this->registra($chiave, $request, $nome, $busta->getStatusCode(), $prova, $inizio);
+        if ($scrive || $busta->getStatusCode() >= 400) {
+            [$motivo, $campi] = $this->motivoDa($busta);
+            $this->registra($chiave, $request, $nome, $busta->getStatusCode(), $prova, $inizio, $motivo, $campi);
         }
 
         if (! $chiave->ultimo_uso_at || $chiave->ultimo_uso_at->lt(now()->subMinute())) {
@@ -169,12 +195,15 @@ class AutenticaAgente
         Queue::fake();
         $dischi = $this->dischiInProva();
 
+        // Si torna al livello di partenza, non a zero: in produzione è la stessa cosa (si parte da zero), nei test
+        // la richiesta gira già dentro la transazione del test, che non va annullata insieme all'anteprima.
+        $livello = DB::transactionLevel();
         DB::beginTransaction();
 
         try {
             return $next($request);
         } finally {
-            while (DB::transactionLevel() > 0) {
+            while (DB::transactionLevel() > $livello) {
                 DB::rollBack();
             }
             foreach ($dischi as $nome) {
@@ -322,7 +351,52 @@ class AutenticaAgente
         return ($parti['path'] ?? '/').(isset($parti['query']) ? '?'.$parti['query'] : '');
     }
 
-    private function registra(ChiaveAgente $chiave, Request $request, string $nome, int $stato, bool $prova, float $inizio): void
+    /**
+     * Il contatore delle richieste sta nella cache. Se la cache inciampa (il 14/11/2026 due richieste nello stesso
+     * istante si sono bloccate a vicenda sulla cache a database, e una è caduta con un errore del server) la
+     * richiesta passa lo stesso: meglio una richiesta non contata che un lavoro interrotto a metà.
+     */
+    private function entroIlLimite(ChiaveAgente $chiave): bool
+    {
+        try {
+            return (bool) RateLimiter::attempt('agente:'.$chiave->id, (int) config('agenti.richieste_al_minuto', self::RICHIESTE_AL_MINUTO), fn () => true, 60);
+        } catch (Throwable $e) {
+            Log::warning('Agenti: contatore delle richieste non aggiornato', ['errore' => $e->getMessage()]);
+
+            return true;
+        }
+    }
+
+    /**
+     * Perché il gestionale ha detto di no: la frase del rifiuto e i NOMI dei campi sbagliati. Mai i valori inviati.
+     *
+     * @return array{0:?string,1:?string}
+     */
+    private function motivoDa(Response $busta): array
+    {
+        if ($busta->getStatusCode() < 400) {
+            return [null, null];
+        }
+
+        $dati = json_decode((string) $busta->getContent(), true);
+
+        if (! is_array($dati)) {
+            return [null, null];
+        }
+
+        $errori = is_array($dati['errori'] ?? null) ? $dati['errori'] : [];
+        $motivo = $dati['messaggio'] ?? null;
+
+        if (! is_string($motivo) || $motivo === '') {
+            $rosso = collect($dati['avvisi'] ?? [])->first(fn ($a) => in_array($a['tipo'] ?? '', ['error', 'danger'], true) && is_string($a['testo'] ?? null));
+            $primo = collect($errori)->flatten()->first(fn ($v) => is_string($v));
+            $motivo = $rosso['testo'] ?? $primo;
+        }
+
+        return [is_string($motivo) ? $motivo : null, $errori ? implode(', ', array_keys($errori)) : null];
+    }
+
+    private function registra(ChiaveAgente $chiave, Request $request, string $nome, int $stato, bool $prova, float $inizio, ?string $motivo = null, ?string $campi = null): void
     {
         try {
             AzioneAgente::create([
@@ -331,6 +405,8 @@ class AutenticaAgente
                 'percorso'  => Str::limit('/'.ltrim($request->path(), '/'), 490, ''),
                 'rotta'     => $nome ?: null,
                 'stato'     => $stato,
+                'motivo'    => $motivo !== null ? Str::limit($motivo, 390, '…') : null,
+                'campi'     => $campi !== null ? Str::limit($campi, 390, '…') : null,
                 'prova'     => $prova,
                 'durata_ms' => (int) round((microtime(true) - $inizio) * 1000),
             ]);

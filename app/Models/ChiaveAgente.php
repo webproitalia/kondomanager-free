@@ -19,10 +19,11 @@ class ChiaveAgente extends Model
 
     protected $table = 'agenti_chiavi';
 
-    protected $fillable = ['nome', 'user_id', 'creata_da', 'impronta', 'inizio', 'sola_lettura', 'scade_at'];
+    protected $fillable = ['nome', 'user_id', 'creata_da', 'impronta', 'inizio', 'sola_lettura', 'puo_eliminare', 'scade_at'];
 
     protected $casts = [
         'sola_lettura'  => 'boolean',
+        'puo_eliminare' => 'boolean',
         'ultimo_uso_at' => 'datetime',
         'scade_at'      => 'datetime',
         'revocata_at'   => 'datetime',

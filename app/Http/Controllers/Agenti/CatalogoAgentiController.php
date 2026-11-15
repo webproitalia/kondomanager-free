@@ -31,7 +31,7 @@ use Throwable;
  */
 class CatalogoAgentiController extends Controller
 {
-    public const VERSIONE = 'agenti-2';
+    public const VERSIONE = 'agenti-3';
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -52,6 +52,15 @@ class CatalogoAgentiController extends Controller
             if ($chiave instanceof ChiaveAgente && $chiave->sola_lettura && $rotta['scrive']) {
                 $rotta['consentita'] = false;
             }
+
+            // Una funzione che chiede un permesso in più sulla chiave (eliminare un condominio): lo si dice, e
+            // senza permesso non è consentita.
+            if ($permesso = AutenticaAgente::CON_PERMESSO[$rotta['nome']] ?? null) {
+                $rotta['permesso'] = $permesso;
+                if ($chiave instanceof ChiaveAgente && ! $chiave->{$permesso}) {
+                    $rotta['consentita'] = false;
+                }
+            }
         }
         unset($rotta);
 
@@ -65,7 +74,7 @@ class CatalogoAgentiController extends Controller
                 'email' => $utente->email,
                 'ruoli' => $utente->getRoleNames()->values(),
             ],
-            'chiave'    => $chiave instanceof ChiaveAgente ? ['nome' => $chiave->nome, 'sola_lettura' => $chiave->sola_lettura] : null,
+            'chiave'    => $chiave instanceof ChiaveAgente ? ['nome' => $chiave->nome, 'sola_lettura' => $chiave->sola_lettura, 'puo_eliminare' => (bool) $chiave->puo_eliminare] : null,
             'rotte'     => array_values($rotte),
         ], 200, [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

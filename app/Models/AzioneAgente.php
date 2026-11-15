@@ -5,14 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Una scrittura fatta da un agente AI (Web Pro Italia, 09/11/2026): metodo, percorso, rotta, esito. Mai i dati inviati. */
+/**
+ * Una richiesta di un agente AI (Web Pro Italia, 09/11/2026): ogni scrittura e ogni rifiuto, con metodo, percorso,
+ * rotta, esito e, per i rifiuti, il motivo e i nomi dei campi sbagliati. Mai i dati inviati.
+ */
 class AzioneAgente extends Model
 {
     public const UPDATED_AT = null;
 
     protected $table = 'agenti_azioni';
 
-    protected $fillable = ['chiave_id', 'metodo', 'percorso', 'rotta', 'stato', 'prova', 'durata_ms'];
+    protected $fillable = ['chiave_id', 'metodo', 'percorso', 'rotta', 'stato', 'motivo', 'campi', 'prova', 'durata_ms'];
 
     protected $casts = ['prova' => 'boolean'];
 

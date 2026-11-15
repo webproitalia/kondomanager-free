@@ -16,10 +16,10 @@ import type { BreadcrumbItem } from '@/types'
 
 interface Chiave {
   id: number; nome: string; inizio: string; utente: { nome: string; email: string } | null
-  sola_lettura: boolean; creata: string | null; ultimo_uso: string | null; scade: string | null
+  sola_lettura: boolean; puo_eliminare: boolean; tecnica: boolean; creata: string | null; ultimo_uso: string | null; scade: string | null
   revocata: string | null; attiva: boolean
 }
-interface Azione { quando: string; chiave: string | null; metodo: string; rotta: string | null; percorso: string; stato: number; prova: boolean }
+interface Azione { quando: string; chiave: string | null; metodo: string; rotta: string | null; percorso: string; stato: number; motivo: string | null; campi: string | null; prova: boolean }
 interface Props {
   chiavi: Chiave[]
   azioni: Azione[]
@@ -61,6 +61,12 @@ const comando = computed(() => {
 const revoca = (c: Chiave) => {
   if (!confirm(trans('agenti.revoca_conferma', { nome: c.nome }))) return
   router.delete(`/impostazioni/agenti/${c.id}`, { preserveScroll: true })
+}
+
+// Il permesso di eliminare un condominio con tutto il suo contenuto: si accende qui, su una chiave che può modificare.
+const permessoElimina = (c: Chiave) => {
+  if (!c.puo_eliminare && !confirm(trans('agenti.elimina_conferma', { nome: c.nome }))) return
+  router.patch(`/impostazioni/agenti/${c.id}`, { puo_eliminare: !c.puo_eliminare }, { preserveScroll: true })
 }
 
 const lingua = computed(() => String((page.props as any).locale || 'it'))
@@ -196,15 +202,24 @@ const campo = 'border-input h-9 w-full rounded-md border bg-transparent px-3 py-
                 <tr v-for="c in chiavi" :key="c.id" class="border-b last:border-0" :class="!c.attiva ? 'opacity-60' : ''">
                   <td class="py-2 pr-3"><div class="font-medium">{{ c.nome }}</div><code class="text-xs text-muted-foreground">{{ c.inizio }}…</code></td>
                   <td class="py-2 pr-3">{{ c.utente?.nome ?? '—' }}</td>
-                  <td class="py-2 pr-3">{{ c.sola_lettura ? trans('agenti.sola_lettura') : trans('agenti.scrittura') }}</td>
+                  <td class="py-2 pr-3">
+                    {{ c.sola_lettura ? trans('agenti.sola_lettura') : trans('agenti.scrittura') }}
+                    <Badge v-if="c.puo_eliminare" variant="destructive" class="ml-1">{{ trans('agenti.elimina_si') }}</Badge>
+                  </td>
                   <td class="py-2 pr-3">{{ c.ultimo_uso ? data(c.ultimo_uso) : trans('agenti.mai_usata') }}</td>
                   <td class="py-2 pr-3">{{ c.scade ? data(c.scade) : trans('agenti.mai') }}</td>
                   <td class="py-2 pr-3"><Badge :variant="c.attiva ? 'default' : 'secondary'">{{ stato(c) }}</Badge></td>
-                  <td class="py-2 text-right"><Button v-if="c.attiva" type="button" size="sm" variant="outline" @click="revoca(c)">{{ trans('agenti.revoca') }}</Button></td>
+                  <td class="py-2 text-right whitespace-nowrap">
+                    <Button v-if="c.attiva && !c.sola_lettura && (!c.tecnica || c.puo_eliminare)" type="button" size="sm" variant="ghost" class="mr-1" :title="trans('agenti.elimina_aiuto')" @click="permessoElimina(c)">
+                      {{ c.puo_eliminare ? trans('agenti.elimina_spegni') : trans('agenti.elimina_accendi') }}
+                    </Button>
+                    <Button v-if="c.attiva" type="button" size="sm" variant="outline" @click="revoca(c)">{{ trans('agenti.revoca') }}</Button>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <p class="text-xs text-muted-foreground"><span class="font-medium">{{ trans('agenti.elimina_titolo') }}.</span> {{ trans('agenti.elimina_aiuto') }}</p>
         </CardContent>
       </Card>
 
@@ -226,7 +241,10 @@ const campo = 'border-input h-9 w-full rounded-md border bg-transparent px-3 py-
                 <tr v-for="(a, i) in azioni" :key="i" class="border-b last:border-0">
                   <td class="py-2 pr-3 whitespace-nowrap">{{ data(a.quando) }}</td>
                   <td class="py-2 pr-3">{{ a.chiave ?? '—' }}</td>
-                  <td class="py-2 pr-3"><code class="text-xs">{{ a.metodo }} {{ a.rotta ?? a.percorso }}</code></td>
+                  <td class="py-2 pr-3">
+                    <code class="text-xs">{{ a.metodo }} {{ a.rotta ?? a.percorso }}</code>
+                    <div v-if="a.motivo" class="text-xs text-muted-foreground max-w-xl">{{ a.motivo }}<span v-if="a.campi"> ({{ trans('agenti.registro_campi') }}: {{ a.campi }})</span></div>
+                  </td>
                   <td class="py-2">
                     <Badge :variant="a.stato < 400 ? 'outline' : 'destructive'">{{ a.stato }}</Badge>
                     <Badge v-if="a.prova" variant="secondary" class="ml-1">{{ trans('agenti.prova') }}</Badge>

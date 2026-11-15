@@ -54,6 +54,10 @@ Route::middleware('auth')->group(function () {
         ->whereNumber('chiave')
         ->name('impostazioni.agenti.destroy');
 
+    Route::patch('impostazioni/agenti/{chiave}', [ImpostazioniAgentiController::class, 'update'])
+        ->whereNumber('chiave')
+        ->name('impostazioni.agenti.update');
+
     Route::get('impostazioni/stampe', [ImpostazioniStampeController::class, 'index'])
         ->name('impostazioni.stampe');
 

@@ -9,9 +9,29 @@ Impostazioni → **Agenti AI**. Una chiave:
 - appartiene a un utente amministratore o collaboratore, e ne eredita ruoli e permessi;
 - può essere di **sola consultazione** o anche di **modifica**;
 - può scadere dopo 30, 90 o 365 giorni, e si revoca con un clic;
-- si mostra una volta sola, alla creazione: nel database resta solo la sua impronta (sha256).
+- si mostra una volta sola, alla creazione: nel database resta solo la sua impronta (sha256);
+- può avere il permesso di **eliminare un condominio con tutto il suo contenuto** (spento di serie; vedi sotto).
 
-La stessa pagina mostra il **registro delle modifiche** fatte dagli agenti: quando, con quale chiave, quale funzione, con che esito. I dati inviati non si registrano.
+La stessa pagina mostra il **registro** degli agenti: ogni modifica e ogni richiesta rifiutata (anche le letture),
+con quando, quale chiave, quale funzione, l'esito e, per i rifiuti, la frase con cui il gestionale ha detto di no e i
+nomi dei campi sbagliati. I dati inviati non si registrano mai.
+
+### Eliminare un condominio con tutto il suo contenuto
+
+Chi carica i condomìni sbaglia dei caricamenti, e il tasto «elimina» normale si ferma (giustamente) davanti a un
+condominio che ha casse, pagamenti o deleghe. La funzione `condomini.elimina-tutto`
+(`DELETE /condomini/{condominio}/tutto`) è la strada dichiarata per buttare un caricamento e rifarlo:
+
+- chiede `conferma_nome`, il nome del condominio riscritto uguale (maiuscole e spazi doppi non contano);
+- a un agente serve il permesso sulla chiave, che l'amministratore accende e spegne nella pagina Agenti AI
+  (la pagina è vietata agli agenti: una chiave non può darselo da sola);
+- in anteprima (`X-Kondo-Prova: 1`) dice che cosa verrebbe eliminato e non cancella niente;
+- prima di cancellare salva una copia: `storage/app/private/condomini-eliminati/<data>-<id>-<nome>/` con
+  `dati.json.gz` (tutte le righe del condominio, tabella per tabella) e i file dei suoi documenti; le copie si
+  tengono 30 giorni;
+- toglie dalla rubrica solo le persone che non hanno altri condomìni né un accesso al programma.
+
+La rotta `condomini.destroy` resta vietata agli agenti e continua a comportarsi come prima.
 
 ## Come si usa
 
@@ -64,7 +84,7 @@ Codice: `App\Services\Agenti\SegnalazioniEsterne`, `App\Observers\Agenti\Segnala
 
 ## Cosa un agente non può fare
 
-Qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e permessi, impostazioni (chiavi comprese), backup e ripristino, aggiornamenti, installazione, log, cancellazione di un condominio o di un esercizio, e ogni rotta che chiede di ridigitare la password. L'elenco è in `AutenticaAgente::VIETATE`.
+Qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e permessi, impostazioni (chiavi comprese), backup e ripristino, aggiornamenti, installazione, log, cancellazione di un condominio (con il tasto normale) o di un esercizio, e ogni rotta che chiede di ridigitare la password. L'elenco è in `AutenticaAgente::VIETATE`; le funzioni che chiedono un permesso in più sulla chiave sono in `AutenticaAgente::CON_PERMESSO`.
 
 ## Configurazione
 
@@ -79,4 +99,5 @@ Qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e p
 - `app/Http/Middleware/AutenticaAgente.php`: riconoscimento della chiave, busta, anteprima, registro, divieti.
 - `app/Http/Controllers/Agenti/CatalogoAgentiController.php`: il catalogo.
 - `app/Http/Controllers/Impostazioni/ImpostazioniAgentiController.php` e `resources/js/pages/impostazioni/impostazioniAgenti.vue`: la pagina.
-- `app/Models/ChiaveAgente.php`, `app/Models/AzioneAgente.php`, migrazione `2026_11_09_100000_create_agenti_tables.php`.
+- `app/Models/ChiaveAgente.php`, `app/Models/AzioneAgente.php`, migrazioni `2026_11_09_100000_create_agenti_tables.php` e `2026_11_15_100000_agenti_permesso_eliminare_e_motivo.php`.
+- `app/Services/Condomini/EliminaCondominio.php`, `app/Http/Requests/Condominio/EliminaCondominioRequest.php`: eliminare un condominio con tutto il suo contenuto.

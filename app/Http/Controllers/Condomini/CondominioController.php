@@ -7,11 +7,13 @@ use App\Traits\OrdinaElenco;
 use App\Exceptions\LimiteCondominiRaggiunto;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Condominio\CreateCondominioRequest;
+use App\Http\Requests\Condominio\EliminaCondominioRequest;
 use App\Http\Requests\Condominio\UpdateCondominioRequest;
 use App\Http\Resources\Condominio\CondominioResource;
 use App\Models\Condominio;
 use App\Actions\Condominio\CreaCondominioDimostrativoAction;
 use App\Services\CondominioService;
+use App\Services\Condomini\EliminaCondominio;
 use App\Traits\HandleFlashMessages;
 use App\Traits\PaginaElenco;
 use Illuminate\Http\RedirectResponse;
@@ -381,5 +383,60 @@ class CondominioController extends Controller
                 'Non è stato possibile rimuovere il condominio dimostrativo.'
             ));
         }
+    }
+
+    /**
+     * Elimina un condominio con tutto il suo contenuto (Web Pro Italia, 15/11/2026).
+     *
+     * È un'altra porta rispetto a `destroy`, e lo è apposta: quella resta com'era, e continua a fermarsi davanti
+     * alla contabilità. Qui si passa solo riscrivendo il nome del condominio, e un agente AI solo se la sua chiave
+     * ha il permesso (vedi `AutenticaAgente::CON_PERMESSO`). Serve a chi ha caricato male un condominio e lo deve
+     * rifare da capo. Prima di cancellare si salva una copia: vedi `EliminaCondominio`.
+     */
+    public function eliminaTutto(EliminaCondominioRequest $request, Condominio $condominio, EliminaCondominio $servizio): RedirectResponse
+    {
+        if ($condominio->is_demo) {
+            return $this->eliminaDimostrativo($condominio, app(CreaCondominioDimostrativoAction::class));
+        }
+
+        $nome = $condominio->nome;
+
+        try {
+            $esito = $servizio->esegui($condominio);
+        } catch (\Throwable $e) {
+            Log::error('Errore eliminando il condominio con tutto il contenuto: '.$e->getMessage());
+
+            return back()->with($this->flashError(
+                $e instanceof \RuntimeException
+                    ? $e->getMessage()
+                    : "Non è stato possibile eliminare «{$nome}»: non è stato cancellato niente."
+            ));
+        }
+
+        $r = $esito['riepilogo'];
+        $conta = fn (int $n, string $uno, string $tanti) => $n ? $n.' '.($n === 1 ? $uno : $tanti) : null;
+        $parti = array_filter([
+            $conta($r['unita'], 'unità', 'unità'),
+            $r['persone'] ? $conta($r['persone'], 'persona collegata', 'persone collegate')
+                .' ('.$esito['persone_tolte'].' '.($esito['persone_tolte'] === 1 ? 'tolta' : 'tolte').' dalla rubrica perché non avevano altri condomìni)' : null,
+            $conta($r['esercizi'], 'esercizio', 'esercizi'),
+            $conta($r['tabelle'], 'tabella', 'tabelle'),
+            $conta($r['piani_rate'], 'piano rate', 'piani rate'),
+            $conta($r['fatture'], 'fattura', 'fatture'),
+            $conta($r['pagamenti'], 'pagamento', 'pagamenti'),
+            $conta($r['movimenti'], 'movimento contabile', 'movimenti contabili'),
+            $conta($r['casse'], 'cassa', 'casse'),
+            $conta($r['segnalazioni'], 'segnalazione', 'segnalazioni'),
+            $conta($esito['documenti_tolti'], 'documento', 'documenti'),
+        ]);
+        $contenuto = $parti ? ': '.implode(', ', $parti).'.' : '.';
+
+        // In anteprima (un agente che chiede «che cosa succederebbe») non si è cancellato niente: va detto così.
+        $messaggio = $esito['anteprima']
+            ? "Anteprima: «{$nome}» verrebbe eliminato con tutto il suo contenuto{$contenuto} Non è stato cancellato niente."
+            : "«{$nome}» eliminato con tutto il suo contenuto{$contenuto}"
+                .($esito['copia'] ? ' Una copia di sicurezza resta per '.EliminaCondominio::GIORNI_COPIA.' giorni in «'.$esito['copia'].'».' : '');
+
+        return to_route('condomini.index')->with($this->flashSuccess($messaggio));
     }
 }

@@ -37,6 +37,8 @@ class ImpostazioniAgentiController extends Controller
             'inizio'        => $c->inizio,
             'utente'        => $c->user ? ['nome' => $c->user->name, 'email' => $c->user->email] : null,
             'sola_lettura'  => $c->sola_lettura,
+            'puo_eliminare' => (bool) $c->puo_eliminare,
+            'tecnica'       => self::tecnica($c),
             'creata'        => $c->created_at?->toIso8601String(),
             'ultimo_uso'    => $c->ultimo_uso_at?->toIso8601String(),
             'scade'         => $c->scade_at?->toIso8601String(),
@@ -51,6 +53,8 @@ class ImpostazioniAgentiController extends Controller
             'rotta'  => $a->rotta,
             'percorso' => $a->percorso,
             'stato'  => $a->stato,
+            'motivo' => $a->motivo,
+            'campi'  => $a->campi,
             'prova'  => $a->prova,
         ]);
 
@@ -75,9 +79,10 @@ class ImpostazioniAgentiController extends Controller
             'user_id'      => ['required', 'integer', Rule::in($this->utentiAmmessi()->pluck('id')->all())],
             'sola_lettura' => ['required', 'boolean'],
             'scade_giorni' => ['nullable', 'integer', Rule::in([30, 90, 365])],
+            'puo_eliminare' => ['sometimes', 'boolean'],
         ]);
 
-        [, $testo] = ChiaveAgente::genera(
+        [$chiave, $testo] = ChiaveAgente::genera(
             $dati['nome'],
             User::findOrFail($dati['user_id']),
             (bool) $dati['sola_lettura'],
@@ -85,7 +90,43 @@ class ImpostazioniAgentiController extends Controller
             ! empty($dati['scade_giorni']) ? now()->addDays((int) $dati['scade_giorni']) : null,
         );
 
+        // Il permesso di eliminare ha senso solo su una chiave che può modificare.
+        if (! empty($dati['puo_eliminare']) && ! $dati['sola_lettura'] && ! self::tecnica($chiave)) {
+            $chiave->forceFill(['puo_eliminare' => true])->save();
+        }
+
         return $this->index($settings, $testo);
+    }
+
+    /**
+     * Accende o spegne, su una chiave che esiste già, il permesso di eliminare un condominio con tutto il suo
+     * contenuto (15/11/2026). Sta qui, nelle impostazioni, che agli agenti sono vietate: una chiave non può darselo.
+     */
+    public function update(Request $request, int $chiave, GeneralSettings $settings): RedirectResponse
+    {
+        Gate::authorize('manage', $settings);
+
+        $dati = $request->validate(['puo_eliminare' => ['required', 'boolean']]);
+        $trovata = ChiaveAgente::findOrFail($chiave);
+
+        // Non a una chiave di sola consultazione, non a una revocata, e non a un collegamento tecnico (l'app dei
+        // condòmini): eliminare un condominio è un lavoro da studio, non da portineria.
+        if ($dati['puo_eliminare'] && ($trovata->sola_lettura || ! $trovata->attiva() || self::tecnica($trovata))) {
+            return redirect()->route('impostazioni.agenti')->with($this->flashError(__('agenti.elimina_non_ammesso')));
+        }
+
+        $trovata->forceFill(['puo_eliminare' => (bool) $dati['puo_eliminare']])->save();
+
+        return redirect()->route('impostazioni.agenti')->with($this->flashSuccess(__(
+            $dati['puo_eliminare'] ? 'agenti.elimina_acceso' : 'agenti.elimina_spento',
+            ['nome' => $trovata->nome],
+        )));
+    }
+
+    /** La chiave di un collegamento tecnico (utente con email `@app.invalid`, per esempio l'app dei condòmini). */
+    private static function tecnica(ChiaveAgente $chiave): bool
+    {
+        return str_ends_with((string) $chiave->user?->email, '@app.invalid');
     }
 
     public function destroy(int $chiave, GeneralSettings $settings): RedirectResponse
