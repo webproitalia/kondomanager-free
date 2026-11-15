@@ -20,6 +20,10 @@
     $dal = \Carbon\Carbon::parse($periodo['dal'])->format('d/m/Y');
     $al = \Carbon\Carbon::parse($periodo['al'])->format('d/m/Y');
     $futuro = $periodo['stato'] === 'futuro';
+    // Lo studio: il blocco in testa alla prima pagina e il suo nome nella testatina; senza, la carta intestata del condominio di sempre.
+    $conStudio = isset($carta) && $carta->haStudio();
+    // I titoli, i loro filetti e la testata hanno il colore della carta dello studio; senza un colore, quello di sempre.
+    $coloreTitoli = \App\Services\PDF\Carta::coloreDi($carta ?? null, '#0E2238');
 @endphp
 <!DOCTYPE html>
 <html lang="it">
@@ -33,22 +37,24 @@
               font-size: 7.5pt; padding: 6px 9px; margin-bottom: 12px; }
     .fascia b { letter-spacing: 1pt; text-transform: uppercase; }
 
-    .testata { width: 100%; border-collapse: collapse; border-bottom: 2px solid #0E2238; }
+    .testata { width: 100%; border-collapse: collapse; border-bottom: 2px solid {{ $coloreTitoli }}; }
     .testata td { padding: 0 0 10px 0; vertical-align: top; border: 0; }
-    .ente { font-family: fraunces; font-size: 15pt; color: #0E2238; }
+    .ente { font-family: fraunces; font-size: 15pt; color: {{ $coloreTitoli }}; }
     .att { font-size: 7pt; letter-spacing: 1.1pt; text-transform: uppercase; color: #5A6B7B; }
     .rif { font-size: 7.5pt; color: #5A6B7B; }
     .doc { text-align: right; font-size: 7.5pt; color: #5A6B7B; }
     .doc b { color: #0E2238; }
+    .forte { color: #0E2238; }
 
-    h1 { font-family: fraunces; font-size: 17pt; color: #0E2238; margin: 14px 0 1px; padding: 0; }
-    .sotto { font-family: fraunces; font-size: 10pt; color: #2E5C86; margin: 0 0 10px; }
+    h1 { font-family: fraunces; font-size: 17pt; color: {{ $coloreTitoli }}; margin: 14px 0 1px; padding: 0; }
+    .sotto { font-family: fraunces; font-size: 10pt; color: {{ \App\Services\PDF\Carta::coloreDi($carta ?? null, '#2E5C86') }}; margin: 0 0 10px; }
 
     .dati { width: 100%; border-collapse: collapse; border-top: 1px solid #D9DEE5;
             border-bottom: 1px solid #D9DEE5; margin-bottom: 14px; }
     .dati td { padding: 8px 10px 8px 0; border: 0; vertical-align: top; }
-    .dati .et { font-size: 7pt; letter-spacing: 0.9pt; text-transform: uppercase; color: #5A6B7B; }
-    .dati .vl { font-size: 9.5pt; color: #0E2238; font-family: fraunces; }
+    {{-- Dentro una cella mPDF non applica una regola con un antenato («.dati .vl», «.doc b»): le cifre in testa e il grassetto della testata hanno regole con una classe sola. --}}
+    .et { font-size: 7pt; letter-spacing: 0.9pt; text-transform: uppercase; color: #5A6B7B; }
+    .vl { font-size: 9.5pt; color: #0E2238; font-family: fraunces; }
 
     table.registro { width: 100%; border-collapse: collapse; }
     table.registro th { font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase;
@@ -80,6 +86,32 @@
 </head>
 <body>
 
+{{-- Come il mastrino: dalla seconda pagina una riga con il condominio, e il piede con la data, la nota legale e il numero di pagina. Un libro
+     mastro di molte pagine, staccato un foglio, deve dire di che cosa è e di quale condominio. --}}
+<htmlpageheader name="libroMastroTestatina">
+    <table style="width: 100%; border-collapse: collapse; border-bottom: 1px solid #D9DEE5;">
+        <tr>
+            <td style="border: 0; padding: 0 0 5px 0; font-size: 7.5pt; color: #5A6B7B;">
+                @if($conStudio){{ $carta->nome() }} · @endif<b style="color: {{ $coloreTitoli }};">{{ $condominio->nome }}</b> · Libro mastro
+            </td>
+            <td style="border: 0; padding: 0 0 5px 0; text-align: right; font-size: 7.5pt; color: #5A6B7B;">
+                {{ $esercizio->nome }}
+            </td>
+        </tr>
+    </table>
+</htmlpageheader>
+<sethtmlpageheader name="libroMastroTestatina" page="ALL" value="on" />
+
+<htmlpagefooter name="libroMastroPiede">
+    @include('pdf._carta.piede_inter', ['giorno' => ($data_emissione_stampe ?? \App\Helpers\DateHelper::adessoUtente())->format('d/m/Y'), 'parte' => null])
+</htmlpagefooter>
+<sethtmlpagefooter name="libroMastroPiede" page="ALL" value="on" />
+
+@if($conStudio)
+@component('pdf._carta.testata_inter', ['carta' => $carta, 'condominio' => $condominio, 'att' => 'Libro mastro'])
+<b class="forte">{{ $esercizio->nome }}</b> · @if($futuro)comincia il <b class="forte">{{ $dal }}</b>, fotografia al <b class="forte">{{ $al }}</b>@else dal <b class="forte">{{ $dal }}</b> al <b class="forte">{{ $al }}</b>@endif · Stampato il <b class="forte">{{ \App\Helpers\DateHelper::adessoUtente()->format('d/m/Y') }}</b>
+@endcomponent
+@else
 <table class="testata">
     <tr>
         <td>
@@ -90,12 +122,13 @@
             </div>
         </td>
         <td class="doc">
-            <b>{{ $esercizio->nome }}</b><br>
-            @if($futuro)comincia il <b>{{ $dal }}</b>, fotografia al <b>{{ $al }}</b>@else dal <b>{{ $dal }}</b> al <b>{{ $al }}</b>@endif<br>
-            Stampato il <b>{{ now()->format('d/m/Y') }}</b>
+            <b class="forte">{{ $esercizio->nome }}</b><br>
+            @if($futuro)comincia il <b class="forte">{{ $dal }}</b>, fotografia al <b class="forte">{{ $al }}</b>@else dal <b class="forte">{{ $dal }}</b> al <b class="forte">{{ $al }}</b>@endif<br>
+            Stampato il <b class="forte">{{ \App\Helpers\DateHelper::adessoUtente()->format('d/m/Y') }}</b>
         </td>
     </tr>
 </table>
+@endif
 
 <h1>Libro mastro</h1>
 <p class="sotto">I mastrini di tutti i conti movimentati — {{ count($mastrini) }} {{ count($mastrini) === 1 ? 'conto' : 'conti' }}, @if($futuro)fotografia al {{ $al }}: l'esercizio comincia il {{ $dal }} @else dal {{ $dal }} al {{ $al }} @endif</p>

@@ -35,6 +35,30 @@
     // mostrata, e con zero righe stampava «€ 0,00» su un conto a −370,56.
     $saldoFinale = $saldo_finale;
     $dataSaldo = $saldo_alla_data;
+    // Il registro intero di un esercizio finito dice il saldo alla sua fine, come la riga del saldo a fine mese: dopo l'ultima riga non ci sono
+    // movimenti, e la data dell'ultimo movimento accanto alla stessa cifra farebbe due date per un saldo solo.
+    $fineEsercizio = isset($esercizio) && $esercizio->data_fine ? \Carbon\Carbon::parse($esercizio->data_fine)->format('Y-m-d') : null;
+    if (! $parziale && $dataSaldo !== null && $fineEsercizio !== null && $dataSaldo < $fineEsercizio && $fineEsercizio <= \App\Helpers\DateHelper::oggiUtente()) {
+        $dataSaldo = $fineEsercizio;
+    }
+    // Il riporto, i totali per tipo e il saldo a fine mese arrivano dal servizio, come il saldo.
+    $riporto = $riporto ?? ['totale' => 0, 'per_cassa' => []];
+    $totaliPerTipo = $totali_per_tipo ?? [];
+    $fineMese = [];
+    foreach ($saldi_fine_mese ?? [] as $m) { $fineMese[$m['mese']] = $m; }
+    // La riga del saldo a fine mese va dopo l'ultimo movimento mostrato di quel mese: l'indice di quella riga.
+    $chiudeMese = [];
+    $chiavi = array_keys($righe);
+    foreach ($chiavi as $n => $i) {
+        $mese = substr($righe[$i]['data'], 0, 7);
+        $dopo = $chiavi[$n + 1] ?? null;
+        if (isset($fineMese[$mese]) && ($dopo === null || substr($righe[$dopo]['data'], 0, 7) !== $mese)) { $chiudeMese[$i] = $fineMese[$mese]; }
+    }
+    $euroStampa = fn (int $c) => '€ '.number_format($c / 100, 2, ',', '.');
+    // Lo studio: il blocco in testa alla prima pagina e il suo nome nella testatina; senza, la carta intestata del condominio di sempre.
+    $conStudio = isset($carta) && $carta->haStudio();
+    // I titoli, i loro filetti e la testata hanno il colore della carta dello studio; senza un colore, quello di sempre.
+    $coloreTitoli = \App\Services\PDF\Carta::coloreDi($carta ?? null, '#0E2238');
 @endphp
 <!DOCTYPE html>
 <html lang="it">
@@ -49,23 +73,25 @@
               font-size: 7.5pt; padding: 6px 9px; margin-bottom: 12px; }
     .fascia b { letter-spacing: 1pt; text-transform: uppercase; }
 
-    .testata { width: 100%; border-collapse: collapse; border-bottom: 2px solid #0E2238; }
+    .testata { width: 100%; border-collapse: collapse; border-bottom: 2px solid {{ $coloreTitoli }}; }
     .testata td { padding: 0 0 10px 0; vertical-align: top; border: 0; }
-    .ente { font-family: fraunces; font-size: 15pt; color: #0E2238; }
+    .ente { font-family: fraunces; font-size: 15pt; color: {{ $coloreTitoli }}; }
     .att { font-size: 7pt; letter-spacing: 1.1pt; text-transform: uppercase; color: #5A6B7B; }
     .rif { font-size: 7.5pt; color: #5A6B7B; }
     .doc { text-align: right; font-size: 7.5pt; color: #5A6B7B; }
     .doc b { color: #0E2238; }
+    .forte { color: #0E2238; }
 
-    h1 { font-family: fraunces; font-size: 17pt; color: #0E2238; margin: 14px 0 1px; padding: 0; }
-    .sotto { font-family: fraunces; font-size: 10pt; color: #2E5C86; margin: 0 0 10px; }
+    h1 { font-family: fraunces; font-size: 17pt; color: {{ $coloreTitoli }}; margin: 14px 0 1px; padding: 0; }
+    .sotto { font-family: fraunces; font-size: 10pt; color: {{ \App\Services\PDF\Carta::coloreDi($carta ?? null, '#2E5C86') }}; margin: 0 0 10px; }
 
     /* `.dati` del fac-simile è una griglia CSS: qui è una tabella, perché mPDF non ha il grid. */
     .dati { width: 100%; border-collapse: collapse; border-top: 1px solid #D9DEE5;
             border-bottom: 1px solid #D9DEE5; margin-bottom: 14px; }
     .dati td { padding: 8px 10px 8px 0; border: 0; vertical-align: top; }
-    .dati .et { font-size: 7pt; letter-spacing: 0.9pt; text-transform: uppercase; color: #5A6B7B; }
-    .dati .vl { font-size: 9.5pt; color: #0E2238; font-family: fraunces; }
+    {{-- Dentro una cella mPDF non applica una regola con un antenato («.dati .vl», «.doc b»): le cifre in testa e il grassetto della testata hanno regole con una classe sola. --}}
+    .et { font-size: 7pt; letter-spacing: 0.9pt; text-transform: uppercase; color: #5A6B7B; }
+    .vl { font-size: 9.5pt; color: #0E2238; font-family: fraunces; }
 
     table.registro { width: 100%; border-collapse: collapse; }
     table.registro th { font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase;
@@ -81,6 +107,8 @@
     th.n { font-family: inter; }
     .num { text-align: right; color: #5A6B7B; font-family: fraunces; white-space: nowrap; }
     .neg { color: #96302F; }
+    {{-- Il meno sulle cifre in testa: con due classi sole mPDF tiene il colore di «.vl»; la regola con le due classi insieme vale. --}}
+    .vl.neg { color: #96302F; }
     .d { color: #5A6B7B; font-size: 6pt; }
     .rit { color: #8A6212; font-size: 6pt; }
     .badge { font-size: 5.8pt; font-weight: bold; letter-spacing: 0.5pt; text-transform: uppercase;
@@ -90,7 +118,7 @@
                               font-weight: bold; color: #0E2238; padding: 7px; }
 
     .chiusura { margin-top: 4px; padding: 10px 12px; background: #F4F5F7;
-                border-left: 3px solid #C9A227; font-size: 7.5pt; color: #26313F;
+                border-left: 3px solid #C9A227; font-size: 8pt; color: #26313F;
                 margin-bottom: 14px; }
     .chiusura b { color: #0E2238; }
 
@@ -106,7 +134,7 @@
     <table style="width: 100%; border-collapse: collapse; border-bottom: 1px solid #D9DEE5;">
         <tr>
             <td style="border: 0; padding: 0 0 5px 0; font-size: 7.5pt; color: #5A6B7B;">
-                <b style="color: #0E2238;">{{ $condominio->nome }}</b> · Registro di contabilità
+                @if($conStudio){{ $carta->nome() }} · @endif<b style="color: {{ $coloreTitoli }};">{{ $condominio->nome }}</b> · Registro di contabilità
             </td>
             <td style="border: 0; padding: 0 0 5px 0; text-align: right; font-size: 7.5pt; color: #5A6B7B;">
                 {{ $esercizio->nome }}@if($parziale) · estratto parziale @endif
@@ -115,22 +143,15 @@
         </tr>
     </table>
 </htmlpageheader>
+{{-- Con lo studio, una stampa che comincia con la testatina (le parti del fascicolo) la ha già dalla prima pagina. --}}
+@if($conStudio && ! $carta->primaPaginaIntera())
+<sethtmlpageheader name="registroTestatina" page="ALL" value="on" show-this-page="1" />
+@else
 <sethtmlpageheader name="registroTestatina" page="ALL" value="on" />
+@endif
 
 <htmlpagefooter name="registroPiede">
-    <table style="width: 100%; border-collapse: collapse; border-top: 1px solid #D9DEE5;">
-        <tr>
-            <td style="border: 0; padding: 5px 0 0 0; font-size: 7pt; color: #5A6B7B;">
-                Documento emesso il {{ ($data_emissione_stampe ?? now())->format('d/m/Y') }}
-                @if(!empty($nota_legale_stampe))
-                    <br>{!! nl2br(e($nota_legale_stampe)) !!}
-                @endif
-            </td>
-            <td style="border: 0; padding: 5px 0 0 0; text-align: right; font-size: 7pt; color: #5A6B7B;">
-                Pagina {PAGENO} di {nbpg}
-            </td>
-        </tr>
-    </table>
+    @include('pdf._carta.piede_inter', ['giorno' => ($data_emissione_stampe ?? \App\Helpers\DateHelper::adessoUtente())->format('d/m/Y'), 'parte' => $parte_del_fascicolo ?? null])
 </htmlpagefooter>
 <sethtmlpagefooter name="registroPiede" page="ALL" value="on" />
 
@@ -165,6 +186,11 @@
 </div>
 @endif
 
+@if($conStudio)
+@component('pdf._carta.testata_inter', ['carta' => $carta, 'condominio' => $condominio, 'att' => 'Registro di contabilità'])
+<b class="forte">{{ $esercizio->nome }}</b> · dal <b class="forte">{{ $esercizio->data_inizio->format('d/m/Y') }}</b> al <b class="forte">{{ $esercizio->data_fine->format('d/m/Y') }}</b> · Stampato il <b class="forte">{{ \App\Helpers\DateHelper::adessoUtente()->format('d/m/Y') }}</b>
+@endcomponent
+@else
 <table class="testata">
     <tr>
         <td>
@@ -175,15 +201,18 @@
             </div>
         </td>
         <td class="doc">
-            <b>{{ $esercizio->nome }}</b><br>
-            dal <b>{{ $esercizio->data_inizio->format('d/m/Y') }}</b> al <b>{{ $esercizio->data_fine->format('d/m/Y') }}</b><br>
-            Stampato il <b>{{ now()->format('d/m/Y') }}</b>
+            <b class="forte">{{ $esercizio->nome }}</b><br>
+            dal <b class="forte">{{ $esercizio->data_inizio->format('d/m/Y') }}</b> al <b class="forte">{{ $esercizio->data_fine->format('d/m/Y') }}</b><br>
+            Stampato il <b class="forte">{{ \App\Helpers\DateHelper::adessoUtente()->format('d/m/Y') }}</b>
         </td>
     </tr>
 </table>
+@endif
 
 <h1>Registro di contabilità</h1>
 <p class="sotto">Movimenti in entrata e in uscita — art. 1130, comma 1, n. 7 c.c.</p>
+{{-- Il registro nomina chi ha versato ogni incasso, quanto e quando. --}}
+<p class="sotto" style="font-family: inter; font-size: 7.5pt; color: #5A6B7B;">{{ \App\Services\Gestionale\PosizioniDeiCondomini::RISERVATO }}</p>
 
 {{--
   ⚠️ **Questa nota non è cortesia: è la difesa del documento.** Il registro di contabilità è a
@@ -203,11 +232,13 @@
          la scheda in pagina e docs/registri_contabili.md, D15. --}}
     <b>Il saldo è unico su tutte le casse reali</b> — un prelievo verso i contanti compare due
     volte, in uscita dalla banca e in entrata nei contanti — e per il confronto con l'estratto conto
-    vale il saldo della cassa nello Stato patrimoniale, che porta dentro anche il riporto.
-    <b>Il saldo progressivo parte da zero all'inizio dell'esercizio</b>: è
-    il saldo dei movimenti di quest'anno e non comprende la disponibilità riportata
-    dall'esercizio precedente. Le operazioni sono numerate in ordine cronologico di
-    effettuazione.
+    a una data vale il saldo della cassa nella situazione patrimoniale, che taglia per data.
+    <b>Il saldo progressivo parte dal riporto</b>: la cassa all'inizio dell'esercizio, come
+    la lasciano i registri degli esercizi precedenti (nel primo esercizio, il saldo di
+    apertura). Il riporto è la prima riga e non è un'entrata. Un movimento con la data di un
+    altro anno conta nel registro dell'esercizio in cui è scritto, una volta sola.
+    Le operazioni sono numerate in ordine cronologico di effettuazione; alla fine di ogni mese
+    con movimenti una riga dice il saldo a quel giorno, e in fondo i totali per tipo di movimento.
     @if($mostra_annotazione)
     Accanto a ogni data compare quella di annotazione, così che il termine di trenta giorni
     dell'art. 1130, comma 1, n. 7 c.c. sia verificabile riga per riga.
@@ -219,19 +250,23 @@
 
 <table class="dati">
     <tr>
-        <td style="width: 20%;">
+        <td style="width: 14%;">
             <div class="et">Movimenti</div>
             <div class="vl">{{ number_format(count($righe), 0, ',', '.') }}</div>
         </td>
-        <td style="width: 27%;">
+        <td style="width: 22%;">
+            <div class="et">{{ $riporto['etichetta'] ?? 'Riporto dall\'esercizio precedente' }}</div>
+            <div class="vl {{ $riporto['totale'] < 0 ? 'neg' : '' }}">{{ $euroStampa($riporto['totale']) }}</div>
+        </td>
+        <td style="width: 20%;">
             <div class="et">Totale entrate</div>
             <div class="vl">€ {{ number_format($totale_entrate / 100, 2, ',', '.') }}</div>
         </td>
-        <td style="width: 27%;">
+        <td style="width: 20%;">
             <div class="et">Totale uscite</div>
             <div class="vl">€ {{ number_format($totale_uscite / 100, 2, ',', '.') }}</div>
         </td>
-        <td style="width: 26%;">
+        <td style="width: 24%;">
             {{-- Lo spazio prima di `@if` è necessario: Blade non compila una direttiva
                  attaccata a un carattere di parola. Vedi la nota più sotto su `gg @endif`. --}}
             <div class="et">Saldo di cassa @if($dataSaldo)al {{ \Carbon\Carbon::parse($dataSaldo)->format('d/m/Y') }} @endif</div>
@@ -251,6 +286,7 @@
     <thead>
         <tr>
             <th style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; font-weight: bold; text-align: left; border-bottom: 1px solid #0E2238; padding: 4px 5px;">Saldo per cassa</th>
+            <th class="n" style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; font-weight: bold; border-bottom: 1px solid #0E2238; padding: 4px 5px; font-family: inter;">Riporto</th>
             <th class="n" style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; font-weight: bold; border-bottom: 1px solid #0E2238; padding: 4px 5px; font-family: inter;">Movimenti</th>
             <th class="n" style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; font-weight: bold; border-bottom: 1px solid #0E2238; padding: 4px 5px; font-family: inter;">Entrate</th>
             <th class="n" style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; font-weight: bold; border-bottom: 1px solid #0E2238; padding: 4px 5px; font-family: inter;">Uscite</th>
@@ -261,6 +297,7 @@
         @foreach($saldi_per_cassa as $sc)
         <tr>
             <td style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">{{ $sc['cassa'] }}</td>
+            <td class="n" style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">{{ $euroStampa((int) ($sc['riporto'] ?? 0)) }}</td>
             <td class="n" style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">{{ $sc['movimenti'] }}</td>
             <td class="n" style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">€ {{ number_format($sc['entrate'] / 100, 2, ',', '.') }}</td>
             <td class="n" style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">€ {{ number_format($sc['uscite'] / 100, 2, ',', '.') }}</td>
@@ -280,7 +317,7 @@
   dichiarate sui `<th>` perché ogni blocco è una tabella a sé e senza di quelle le colonne si
   disallineerebbero da un blocco all'altro.
 --}}
-@foreach(array_chunk($righe, 300) as $blocco)
+@foreach(array_chunk($righe, 300, true) as $blocco)
 @if(! $loop->first)<pagebreak />@endif
 <table class="registro">
     <thead>
@@ -305,12 +342,25 @@
         </tr>
     </thead>
     <tbody>
+        @if($loop->first)
+        {{-- Il riporto è la prima riga: la cassa all'inizio dell'esercizio, senza numero, e non è un'entrata. --}}
+        <tr>
+            <td class="num"></td>
+            <td style="white-space: nowrap;">{{ $esercizio->data_inizio->format('d/m/Y') }}</td>
+            @if($mostra_annotazione)<td></td>@endif
+            <td class="d"></td>
+            <td colspan="3"><b>{{ $riporto['etichetta'] ?? 'Riporto dall\'esercizio precedente' }}</b>@if(count($riporto['per_cassa']) > 1) <span class="d">({{ implode(' · ', array_map(fn ($c) => $c['cassa'].' '.$euroStampa($c['riporto']), $riporto['per_cassa'])) }})</span>@endif</td>
+            <td class="n"></td>
+            <td class="n"></td>
+            <td class="n {{ $riporto['totale'] < 0 ? 'neg' : '' }}"><b>{{ $euroStampa($riporto['totale']) }}</b></td>
+        </tr>
+        @endif
         {{--
           ⚠️ `Carbon::parse()` qui è sicuro solo perché lo è il chiamante: le date arrivano da
           `RegistroContabilitaService::registro()`, che le ha già normalizzate in 'Y-m-d' da
           colonne DATE non nullable. Non è una garanzia della vista.
         --}}
-        @foreach($blocco as $riga)
+        @foreach($blocco as $i => $riga)
         <tr>
             <td class="num">{{ $riga['numero'] }}</td>
             <td style="white-space: nowrap;">{{ \Carbon\Carbon::parse($riga['data'])->format('d/m/Y') }}</td>
@@ -342,6 +392,15 @@
                 € {{ number_format($riga['saldo_progressivo'] / 100, 2, ',', '.') }}
             </td>
         </tr>
+        @if(isset($chiudeMese[$i]))
+        @php $m = $chiudeMese[$i]; @endphp
+        <tr style="background: #F4F5F7;">
+            <td colspan="{{ $mostra_annotazione ? 7 : 6 }}" style="text-align: right; color: #5A6B7B;">Saldo al {{ \Carbon\Carbon::parse($m['fine'])->format('d/m/Y') }} · movimenti del mese</td>
+            <td class="n">{{ $euroStampa($m['entrate']) }}</td>
+            <td class="n">{{ $euroStampa($m['uscite']) }}</td>
+            <td class="n {{ $m['saldo'] < 0 ? 'neg' : '' }}"><b>{{ $euroStampa($m['saldo']) }}</b></td>
+        </tr>
+        @endif
         @endforeach
     </tbody>
     {{-- Il totale una volta sola, in fondo all'ultimo blocco: ripeterlo a ogni blocco lo farebbe
@@ -367,6 +426,31 @@
     @endif
 </table>
 @endforeach
+
+@if(count($totaliPerTipo) > 0)
+{{-- I totali per tipo di movimento, delle righe riportate: la loro somma è il totale del registro. Una tabella che non si spezza: l'intestazione non resta
+     in fondo a una pagina con le righe nella seguente. --}}
+<table style="width: 70%; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid;" autosize="1">
+    <thead>
+        <tr>
+            <th style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; text-align: left; border-bottom: 1px solid #0E2238; padding: 4px 5px;">Totali per tipo di movimento</th>
+            <th class="n" style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; border-bottom: 1px solid #0E2238; padding: 4px 5px; font-family: inter;">Movimenti</th>
+            <th class="n" style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; border-bottom: 1px solid #0E2238; padding: 4px 5px; font-family: inter;">Entrate</th>
+            <th class="n" style="font-size: 6.2pt; letter-spacing: 0.7pt; text-transform: uppercase; color: #5A6B7B; border-bottom: 1px solid #0E2238; padding: 4px 5px; font-family: inter;">Uscite</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach($totaliPerTipo as $t)
+        <tr>
+            <td style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">{{ \App\Services\Gestionale\ParoleDellaStampa::frase($t['etichetta']) }}@if($t['di_cui_esercizi_precedenti'] > 0) <span class="d">(di cui {{ $euroStampa($t['di_cui_esercizi_precedenti']) }} per fatture di esercizi precedenti)</span>@endif</td>
+            <td class="n" style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">{{ $t['movimenti'] }}</td>
+            <td class="n" style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">{{ $t['entrate'] ? $euroStampa($t['entrate']) : '' }}</td>
+            <td class="n" style="padding: 3px 5px; border-bottom: 1px solid #D9DEE5;">{{ $t['uscite'] ? $euroStampa($t['uscite']) : '' }}</td>
+        </tr>
+        @endforeach
+    </tbody>
+</table>
+@endif
 
 {{-- Fuori dal ciclo dei blocchi: con zero righe `array_chunk([], 300)` è vuoto e il `@foreach`
      non gira nemmeno una volta. --}}

@@ -1,3 +1,12 @@
+{{-- La testata dello studio: con lo studio la prima pagina ha il blocco intero e le seguenti una riga (le regole `@page` qui sotto); senza, la
+     testata del condominio di sempre, su ogni pagina. Le testate si danno con `@page`: con il margine che si allunga sulla testata (`PdfService`)
+     mPDF misura così anche la prima pagina, mentre una testata accesa nel corpo (`sethtmlpageheader`) arriva quando la prima pagina è già
+     cominciata, e il corpo le finirebbe sotto. `$intestazione_propria`: la vista scrive da sé chi emette il documento (la lettera, la ricevuta,
+     l'avviso), e qui non si ripete. Con la carta intestata lo studio è stampato sulla carta: su ogni pagina una riga con il condominio, in cima alla
+     parte libera. --}}
+@php($testataDelloStudio = empty($intestazione_propria ?? null) && isset($carta) && $carta->haStudio())
+@php($testataDellaCarta = empty($intestazione_propria ?? null) && isset($carta) && $carta->cartaIntestata() !== null)
+@php($testataComune = empty($intestazione_propria ?? null) && ! $testataDelloStudio && ! $testataDellaCarta)
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -6,9 +15,34 @@
     <style>
         @include('pdf.styles')
     </style>
+    @if($testataDelloStudio)
+    <style>
+        @include('pdf._carta.regole_pagina', ['prima' => 'KondoTestata', 'seguenti' => 'KondoTestatina', 'piede' => 'KondoFooter'])
+    </style>
+    @elseif($testataDellaCarta)
+    <style>
+        @page { header: html_KondoCarta; footer: html_KondoFooter; }
+    </style>
+    @elseif($testataComune)
+    <style>
+        @page { header: html_{{ \App\Services\PDF\PdfService::TESTATA_COMUNE }}; footer: html_KondoFooter; }
+    </style>
+    @endif
 </head>
 <body>
-    <htmlpageheader name="KondoHeader">
+    @if($testataDelloStudio)
+    <htmlpageheader name="KondoTestata">
+        @include('pdf._carta.testata', ['titolo' => $titolo_stampa ?? null])
+    </htmlpageheader>
+    <htmlpageheader name="KondoTestatina">
+        @include('pdf._carta.testatina', ['titolo' => $titolo_stampa ?? null])
+    </htmlpageheader>
+    @elseif($testataDellaCarta)
+    <htmlpageheader name="KondoCarta">
+        @include('pdf._carta.testata_carta', ['titolo' => $titolo_stampa ?? null])
+    </htmlpageheader>
+    @elseif($testataComune)
+    <htmlpageheader name="{{ \App\Services\PDF\PdfService::TESTATA_COMUNE }}">
         <div class="header">
             @if(isset($condominio))
                 <div class="header-title">{{ $condominio->nome }}</div>
@@ -19,9 +53,8 @@
             @endif
             {{--
               ⚠️ **Facoltativo, e per un motivo preciso.** `Mpdf::SetHeader()` — l'API pensata per
-              questo — non produce nulla: viene chiamata dopo `WriteHTML()`, e questo blocco HTML
-              (`sethtmlpageheader`) ha comunque la precedenza. È inerte allo stesso modo in altri
-              sei controller di stampa del progetto, tutti fuori da questo diff — non li tocco.
+              questo — chiamata dopo `WriteHTML()` sostituirebbe la testata dell'ultima pagina, che
+              qui viene dalla regola `@page`: nessuna stampa la chiama.
               Qui, dove serve davvero (un registro di più pagine che altrimenti si identifica
               solo a pagina 1), il chiamante valorizza `$titolo_stampa`: chi non lo passa vede
               esattamente l'intestazione di sempre, byte per byte.
@@ -31,9 +64,11 @@
             @endif
         </div>
     </htmlpageheader>
+    @endif
 
-    <sethtmlpageheader name="KondoHeader" page="O" value="on" show-this-page="1" />
-
+    {{-- Il giorno dell'emissione è quello dell'amministratore, non quello del server: fra le 00:00 e le 02:00 di Roma il server (UTC) è
+         ancora a ieri. Una stampa che passa la sua data (`data_emissione_stampe`) tiene la sua. --}}
+    @php($giornoDelPiede = ($data_emissione_stampe ?? \Illuminate\Support\Carbon::parse(\App\Helpers\DateHelper::oggiUtente()))->format('d/m/Y'))
     <htmlpagefooter name="KondoFooter">
         @if(!empty($piede_compatto ?? null))
             {{-- Beta.27: le stampe del riparto chiedono un piede che stia nel margine. mPDF ancora il
@@ -45,9 +80,11 @@
                 <table style="width: 100%; font-size: 7pt; line-height: 1.15; border-collapse: collapse;">
                     <tr>
                         <td style="text-align: left; width: 75%; padding: 0;">
-                            <span style="color: #555;">Documento emesso il {{ ($data_emissione_stampe ?? now())->format('d/m/Y') }}</span>
+                            @if(empty($piede_senza_data ?? null))
+                                <span style="color: #555;">Documento emesso il {{ $giornoDelPiede }}</span>
+                            @endif
                             @if(!empty($nota_legale_stampe))
-                                <br>{!! nl2br(str_replace('  ', '&nbsp;&nbsp;', e($nota_legale_stampe))) !!}
+                                @if(empty($piede_senza_data ?? null))<br>@endif{!! nl2br(str_replace('  ', '&nbsp;&nbsp;', e($nota_legale_stampe))) !!}
                             @endif
                         </td>
                         <td style="text-align: right; width: 25%; padding: 0;">
@@ -62,14 +99,24 @@
             <table style="width: 100%;">
                 <tr>
                     <td style="text-align: left; width: 75%;">
-                        <span style="color: #555;">Documento emesso il {{ ($data_emissione_stampe ?? now())->format('d/m/Y') }}</span>
+                        @if(empty($piede_senza_data ?? null))
+                            <span style="color: #555;">Documento emesso il {{ $giornoDelPiede }}</span>
+                        @endif
                         @if(!empty($nota_legale_stampe))
-                            <br>{!! nl2br(str_replace('  ', '&nbsp;&nbsp;', e($nota_legale_stampe))) !!}
+                            @if(empty($piede_senza_data ?? null))<br>@endif{!! nl2br(str_replace('  ', '&nbsp;&nbsp;', e($nota_legale_stampe))) !!}
                         @endif
                     </td>
+                    {{-- Nel fascicolo del rendiconto il nome della parte accanto al numero, in basso, con sotto una riga libera dove il fascicolo scrive il
+                         suo numero di pagina (`FascicoloDelRendiconto::scriviIlNumero`); chi non lo passa vede il piede di sempre. Il fascicolo scrive il numero
+                         dal margine destro e non sa dove finisce la colonna: sta su un foglio orizzontale, dove il 25 % sono 68 mm (il numero più lungo, a 9 punti,
+                         ne misura 50), e il nome della parte non va a capo. --}}
+                    @if(! empty($parte_del_fascicolo ?? null))
+                    <td style="text-align: right; vertical-align: bottom; width: 25%; white-space: nowrap;">{{ $parte_del_fascicolo }}, pagina {PAGENO} di {nbpg}<br>&nbsp;</td>
+                    @else
                     <td style="text-align: right; width: 25%;">
                         Pagina {PAGENO} di {nbpg}
                     </td>
+                    @endif
                 </tr>
             </table>
         </div>

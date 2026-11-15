@@ -20,6 +20,7 @@ use App\Services\PDF\PdfService;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
+use App\Services\PDF\GruppoCarta;
 
 class EstrattoContoAnagraficaController extends Controller
 {
@@ -63,7 +64,38 @@ class EstrattoContoAnagraficaController extends Controller
             'solidarieta' => app(\App\Services\Subentro\NotaSolidarieta::class)->per($condominio, $anagrafica),
             // Coda 167, beta.40: i versamenti fatti per il debito di un altro — un riquadro, non righe del libro.
             'versamenti_per_altri' => app(\App\Services\Gestionale\VersamentiPerContoDiAltri::class)->per($condominio, $anagrafica),
+            // 1.12.0-beta.4: le lettere e le comunicazioni a questa persona in questo condominio, con il residuo di oggi delle stesse rate.
+            'lettere' => app(\App\Services\Gestionale\Lettere\RegistroLettere::class)->perPersona($condominio, $anagrafica),
+            // Coda 533: nella scheda «Corrispondenza», con le lettere, le ricevute, gli avvisi di compensazione e «non serve comunicarla»; e in testa
+            // l'ultima lettera, letta come la colonna di «Rate scadute».
+            'documenti' => app(\App\Services\Gestionale\Lettere\CorrispondenzaDellaPersona::class)->documenti($condominio, $anagrafica),
+            'ultima_lettera' => app(\App\Services\Gestionale\Lettere\CorrispondenzaDellaPersona::class)->ultimaLettera($condominio, $anagrafica),
+            // Il giorno dell'amministratore, per le date della spedizione (non dopo oggi).
+            'oggi' => \App\Helpers\DateHelper::oggiUtente(),
+            // Gli accordi di rientro della persona in questo condominio, anche chiusi o riusciti, con il segno e i versati oltre il capitale.
+            'accordi_rientro' => $this->accordiRientro($condominio, $anagrafica),
         ]);
+    }
+
+    /**
+     * Gli accordi di rientro della persona, dal più recente, con le cifre di oggi: il segno, «fino al» passato, la parte versata oltre il
+     * capitale riconosciuto (che è un credito della persona). Ci sono anche quando la persona non ha più rate scadute e non è nell'elenco.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function accordiRientro(Condominio $condominio, Anagrafica $anagrafica): array
+    {
+        $accordi = \App\Models\Gestionale\AccordoRientro::with('rate')->where('condominio_id', $condominio->id)->where('anagrafica_id', $anagrafica->id)
+            ->orderByDesc('data_accordo')->orderByDesc('id')->get();
+        if ($accordi->isEmpty()) {
+            return [];
+        }
+        $oggi = \App\Helpers\DateHelper::oggiUtente();
+        $lettura = app(\App\Services\Gestionale\Debiti\LetturaDebiti::class)->perPersona((int) $condominio->id, (int) $anagrafica->id)['rate'];
+        $inCorso = $accordi->keyBy('id');
+
+        return array_map(fn (array $a) => $a + ['in_corso' => $inCorso[$a['id']]->inCorsoIl($oggi)],
+            app(\App\Services\Gestionale\Debiti\AccordiRientro::class)->segni($accordi, $lettura, $oggi)['accordi']);
     }
 
     /**
@@ -189,12 +221,12 @@ class EstrattoContoAnagraficaController extends Controller
             'versamentiPerAltri' => app(\App\Services\Gestionale\VersamentiPerContoDiAltri::class)->per($condominio, $anagrafica),
         ];
 
-        $mpdf = $pdfService->generate('pdf.gestionale.estratto_conto_anagrafica', $data, [
+        $mpdf = $pdfService->generate('pdf.gestionale.estratto_conto_anagrafica', $data + ['gruppo_carta' => GruppoCarta::PER_LA_PERSONA], [
             'orientation' => 'P',
-            'margin_top'  => 30,
+            // 32 come il prospetto degli oneri: con 30 la testata del condominio (il filetto a 30,95 mm) scende sotto il margine, e la prima
+            // riga del corpo le finisce sopra.
+            'margin_top'  => 32,
         ]);
-
-        $mpdf->SetHeader($condominio->nome . '||Estratto Conto – ' . $anagrafica->nome);
 
         // ⚠️ `Output(..., 'I')` scrive il PDF sull'output buffer e torna vuota: mPDF mandava da sé,
         // con `header()` ed `echo`, intestazioni e corpo, e nella risposta Laravel non passava nulla —
@@ -546,7 +578,7 @@ class EstrattoContoAnagraficaController extends Controller
         })->values();
 
         // --- STEP 3: L'ORDINE DEL LIBRO ---
-        // Coda 317 (decisione 153.6): per data di competenza, la data del fatto, come la Prima nota (D6 di `registri_contabili.md`); un incasso
+        // Coda 317 (decisione 153.6): per data di competenza, la data del fatto, come il registro di contabilità (D6 di `registri_contabili.md`); un incasso
         // del 10/07 inserito il 18/10 sta al 10/07. Nello stesso giorno il dare prima dell'avere, anche fra scritture diverse: il saldo
         // progressivo non scende sotto il vero dentro il giorno. Poi la scrittura, e a parità di riga l'importo decrescente. Lo storno sta
         // alla sua data. Totali e saldo finale non dipendono dall'ordine. Fino alla 1.11.0-beta.58 l'ordine era per scrittura.

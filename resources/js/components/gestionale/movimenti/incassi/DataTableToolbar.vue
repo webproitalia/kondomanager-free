@@ -6,7 +6,7 @@ import { usePage, Link } from '@inertiajs/vue3';
 import { useTabellaServer } from '@/composables/useTabellaServer';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, X } from 'lucide-vue-next';
+import { Search, Plus, X, FileText } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { usePermission } from "@/composables/permissions";
 import type { Table } from '@tanstack/vue-table';
@@ -17,6 +17,7 @@ const page = usePage<{
   condominio: Building;
   stati: string[];
   filters: { search?: string; stato?: string; data_da?: string; data_a?: string };
+  ricevute_mancanti?: { numero: number; dal: string };
 }>();
 const { generateRoute } = usePermission();
 const condominioId = computed(() => page.props.condominio.id);
@@ -45,8 +46,9 @@ watch([stato, dataDa, dataA], applyFilters)
 // 'annullata' è il valore reale in DB (StornoIncassoRateAction), ma per
 // l'amministratore "Stornata" è il termine corretto: è lui che ha cliccato
 // "Storna" per arrivarci.
-const statoLabels: Record<string, string> = { annullata: 'Stornata' }
-const statoLabel = (s: string) => statoLabels[s] ?? s
+const statoLabels: Record<string, string> = { annullata: 'Stornata', fuori_ordine: 'Fuori ordine, non dichiarata' }
+// Maiuscola solo all'inizio: «Fuori ordine, non dichiarata», non «Fuori Ordine, Non Dichiarata».
+const statoLabel = (s: string) => statoLabels[s] ?? (s.charAt(0).toUpperCase() + s.slice(1))
 
 const isFiltered = computed(() => !!(globalFilter.value || stato.value || dataDa.value || dataA.value))
 const resetFilter = () => {
@@ -79,8 +81,8 @@ const resetFilter = () => {
         <SelectTrigger class="h-8 w-[140px] text-xs style-chooser">
           <SelectValue placeholder="Stato" />
         </SelectTrigger>
-        <SelectContent position="popper" :style="{ width: 'var(--reka-select-trigger-width)' }">
-          <SelectItem v-for="s in page.props.stati" :key="s" :value="s" class="capitalize">
+        <SelectContent position="popper" :style="{ minWidth: 'var(--reka-select-trigger-width)' }">
+          <SelectItem v-for="s in page.props.stati" :key="s" :value="s" class="whitespace-nowrap">
             {{ statoLabel(s) }}
           </SelectItem>
         </SelectContent>
@@ -104,6 +106,34 @@ const resetFilter = () => {
 
     </div>
 
+    <div class="flex flex-wrap items-center gap-2">
+    <!-- Le ricevute (1.12.0-beta.2): la pagina si apre sulle ricevute mai emesse dei versamenti recenti. -->
+    <Button as-child variant="outline">
+        <Link
+          :href="route(generateRoute('gestionale.ricevute.index'), { condominio: condominioId })"
+          class="inline-flex items-center gap-2 px-3 py-2 h-auto text-xs font-medium"
+        >
+          <FileText class="w-3.5 h-3.5" />
+          Ricevute
+          <!-- Contate come la pagina che si apre: i versamenti dal primo del mese scorso, e lo dice. -->
+          <span v-if="(page.props.ricevute_mancanti?.numero ?? 0) > 0" class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+            {{ page.props.ricevute_mancanti!.numero }} senza ricevuta dal {{ page.props.ricevute_mancanti!.dal.split('-').reverse().join('/') }}
+          </span>
+        </Link>
+    </Button>
+
+    <!-- L'incasso da terzi: l'affitto dell'antenna, gli interessi, un rimborso. Dopo la registrazione si torna qui. -->
+    <Button as-child variant="outline">
+        <Link
+          :href="route(generateRoute('gestionale.incassi-da-terzi.create'), { condominio: condominioId, da: 'incassi' })"
+          class="inline-flex items-center gap-2 px-3 py-2 h-auto text-xs font-medium"
+          data-azione="altro-incasso"
+        >
+          <Plus class="w-3.5 h-3.5 text-emerald-600" />
+          Altro incasso
+        </Link>
+    </Button>
+
     <Button as-child>
         <Link
           :href="route(generateRoute('gestionale.movimenti-rate.create'), { condominio: condominioId })"
@@ -113,5 +143,6 @@ const resetFilter = () => {
           Registra incasso
         </Link>
     </Button>
+    </div>
   </div>
 </template>

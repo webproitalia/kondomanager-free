@@ -1,12 +1,16 @@
 @extends('pdf.base')
+{{-- I titoli e i loro filetti hanno il colore della carta dello studio; senza un colore, quello di sempre. --}}
+@php
+    $coloreTitoli = \App\Services\PDF\Carta::coloreDi($carta ?? null, '#1e3a5f');
+@endphp
 
 @section('title', 'Estratto Conto – ' . $anagrafica->nome)
 
 @section('content')
 
 {{-- INTESTAZIONE DOCUMENTO --}}
-<div style="margin-bottom: 12px; border-bottom: 2px solid #1e3a5f; padding-bottom: 12px; padding-top: 5px;">
-    <h2 style="margin: 0; padding: 0; font-size: 13pt; color: #1e3a5f; letter-spacing: 0.5px;">
+<div style="margin-bottom: 12px; border-bottom: 2px solid {{ $coloreTitoli }}; padding-bottom: 12px; padding-top: 5px;">
+    <h2 style="margin: 0; padding: 0; font-size: 13pt; color: {{ $coloreTitoli }}; letter-spacing: 0.5px;">
         ESTRATTO CONTO — {{ strtoupper($anagrafica->nome) }}
     </h2>
     <div style="font-size: 8.5pt; color: #444; margin-top: 3px;">
@@ -14,7 +18,7 @@
         &nbsp;|&nbsp;
         (dal {{ $esercizio->data_inizio->format('d/m/Y') }} al {{ $esercizio->data_fine->format('d/m/Y') }})
         &nbsp;|&nbsp;
-        Stampato il <strong>{{ now()->format('d/m/Y H:i') }}</strong>
+        Stampato il <strong>{{ \App\Helpers\DateHelper::adessoUtente()->format('d/m/Y H:i') }}</strong>
     </div>
 </div>
 

@@ -28,6 +28,7 @@ use App\Exceptions\Pagamenti\RitenutaIncoerenteException;
 use App\Models\Esercizio;
 use App\Models\Fornitore;
 use App\Models\Gestionale\Cassa;
+use App\Models\Gestionale\Conto;
 use App\Models\Gestionale\ContoContabile;
 use App\Models\Gestionale\FatturaPassiva;
 use App\Models\Gestionale\FatturaScrittura;
@@ -93,6 +94,9 @@ use Illuminate\Support\Str;
  */
 class PagamentoFornitoreService
 {
+    /** Antiriciclaggio (D.Lgs. 231/2007): un pagamento in contanti da questo importo in su, € 5.000,00 compresi, è vietato. In centesimi. */
+    private const LIMITE_CONTANTI_CENTS = 500000;
+
     // ════════════════════════════════════════════════════════════════════════
     // INTERFACCIA PUBBLICA
     // ════════════════════════════════════════════════════════════════════════
@@ -113,6 +117,7 @@ class PagamentoFornitoreService
      *   importo_ritenuta_cents  int       Ritenuta d'acconto (default: 0)
      *   importo_netto_cents     int       Netto bonificato (default: lordo - ritenuta)
      *   importo_commissioni_cents int     Commissioni bancarie (default: 0)
+     *   voce_commissione_id     int|null  La voce di spesa della commissione: obbligatoria se la commissione è più di zero
      *   iban_beneficiario       string|null IBAN destinatario
      *   causale_bonifico        string|null Override causale (null = auto-generata)
      *   riferimento_bancario    string|null CRO/TRN da valorizzare post-conferma banca
@@ -227,6 +232,12 @@ class PagamentoFornitoreService
                 $gestioneId = $data['gestione_id']
                     ?? $this->deriveGestioneId($fatture);
 
+                // La voce della commissione, della gestione del pagamento o di un'altra gestione dello stesso esercizio (`VoceDellaCommissione`): senza, la
+                // commissione resterebbe fuori dal consuntivo e dal riparto. Si controlla prima di scrivere, dentro la transazione.
+                $voceCommissione = app(VoceDellaCommissione::class)->verifica(
+                    $condominioId, (int) $gestioneId, $data['voce_commissione_id'] ?? null, $totali['commissioni'], (int) $data['esercizio_id']
+                );
+
                 $idempotencyKey = (string) ($data['idempotency_key'] ?? Str::uuid());
 
                 $scrittura = ScritturaContabile::create([
@@ -274,11 +285,12 @@ class PagamentoFornitoreService
                     ]);
                 }
 
-                // DARE: Spese Bancarie (commissioni — se presenti)
+                // DARE: la commissione, sul mastro della sua voce e con la voce, come la regolazione immediata
+                // (`RegistraRegolazioneImmediataAction`). Le «Spese bancarie» di sistema restano ai pagamenti scritti prima.
                 if ($totali['commissioni'] > 0) {
-                    $contoSpese = $this->trovaConto($condominioId, 'spese_bancarie');
                     $scrittura->righe()->create([
-                        'conto_contabile_id' => $contoSpese->id,
+                        'conto_contabile_id' => $voceCommissione->conto_contabile_id,
+                        'voce_spesa_id' => $voceCommissione->id,
                         'tipo_riga' => 'dare',
                         'importo' => $totali['commissioni'],
                     ]);
@@ -451,9 +463,10 @@ class PagamentoFornitoreService
      * Campi immutabili: fornitore_id, allocazioni fatture, uuid, idempotency_key,
      * numero_protocollo scrittura.
      *
-     * Nota commissioni: la riga contabile "Spese Bancarie" viene ricreata da zero
-     * ad ogni modifica (come le altre righe), quindi rispecchia sempre l'ultimo
-     * valore di importo_commissioni_cents — non è un delta rispetto al valore precedente.
+     * Nota commissioni: la riga della commissione viene ricreata da zero ad ogni modifica (come le altre righe), quindi rispecchia sempre
+     * l'ultimo valore di importo_commissioni_cents — non è un delta rispetto al valore precedente. Si riscrive sul mastro della voce scelta,
+     * con la voce (`voce_commissione_id`, obbligatoria se la commissione è più di zero). Solo un pagamento scritto prima senza voce, con la
+     * commissione com'era (stessa cifra) e nessuna voce scelta, si riscrive come prima: sulle «Spese bancarie» di sistema, senza voce.
      *
      * Effetti collaterali:
      *  - Dispatch PagamentoAggiornato → SyncF24WithPagamento::handleAggiornato()
@@ -534,6 +547,14 @@ class PagamentoFornitoreService
         );
         $nuovoImportoNetto = (int) $data['importo_netto_cents'];
         $nuoveCommissioni = (int) ($data['importo_commissioni_cents'] ?? 0);
+        $voceScelta = $data['voce_commissione_id'] ?? null;
+        // Un pagamento scritto prima senza voce, con la commissione com'era e nessuna voce scelta, resta senza voce: la riga torna dov'era.
+        $contoSenzaVoce = in_array($voceScelta, [null, ''], true)
+            ? app(VoceDellaCommissione::class)->contoSenzaVoce($pagamento, $nuoveCommissioni)
+            : null;
+        $voceCommissione = $contoSenzaVoce !== null ? null : app(VoceDellaCommissione::class)->verifica(
+            (int) $pagamento->condominio_id, (int) $scrittura->gestione_id, $voceScelta, $nuoveCommissioni, (int) $scrittura->esercizio_id
+        );
         $nuovoConto = (int) $data['conto_corrente_id'];
         $nuovaData = $data['data_pagamento'];
         $nuovoMetodo = MetodoPagamento::from($data['metodo_pagamento']);
@@ -589,6 +610,16 @@ class PagamentoFornitoreService
             }
         }
 
+        // ── Limite dei contanti (antiriciclaggio) ────────────────────────────
+        // Lo stesso controllo e lo stesso messaggio della registrazione, ma solo dove la modifica porta il pagamento in contanti o ne fa crescere
+        // l'importo in contanti (Coda 466). Un pagamento già in contanti sopra soglia, salvato dalla modifica prima di questo controllo, si corregge
+        // nella nota o nella data senza essere rifiutato; un importo che non cresce non lo peggiora. L'importo in contanti è il netto: quello che la
+        // modifica riscrive sull'allocazione alla fattura e sull'uscita di cassa, e quello che la registrazione confronta con la soglia.
+        if ($nuovoMetodo === MetodoPagamento::CONTANTI
+            && ($pagamento->metodo_pagamento !== MetodoPagamento::CONTANTI || $nuovoImportoNetto > (int) $pagamento->importo_netto)) {
+            $this->verificaLimiteContanti($nuovoImportoNetto);
+        }
+
         // ── Capienza conto (bloccante senza override esplicito) ──────────────
         // A differenza di registraPagamento, qui il pagamento esiste già: il conto
         // vecchio va "riaccreditato" della vecchia uscita prima di verificare la nuova,
@@ -624,7 +655,7 @@ class PagamentoFornitoreService
 
         // ── Transazione atomica ──────────────────────────────────────────────
         return DB::transaction(function () use (
-            $pagamento, $scrittura, $fatture, $data,
+            $pagamento, $scrittura, $fatture, $data, $voceCommissione, $contoSenzaVoce,
             $nuovoImportoLordo, $nuovoImportoRitenuta, $nuovoImportoNetto, $nuoveCommissioni,
             $nuovoConto, $nuovaData, $nuovoMetodo, $nuovoBonificoParlante, $nuovoTipoDetrazione,
             $dataPagamentoBefore, $importoRitenutaBefore
@@ -686,14 +717,11 @@ class PagamentoFornitoreService
                 'anagrafica_id' => $anagraficaPrincipale?->id,
             ]);
 
-            // DARE: Spese Bancarie (commissioni — se presenti)
+            // DARE: la commissione, sul mastro della voce e con la voce (come in registraPagamento); senza voce solo com'era, sulle «Spese bancarie» di sistema
             if ($nuoveCommissioni > 0) {
-                $contoSpese = $this->trovaConto($condominioId, 'spese_bancarie');
-                $scrittura->righe()->create([
-                    'conto_contabile_id' => $contoSpese->id,
-                    'tipo_riga' => 'dare',
-                    'importo' => $nuoveCommissioni,
-                ]);
+                $scrittura->righe()->create($voceCommissione !== null
+                    ? ['conto_contabile_id' => $voceCommissione->conto_contabile_id, 'voce_spesa_id' => $voceCommissione->id, 'tipo_riga' => 'dare', 'importo' => $nuoveCommissioni]
+                    : ['conto_contabile_id' => $contoSenzaVoce, 'tipo_riga' => 'dare', 'importo' => $nuoveCommissioni]);
             }
 
             // AVERE: uscita cassa/banca (netto + commissioni)
@@ -818,8 +846,9 @@ class PagamentoFornitoreService
                 'condominio_id' => $scritturaOriginale->condominio_id,
                 'gestione_id' => $scritturaOriginale->gestione_id,
                 'esercizio_id' => $esercizioTarget->id,
-                'data_registrazione' => now()->toDateString(),
-                'data_competenza' => now()->toDateString(),
+                // Il giorno dell'amministratore: alle 00:30 di Roma del 01/01 in UTC è ancora il 31/12, e lo storno cambierebbe l'anno chiuso.
+                'data_registrazione' => \App\Helpers\DateHelper::oggiUtente(),
+                'data_competenza' => \App\Helpers\DateHelper::oggiUtente(),
                 'causale' => mb_substr($causaleStorno, 0, 255),
                 'tipo_movimento' => TipoMovimentoContabile::STORNO_PAGAMENTO_FORNITORE,
                 'stato' => 'registrata',
@@ -835,12 +864,37 @@ class PagamentoFornitoreService
             //   DARE  Banca      1.185   (era AVERE — rientro cassa)
             //   AVERE Debiti     1.180   (era DARE — riapre il debito)
             //   AVERE Spese Banc.   5   (era DARE — storna il costo commissioni)
+            // La voce si ricopia com'era (quella della commissione, o nessuna per un pagamento scritto prima): lo storno non la chiede, e il
+            // consuntivo della voce torna com'era, come per lo storno della regolazione immediata.
+            // **Lo storno nell'anno dopo** (Variante B1) di una commissione su una voce di una gestione che l'esercizio dello storno non ha (un'ordinaria
+            // dell'anno prima: Coda 553, e prima per i pagamenti dell'ordinaria dalla 1.12.0-beta.5): la riga va sulle «Spese bancarie» di sistema, senza
+            // voce, con una nota che dice la voce di allora. Stesso importo, stesso lato: la partita doppia non cambia. Con la voce di allora la riga starebbe
+            // fuori dal rendiconto e dal riparto dell'esercizio dello storno; senza voce sta nella riga «Commissioni senza voce», e il conto dei costi torna.
+            $sistemaBancarie = null;
             foreach ($scritturaOriginale->righe as $riga) {
+                $voce = $riga->voce_spesa_id;
+                $conto = $riga->conto_contabile_id;
+                $nota = null;
+                if ($crossEsercizio && $voce !== null) {
+                    $voceDiAllora = Conto::with('pianoConto.gestione')->find($voce);
+                    $gestioneDiAllora = $voceDiAllora?->pianoConto?->gestione;
+                    if ($gestioneDiAllora === null || ! VoceDellaCommissione::legataAllEsercizio((int) $gestioneDiAllora->id, (int) $esercizioTarget->id)) {
+                        $sistemaBancarie ??= ContoContabile::where('condominio_id', $scritturaOriginale->condominio_id)->where('ruolo', 'spese_bancarie')->value('id');
+                        if ($sistemaBancarie !== null) {
+                            $nota = sprintf('Storno della commissione che nell\'esercizio «%s» era sulla voce «%s» della gestione «%s», che l\'esercizio «%s» non ha.',
+                                $esercizioOriginale->nome, $voceDiAllora?->nome ?? '—', $gestioneDiAllora?->nome ?? '—', $esercizioTarget->nome);
+                            $voce = null;
+                            $conto = (int) $sistemaBancarie;
+                        }
+                    }
+                }
                 $scritturaStorno->righe()->create([
-                    'conto_contabile_id' => $riga->conto_contabile_id,
+                    'conto_contabile_id' => $conto,
                     'cassa_id' => $riga->cassa_id,
+                    'voce_spesa_id' => $voce,
                     'tipo_riga' => $riga->tipo_riga === 'dare' ? 'avere' : 'dare',
                     'importo' => $riga->importo,
+                    'note' => $nota,
                 ]);
             }
 
@@ -886,7 +940,7 @@ class PagamentoFornitoreService
                 'importo_netto' => $pagamento->importo_netto,
                 'importo_commissione' => $pagamento->importo_commissione,
                 'metodo_pagamento' => $pagamento->metodo_pagamento,
-                'data_pagamento' => now()->toDateString(),
+                'data_pagamento' => \App\Helpers\DateHelper::oggiUtente(),
                 'iban_beneficiario' => $pagamento->iban_beneficiario,
                 'causale_bonifico' => mb_substr(
                     'Storno: '.($pagamento->causale_bonifico ?? ''),
@@ -1222,15 +1276,7 @@ class PagamentoFornitoreService
                 ->where('tipo', TipoAllocazioneFattura::PAGAMENTO->value)
                 ->sum('importo_allocato_cents');
 
-            if ($totalePagamentoCash >= 500000) { // 5.000€ in centesimi
-                throw new IllegalCashAmountException(
-                    sprintf(
-                        'Pagamento in contanti di € %s non consentito: supera il limite di € 5.000 '.
-                        '(D.Lgs. 231/2007 antiriciclaggio).',
-                        number_format($totalePagamentoCash / 100, 2, ',', '.')
-                    )
-                );
-            }
+            $this->verificaLimiteContanti((int) $totalePagamentoCash);
         }
 
         // 6. Capienza conto (bloccante senza override esplicito)
@@ -1276,6 +1322,27 @@ class PagamentoFornitoreService
         //    Score completo (CRO/TRN, 7gg, IBAN+importo) rimandato a v1.16 Treasury.
         if (! ($data['conferma_duplicato_verificato'] ?? false)) {
             $this->rilevaDuplicato($data);
+        }
+    }
+
+    /**
+     * Antiriciclaggio (D.Lgs. 231/2007): un pagamento in contanti da € 5.000,00 compresi in su è vietato. Un solo controllo e un solo messaggio per la
+     * registrazione (`validaInput`) e per la modifica (`aggiornaPagamento`).
+     *
+     * @param  int  $importoCents  L'importo pagato in contanti, in centesimi.
+     *
+     * @throws IllegalCashAmountException
+     */
+    private function verificaLimiteContanti(int $importoCents): void
+    {
+        if ($importoCents >= self::LIMITE_CONTANTI_CENTS) {
+            throw new IllegalCashAmountException(
+                sprintf(
+                    'Pagamento in contanti di € %s non consentito: è pari o superiore al limite di € 5.000,00 '.
+                    '(D.Lgs. 231/2007 antiriciclaggio).',
+                    number_format($importoCents / 100, 2, ',', '.')
+                )
+            );
         }
     }
 
@@ -1452,11 +1519,23 @@ class PagamentoFornitoreService
                 continue;
             }
 
-            $quota = min($alloc['importo_allocato_cents'] / $fattura->netto_a_pagare, 1);
-            $totale += (int) round($fattura->importo_ritenuta * $quota);
+            $totale += self::ritenutaDellaQuota((int) $fattura->importo_ritenuta, (int) $fattura->netto_a_pagare, (int) $alloc['importo_allocato_cents']);
         }
 
         return $totale;
+    }
+
+    /**
+     * La parte della ritenuta di una fattura che segue una quota pagata: la ritenuta per la quota pagata sul netto, mai oltre l'intera. La stessa
+     * regola per la ritenuta di un pagamento e per la ritenuta versata di una fattura alla data (`PagatoAllaData`).
+     */
+    public static function ritenutaDellaQuota(int $ritenuta, int $nettoAPagare, int $allocato): int
+    {
+        if ($ritenuta <= 0 || $nettoAPagare <= 0) {
+            return 0;
+        }
+
+        return (int) round($ritenuta * min($allocato / $nettoAPagare, 1));
     }
 
     /**

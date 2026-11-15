@@ -2,7 +2,7 @@
 
 /**
  * 1.11.0-beta.49 — la contabilità dei crediti, parte «emissione ed estratto conto» (decisioni 71, 75 e 76; voci P1, P3, P5
- * e P6 di `docs/piano_esecutivo_beta49.md`).
+ * e P6 di `docs/verbali/1.11/piano_esecutivo_beta49.md`).
  *
  * Coperti: la rata di soli crediti, la rata mista e la quota a zero che vanno a giornale con la spesa in DARE e il credito
  * riportato in AVERE (DC2, DC2-b, DC2-c, O10, S5); la rata zero fatta di un debito e di un credito uguali; il credito già
@@ -154,7 +154,7 @@ function ceIncassa($test, array $s, string $chi, array $righe, string $data): in
 
 function ceStorna($test, array $s, int $scritturaId): void
 {
-    $test->actingAs($test->user)->post(route('admin.gestionale.movimenti-rate.storno', [$s['c'], $scritturaId]))->assertSessionHasNoErrors();
+    $test->actingAs($test->user)->post(route('admin.gestionale.movimenti-rate.storno', [$s['c'], $scritturaId]), stornoVersamentoTornato())->assertSessionHasNoErrors();
 }
 
 function ceAnnullaEmissione($test, array $s, int $numero)
@@ -663,7 +663,10 @@ it('la previsione di cassa non conta come incassato il credito riportato scritto
 
     // Con il solo filtro sull'emissione: 0 (l'incasso annullato conta ancora: 3000 − 5000 < 0). Con la sola forma netta, senza il
     // filtro: 6000 (le righe d'emissione con la rata entrano nel netto: 7000 − 5000 − 5000 = −3000, e 3000 + 3000 = 6000).
-    expect(cePrevisione($s))->toBe(3000);
+    // Dalla 1.12.0-beta.3 (decisione 217 D4) gli incassi attesi sono per persona, dalla lettura comune: Bice 5000 (l'incasso stornato
+    // non conta), Ugo niente (il suo credito di 2000 toglie solo dal suo denaro atteso, e lui non ne ha). Prima il netto dentro la rata
+    // toglieva il credito di Ugo dal debito di Bice: 3000.
+    expect(cePrevisione($s))->toBe(5000);
 });
 
 // ─── Mutazioni sopravvissute (fase finale della 1.11.0-beta.49): i test che le prendono ────────────────────────────────────

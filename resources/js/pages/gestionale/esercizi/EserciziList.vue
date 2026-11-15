@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 import { computed } from "vue";
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import GestionaleLayout from '@/layouts/GestionaleLayout.vue';
 import DataTable from '@/components/gestionale/esercizi/DataTable.vue';
 import { getColumns } from '@/components/gestionale/esercizi/columns';
@@ -49,9 +49,9 @@ const pageGuides = [
     colorVariant: 'emerald' as const
   },
   {
-    title: 'Chiusura Automatizzata',
-    description: 'Il wizard di fine anno (in arrivo prossimamente) si occuperà di creare il nuovo esercizio e calcolare in automatico i saldi pregressi (Rata 0).',
-    icon: Lock, // L'icona del lucchetto qui è perfetta perché suggerisce che la funzione è "bloccata/protetta" per ora
+    title: 'Fine anno',
+    description: 'Il programma non ha una procedura di fine anno: non scrive le scritture di chiusura, non riporta i saldi pregressi (Rata 0) sull\'esercizio nuovo e non apre il successivo. Lo stato «Chiuso» non fa niente di tutto questo: tieni aperto l\'esercizio in corso.',
+    icon: Lock, // Il lucchetto è lo stato «Chiuso», che non fa il passaggio all'anno nuovo
     colorVariant: 'amber' as const
   }
 ];
@@ -66,7 +66,7 @@ const pageGuides = [
 
       <PageHeaderGuide
         page-title="Esercizi contabili"
-        page-subtitle="Gestisci gli anni contabili del condominio. Apri nuovi esercizi o chiudi quelli passati per consolidare i saldi."
+        page-subtitle="Gli anni contabili del condominio. Il programma non ha il passaggio all'anno nuovo: non mettere lo stato su «Chiuso», tieni aperto l'esercizio in corso."
         :guides="pageGuides"
         :breadcrumbs="headerBreadcrumbs"
         :video-url="null /* TODO: Inserire URL YouTube 'Come gestire gli anni contabili' */"
@@ -80,6 +80,11 @@ const pageGuides = [
               <Alert :message="flashMessage.message" :type="flashMessage.type" />
           </div>
 
+          <div class="flex justify-end pb-2">
+            <!-- La dispensa dell'assemblea dall'agire entro sei mesi: per esercizio, e per alcune persone se la delibera lo dice. -->
+            <Link :href="generatePath('gestionale/:condominio/dispense-sei-mesi', { condominio: props.condominio.id })" data-testid="dispense-sei-mesi"
+                  class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 underline">Dispense dei sei mesi</Link>
+          </div>
           <div class="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-950 overflow-hidden shadow-sm p-4">
             <DataTable 
               :columns="columns" 

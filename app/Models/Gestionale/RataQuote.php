@@ -302,11 +302,14 @@ class RataQuote extends Model
      * `$registro` (piano|persona|unità => centesimi) prende il posto del registro del database: lo passa il rilevamento delle emissioni
      * già scritte per un piano senza `righe_riparto`, con le righe della ricostruzione (`RiallineaCreditiService`).
      *
+     * Con `$conSegno` la parte com'è, anche negativa (un rimborso sulla riga dell'unità): la legge il consuntivo per persona, che toglie dalle
+     * quote la loro parte personale e non chiude nessuna anticipazione.
+     *
      * @param iterable<RataQuote> $quote
      * @param array<string, int>|null $registro
      * @return array<int, int>
      */
-    public static function partiAdPersonam(iterable $quote, ?array $registro = null): array
+    public static function partiAdPersonam(iterable $quote, ?array $registro = null, bool $conSegno = false): array
     {
         $quote = collect($quote);
         $regole = $quote->mapWithKeys(fn (RataQuote $q) => [(int) $q->id => (is_string($q->regole_calcolo) ? json_decode($q->regole_calcolo, true) : $q->regole_calcolo) ?: []]);
@@ -339,7 +342,7 @@ class RataQuote extends Model
                 $rate = (int) ($sue['parametri']['totale_rate_piano'] ?? 0);
                 $parte = $numero > 0 && $rate > 0 ? \App\Actions\PianoRate\GenerateRateQuotesAction::fettina($totale, $rate, $numero) : 0;
             }
-            $esito[(int) $quota->id] = max(0, $parte);
+            $esito[(int) $quota->id] = $conSegno ? $parte : max(0, $parte);
         }
 
         return $esito;
@@ -864,8 +867,22 @@ class RataQuote extends Model
             return;
         }
 
-        // 3. Data ultimo pagamento (CORRETTA)
+        // 3. La data dell'ultimo versamento non stornato: non la rettifica di uno storno (che ha la data dello storno), non
+        // il versamento che una rettifica rovescia, non la riga negativa di un credito preso da questa quota. Fino alla
+        // 1.12.0-beta.2 era la data più recente fra tutte le scritture legate, e dopo lo storno di un versamento la pagina del
+        // piano diceva «Pagato il» con la data dello storno. Lo stornato si riconosce dalla sua rettifica, non dallo stato
+        // «annullata»: lo storno ricalcola la quota prima di sigillare l'originale. Anche il riallineamento dei crediti scrive una
+        // rettifica con il padre (la compensazione che riallinea, `RiallineaCreditiService`), ma non la storna: le sue rettifiche, che
+        // cominciano con il marcatore, non contano (lo stesso criterio di `StornoIncassoRateAction::famiglia()`).
+        $stornate = ScritturaContabile::query()
+            ->where('tipo_movimento', 'rettifica')
+            ->whereNotNull('scrittura_padre_id')
+            ->where(fn ($q) => $q->whereNull('causale')->orWhere('causale', 'not like', \App\Services\Gestionale\RiallineaCreditiService::MARCATORE . '%'))
+            ->select('scrittura_padre_id');
         $ultimoMovimento = $this->pagamenti()
+            ->where('quota_scrittura.importo_pagato', '>', 0)
+            ->where('scritture_contabili.tipo_movimento', '!=', 'rettifica')
+            ->whereNotIn('scritture_contabili.id', $stornate)
             ->orderByDesc('data_competenza')
             ->first();
 

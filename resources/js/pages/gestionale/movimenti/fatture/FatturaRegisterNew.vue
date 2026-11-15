@@ -39,6 +39,7 @@ import { euroToCents } from '@/lib/gestionale/fatture/money';
 import vSelect from 'vue-select';
 import 'vue-select/dist/vue-select.css';
 import type { Breadcrumb } from '@/components/PageHeaderGuide.vue';
+import { oggiLocale, piuGiorni } from '@/lib/giorno';
 
 // ---------------------------------------------------------------------------
 // Interfaces & Props
@@ -125,6 +126,8 @@ interface Conto {
     residuo_budget?: number
     is_capiente?: boolean
     gia_versato_cents?: number
+    /** Coda 438: il già versato della voce per esercizio (`tutti` = vale in tutti i piani della voce, decisione 183.1). */
+    gia_versato_per_esercizio?: Record<string, number>
     ultimi_movimenti?: {
         data: string
         fornitore: string
@@ -833,7 +836,7 @@ const form = useForm({
     imposta_pregressa:          null as number | null,
     riepiloghi:                 null as RiepilogoIva[] | null,
     numero_documento:   '',
-    data_documento:     new Date().toISOString().substring(0, 10),
+    data_documento:     oggiLocale(),
     data_scadenza:      '',
     // La competenza (B2, S6): due estremi sulla testata, entrambi o nessuno. «Deliberata il» = stessa
     // data nei due campi. Non sta più in `dati_extra`: il service scrive le colonne.
@@ -1345,6 +1348,16 @@ const toggleHistory = (contoId: number) => {
 };
 
 // Calcoli Budget in centesimi
+/**
+ * Coda 438 (decisione 183.1): il già versato della voce che vale nell'esercizio della fattura, quello di quell'esercizio e quello che vale per tutti
+ * gli esercizi. Il già versato di un altro esercizio la rata integrativa di questo esercizio non lo toglie, e la stima del modale dello sforo nemmeno.
+ */
+const giaVersatoNellEsercizio = (c: { gia_versato_cents?: number; gia_versato_per_esercizio?: Record<string, number> }, esercizioId: number | null): number => {
+    const per = c.gia_versato_per_esercizio;
+    if (!per) return c.gia_versato_cents || 0;
+    return (per['tutti'] || 0) + (esercizioId ? (per[String(esercizioId)] || 0) : 0);
+};
+
 const budgetImpacts = computed(() => {
     // Le fatture pregresse non impattano il budget corrente
     if (form.is_pregresso) return [];
@@ -1368,7 +1381,7 @@ const budgetImpacts = computed(() => {
             nome:              c.nome,
             speso_cents:       0,
             residuo_cents:     residuoCents,
-            gia_versato_cents: c.gia_versato_cents || 0,
+            gia_versato_cents: giaVersatoNellEsercizio(c, form.esercizio_id),
             ultimi_movimenti:  c.ultimi_movimenti || []
         };
         // ⚠️ **Coda 122.** Una nota di credito rettifica una spesa già fatta: sul capitolo
@@ -1624,9 +1637,9 @@ watch(
         if (!f) return;
 
         if ((fornitoreCambiato || newDataDoc !== oldDataDoc) && !daPreservare?.scadenza) {
-            const d = new Date(newDataDoc);
-            d.setDate(d.getDate() + (f.giorni_scadenza || 30));
-            form.data_scadenza = d.toISOString().substring(0, 10);
+            // La data del documento più i giorni del fornitore, sui numeri della data (1.12.0-beta.3): passando da un istante, a marzo
+            // l'ora legale la faceva uscire un giorno prima.
+            form.data_scadenza = piuGiorni(newDataDoc, f.giorni_scadenza || 30);
         }
 
         if (fornitoreCambiato) {
@@ -1962,7 +1975,7 @@ function resettaFormPerNuovoDocumento() {
     pregressoComeImportato.value = null;
     form.riepiloghi = null;
     form.numero_documento = '';
-    form.data_documento = new Date().toISOString().substring(0, 10);
+    form.data_documento = oggiLocale();
     form.data_scadenza = '';
     form.competenza_dal = '';
     form.competenza_al = '';
@@ -2947,7 +2960,8 @@ const pageSubtitle = 'Inserisci i dati nel pannello di sinistra e le voci di det
                             :incassato-rata-zero="incassato_rata_zero"
                             :totale-fattura-lordo-cents="totali.totale_documento_cents"
                                     :is-nota-credito="isNotaCredito"
-                            :bank-forecast="bankForecast" />
+                            :bank-forecast="bankForecast"
+                            :condominio-id="condominio.id" />
                     </div>
 
                     <!-- Vista corrente -->

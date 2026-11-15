@@ -33,6 +33,15 @@ class AnagraficaController extends Controller
     use PaginaElenco;
 
     /**
+     * Il rifiuto della cancellazione di chi ha un accordo di rientro: che cosa la tiene, e che cosa resta da fare. La scansione si nomina solo se è
+     * stata caricata: il programma non sa altrimenti se l'accordo è firmato.
+     */
+    public const CON_UN_ACCORDO = 'Questa anagrafica compare in un accordo di rientro: non si può eliminare, perché l\'accordo la nomina. Un accordo si chiude, '
+        . 'non si cancella: la persona resta fra le anagrafiche, anche quando non è più in nessun condominio.';
+    public const CON_UN_ACCORDO_CON_LA_SCANSIONE = 'Questa anagrafica compare in un accordo di rientro: non si può eliminare, perché l\'accordo la nomina e ne è '
+        . 'stata caricata la scansione. Un accordo si chiude, non si cancella: la persona resta fra le anagrafiche, anche quando non è più in nessun condominio.';
+
+    /**
      * Display a paginated list of anagrafiche with optional filtering.
      *
      * This method validates query parameters for pagination and filtering.
@@ -371,12 +380,35 @@ class AnagraficaController extends Controller
             );
         }
 
+        // 1.12.0-beta.4: chi ha un accordo di rientro non si cancella. L'accordo è un atto firmato con la persona, con la sua scansione: la
+        // cascata lo toglierebbe con le rate coperte, e la scansione resterebbe fra i documenti senza un proprietario.
+        $accordi = \App\Models\Gestionale\AccordoRientro::where('anagrafica_id', $anagrafica->id)->pluck('id');
+        if ($accordi->isNotEmpty()) {
+            $conLaScansione = \App\Models\Documento::where('documentable_type', \App\Models\Gestionale\AccordoRientro::class)->whereIn('documentable_id', $accordi)->exists();
+
+            return back()->with($this->flashError($conLaScansione ? self::CON_UN_ACCORDO_CON_LA_SCANSIONE : self::CON_UN_ACCORDO));
+        }
+
         // Coda 167 (1.11.0-beta.40, reperto R15 della Fase 1-bis): chi ha versato per il debito di un altro è legato
         // agli incassi dal campo `riferimento` delle righe, che non ha chiave esterna. Cancellandolo, il riquadro
         // «Versamenti per conto di altri», l'elenco degli incassi e il registro perderebbero il suo nome in silenzio.
         if (\App\Models\Gestionale\RigaScrittura::where('riferimento_type', Anagrafica::class)->where('riferimento_id', $anagrafica->id)->exists()) {
             return back()->with(
                 $this->flashError('Questa anagrafica compare come «Versato da» in un incasso: non si può eliminare, perché l\'incasso e il registro la nominano.')
+            );
+        }
+
+        // Chi ha versato un incasso da terzi (l'affitto dell'antenna, gli interessi) è scritto sulle righe dell'incasso e del suo storno, da cui il
+        // registro di contabilità legge la controparte; di solito non è del condominio, e la guardia qui sopra non lo ferma. La chiave esterna è
+        // `nullOnDelete`: cancellandolo, il registro perderebbe il suo nome in silenzio.
+        if (\App\Models\Gestionale\RigaScrittura::where('anagrafica_id', $anagrafica->id)
+            ->whereHas('scrittura', fn ($q) => $q->whereIn('tipo_movimento', [
+                \App\Enums\TipoMovimentoContabile::INCASSO_DIVERSO->value,
+                \App\Enums\TipoMovimentoContabile::STORNO_INCASSO_DIVERSO->value,
+            ]))
+            ->exists()) {
+            return back()->with(
+                $this->flashError('Questa anagrafica compare come «chi ha versato» in un incasso da terzi: non si può eliminare, perché il registro di contabilità la nomina.')
             );
         }
 

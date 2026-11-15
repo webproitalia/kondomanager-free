@@ -1,7 +1,7 @@
 <?php
 
 /**
- * 1.11.0-beta.49, DC4 con la strada (b) — voce P7 del verbale (`docs/piano_esecutivo_beta49.md`), decisioni 75.3 e 76.2.
+ * 1.11.0-beta.49, DC4 con la strada (b) — voce P7 del verbale (`docs/verbali/1.11/piano_esecutivo_beta49.md`), decisioni 75.3 e 76.2.
  *
  * Il ricalcolo e «togli una voce» cancellano le rate e le rigenerano; l'annullamento di una vendita che aveva diviso le bozze
  * (decisione 25) cancella la gemella del pregresso. Oggi la pivot `quota_scrittura` va via a cascata e le righe del giornale
@@ -148,7 +148,7 @@ function lgmRimborsa($test, array $s, int $quotaId, int $importo, string $il): i
 
 function lgmStorna($test, array $s, int $id): void
 {
-    $test->actingAs($test->user)->post(route('admin.gestionale.movimenti-rate.storno', [$s['c'], $id]))->assertSessionHasNoErrors();
+    $test->actingAs($test->user)->post(route('admin.gestionale.movimenti-rate.storno', [$s['c'], $id]), stornoVersamentoTornato())->assertSessionHasNoErrors();
 }
 
 function lgmAnnullaEmissione($test, array $s, int $numero): void
