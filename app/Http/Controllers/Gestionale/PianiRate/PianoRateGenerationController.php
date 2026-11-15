@@ -90,6 +90,13 @@ class PianoRateGenerationController extends Controller
             return back()->with($this->flashError($fraseConguagliato));
         }
 
+        // Coda 438, decisione 192.1: il piano senza l'esercizio salvato, o con la riga delle voci vuota mentre la gestione ha un piano in un altro esercizio,
+        // non si ricalcola: si elimina e si crea di nuovo dalla pagina del suo esercizio. Prima di ogni scrittura, e prima delle voci da aggiungere
+        // (`orphan_ids`): aggiungerle non cambia il fatto che la riga è vuota.
+        if (($daRifare = $pianoRate->fraseDaRifare('Impossibile ricalcolare')) !== null) {
+            return back()->with($this->flashError($daRifare));
+        }
+
         // La scadenza della rata dei saldi (rata 0) si può cambiare qui, con il ricalcolo (Web Pro Italia, 13/11/2026):
         // un piano non ha una pagina di modifica, si rigenera. Conta la **presenza** della chiave nella richiesta, non il
         // valore: assente vuol dire «tieni quella salvata» (è ciò che fanno «Ricalcola» e tutti i chiamanti di prima);

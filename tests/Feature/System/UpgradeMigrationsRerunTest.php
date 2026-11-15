@@ -237,7 +237,277 @@ it('resta rieseguibile dopo un\'interruzione a metà', function (string $file) {
     '2026_08_31_140000_documenti_in_piu_categorie',
     // La scadenza della rata dei saldi (Web Pro Italia, 13/11/2026): una colonna nullable su `piani_rate`, una guardia sola.
     '2026_11_13_100000_add_data_rata_zero_to_piani_rate_table',
+    // 1.12.0-beta.1 (Coda 438): l'esercizio del già versato — colonna più chiave esterna verso `esercizi`, due statement su MySQL. Nessun travaso: le righe
+    // già salvate restano vuote (valgono per tutti i piani della voce, decisione 187). Lo stato a metà lo prova il test sotto.
+    '2026_11_04_100000_add_esercizio_id_to_contributi_versati_table',
+    // 1.12.0-beta.2 (decisione 200): il registro dei documenti mandati a una persona — la tabella, due indici e quattro chiavi esterne, sette statement
+    // su MySQL (la `create table` porta solo le colonne), ognuno con la sua guardia. Gli stati a metà li provano i due test sotto.
+    '2026_11_05_100000_create_registro_invii_table',
+    // 1.12.0-beta.3 (decisioni 217 e 218): l'imputazione dell'incasso, la sua nota e la natura dello storno — tre colonne su `scritture_contabili`,
+    // tre statement su MySQL, una guardia per colonna. Nessun travaso: gli incassi e gli storni di prima restano senza. Lo stato a metà lo prova il test sotto.
+    '2026_11_06_100000_add_imputazione_e_natura_storno_to_scritture_contabili_table',
+    // 1.12.0-beta.4: l'origine del pregresso dichiarata sul saldo — quattro colonne e due chiavi esterne su `saldi`, sei statement su MySQL, una
+    // guardia per ognuno. Nessun travaso: i saldi già scritti restano «origine non dichiarata». Lo stato a metà lo prova il test sotto.
+    '2026_11_07_100000_add_origine_dichiarata_to_saldi_table',
+    // 1.12.0-beta.4: la dispensa dei sei mesi — tre tabelle, due indici unici e sette chiavi esterne, ognuno con la sua guardia. Gli stati a metà
+    // li prova il test sotto.
+    '2026_11_07_100100_create_dispense_sei_mesi_tables',
+    // 1.12.0-beta.4: l'accordo di rientro come registro — due tabelle, due indici e sette chiavi esterne, ognuno con la sua guardia. Lo stato a
+    // metà lo prova il test sotto.
+    '2026_11_07_140000_create_accordi_rientro_tables',
+    // 1.12.0-beta.4: i modelli delle lettere — una tabella, un indice e tre chiavi esterne, cinque statement su MySQL, ognuno con la sua guardia.
+    // Lo stato a metà lo prova il test sotto.
+    '2026_11_07_160000_create_modelli_testo_table',
+    // 1.12.0-beta.6: le carte dello studio — una tabella, le colonne una per una e un indice, ognuno con la sua guardia, e la «Carta dello studio»
+    // scritta solo se la tabella è vuota. Lo stato a metà lo prova il test sotto.
+    '2026_11_08_210000_create_carte_stampa_table',
+    // 1.12.0-beta.8 (Coda 460, decisioni 238 e 241): gli allegati di segnalazioni e comunicazioni — due colonne per tabella su `segnalazioni` e
+    // `comunicazioni`, una guardia per colonna; due colonne e una chiave esterna su `documenti`, tre statement con tre guardie; le quattro preferenze
+    // di notifica nuove, scritte solo per chi non le ha già. Gli stati a metà li prova `tests/Feature/Allegati/AllegatiMigrazioniTest.php`.
+    '2026_11_08_200000_add_allegati_to_segnalazioni_e_comunicazioni',
+    '2026_11_08_200100_add_moderazione_to_documenti',
+    '2026_11_08_200300_seed_preferenze_notifica_allegati',
 ]);
+
+it('la migrazione dei modelli delle lettere interrotta dopo la tabella e prima dell\'indice e delle chiavi si riprende e li mette, uno per nome', function () {
+    $path = database_path('migrations/2026_11_07_160000_create_modelli_testo_table.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_07_160000_create_modelli_testo_table');
+    $migration = require $path;
+    $stato = fn () => [
+        'colonne' => collect(Schema::getColumnListing('modelli_testo'))->sort()->values()->all(),
+        'indici' => collect(Schema::getIndexes('modelli_testo'))->pluck('name')->filter(fn ($n) => str_starts_with($n, 'modelli_testo'))->sort()->values()->all(),
+        'chiavi' => collect(Schema::getForeignKeys('modelli_testo'))->map(fn ($k) => implode(',', $k['columns']) . '>' . $k['foreign_table'] . ' ' . strtolower((string) $k['on_delete']))->sort()->values()->all(),
+    ];
+    $atteso = [
+        'colonne' => ['ambito', 'condominio_id', 'created_at', 'created_by', 'id', 'nome', 'testo', 'tipo', 'updated_at', 'updated_by'],
+        'indici' => ['modelli_testo_ambito_tipo_condominio_index'],
+        'chiavi' => ['condominio_id>condomini cascade', 'created_by>users set null', 'updated_by>users set null'],
+    ];
+    expect($stato())->toBe($atteso);
+
+    // Interrotta dopo la tabella: l'indice e due chiavi mancano.
+    Schema::table('modelli_testo', function ($table) {
+        $table->dropForeign(['condominio_id']);
+        $table->dropForeign(['updated_by']);
+    });
+    Schema::table('modelli_testo', fn ($table) => $table->dropIndex('modelli_testo_ambito_tipo_condominio_index'));
+    expect($stato()['indici'])->toBe([])->and($stato()['chiavi'])->toBe(['created_by>users set null']);
+
+    $migration->up();
+    $migration->up();
+    expect($stato())->toBe($atteso);
+
+    $migration->down();
+    $migration->down();
+    expect(Schema::hasTable('modelli_testo'))->toBeFalse();
+    $migration->up();
+    expect($stato())->toBe($atteso);
+});
+
+it('la migrazione dell\'accordo di rientro interrotta dopo le tabelle e prima degli indici e delle chiavi si riprende e li mette, uno per nome', function () {
+    $path = database_path('migrations/2026_11_07_140000_create_accordi_rientro_tables.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_07_140000_create_accordi_rientro_tables');
+    $migration = require $path;
+    $tabelle = ['accordi_rientro', 'accordo_rientro_rate'];
+    $stato = fn () => collect($tabelle)->mapWithKeys(fn ($t) => [$t => [
+        'indici' => collect(Schema::getIndexes($t))->pluck('name')->filter(fn ($n) => str_starts_with($n, 'accord'))->sort()->values()->all(),
+        'chiavi' => collect(Schema::getForeignKeys($t))->map(fn ($k) => implode(',', $k['columns']) . '>' . $k['foreign_table'] . ' ' . strtolower((string) $k['on_delete']))->sort()->values()->all(),
+    ]])->all();
+    $atteso = [
+        'accordi_rientro' => ['indici' => ['accordi_rientro_persona_index'], 'chiavi' => ['anagrafica_id>anagrafiche cascade', 'chiuso_da>users set null',
+            'condominio_id>condomini cascade', 'registrato_da>users set null']],
+        'accordo_rientro_rate' => ['indici' => ['accordo_rientro_rata_unica'], 'chiavi' => ['accordo_rientro_id>accordi_rientro cascade', 'immobile_id>immobili set null',
+            'rata_id>rate cascade']],
+    ];
+    expect($stato())->toBe($atteso);
+
+    // Interrotta dopo le due tabelle: un indice e tre chiavi mancano.
+    Schema::table('accordo_rientro_rate', function ($table) {
+        $table->dropForeign(['accordo_rientro_id']);
+        $table->dropForeign(['rata_id']);
+    });
+    Schema::table('accordo_rientro_rate', fn ($table) => $table->dropUnique('accordo_rientro_rata_unica'));
+    Schema::table('accordi_rientro', fn ($table) => $table->dropForeign(['anagrafica_id']));
+    expect($stato()['accordo_rientro_rate'])->toBe(['indici' => [], 'chiavi' => ['immobile_id>immobili set null']]);
+    // E la tabella delle rate creata senza la colonna del residuo del giorno dell'accordo.
+    Schema::table('accordo_rientro_rate', fn ($table) => $table->dropColumn('residuo_iniziale'));
+    expect(Schema::hasColumn('accordo_rientro_rate', 'residuo_iniziale'))->toBeFalse();
+
+    $migration->up();
+    $migration->up();
+    expect($stato())->toBe($atteso)
+        ->and(Schema::hasColumn('accordo_rientro_rate', 'residuo_iniziale'))->toBeTrue();
+
+    $migration->down();
+    $migration->down();
+    expect(collect($tabelle)->filter(fn ($t) => Schema::hasTable($t))->all())->toBe([]);
+    $migration->up();
+    expect($stato())->toBe($atteso);
+});
+
+it('la migrazione dell\'origine dei saldi interrotta dopo la prima colonna si riprende e mette le altre e una chiave sola per colonna; rifatta dopo il ritorno indietro le rimette', function () {
+    $path = database_path('migrations/2026_11_07_100000_add_origine_dichiarata_to_saldi_table.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_07_100000_add_origine_dichiarata_to_saldi_table');
+    $migration = require $path;
+    $tutte = ['esercizio_origine_id', 'origine_dichiarata', 'origine_dichiarata_da', 'origine_dichiarata_il'];
+    $colonne = fn () => collect(Schema::getColumnListing('saldi'))->filter(fn ($c) => in_array($c, $tutte, true))->sort()->values()->all();
+    $chiavi = fn () => collect(Schema::getForeignKeys('saldi'))->filter(fn ($k) => array_intersect($k['columns'], $tutte) !== [])
+        ->mapWithKeys(fn ($k) => [implode(',', $k['columns']) => $k['foreign_table'] . ' ' . strtolower((string) $k['on_delete'])])->sortKeys()->all();
+    $attese = ['esercizio_origine_id' => 'esercizi set null', 'origine_dichiarata_da' => 'users set null'];
+    expect($colonne())->toBe($tutte)->and($chiavi())->toBe($attese);
+
+    // Interrotta dopo la prima colonna: le chiavi e le altre tre mancano.
+    Schema::table('saldi', function ($table) {
+        $table->dropForeign(['esercizio_origine_id']);
+        $table->dropForeign(['origine_dichiarata_da']);
+    });
+    Schema::table('saldi', fn ($table) => $table->dropColumn(['origine_dichiarata', 'origine_dichiarata_da', 'origine_dichiarata_il']));
+    expect($colonne())->toBe(['esercizio_origine_id'])->and($chiavi())->toBe([]);
+
+    $migration->up();
+    $migration->up();
+    expect($colonne())->toBe($tutte)->and($chiavi())->toBe($attese);
+
+    $migration->down();
+    $migration->down();
+    expect($colonne())->toBe([]);
+
+    $migration->up();
+    expect($colonne())->toBe($tutte)->and($chiavi())->toBe($attese);
+});
+
+it('la migrazione della dispensa dei sei mesi interrotta dopo le tabelle e prima degli indici e delle chiavi si riprende e li mette, uno per nome', function () {
+    $path = database_path('migrations/2026_11_07_100100_create_dispense_sei_mesi_tables.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_07_100100_create_dispense_sei_mesi_tables');
+    $migration = require $path;
+    $tabelle = ['dispense_sei_mesi', 'dispensa_sei_mesi_esercizio', 'dispensa_sei_mesi_anagrafica'];
+    $stato = fn () => collect($tabelle)->mapWithKeys(fn ($t) => [$t => [
+        'indici' => collect(Schema::getIndexes($t))->pluck('name')->filter(fn ($n) => str_starts_with($n, 'dispensa_'))->sort()->values()->all(),
+        'chiavi' => collect(Schema::getForeignKeys($t))->map(fn ($k) => implode(',', $k['columns']) . '>' . $k['foreign_table'] . ' ' . strtolower((string) $k['on_delete']))->sort()->values()->all(),
+    ]])->all();
+    $atteso = [
+        'dispense_sei_mesi' => ['indici' => [], 'chiavi' => ['condominio_id>condomini cascade', 'registrata_da>users set null', 'revocata_da>users set null']],
+        'dispensa_sei_mesi_esercizio' => ['indici' => ['dispensa_esercizio_unica'], 'chiavi' => ['dispensa_id>dispense_sei_mesi cascade', 'esercizio_id>esercizi cascade']],
+        'dispensa_sei_mesi_anagrafica' => ['indici' => ['dispensa_anagrafica_unica'], 'chiavi' => ['anagrafica_id>anagrafiche cascade', 'dispensa_id>dispense_sei_mesi cascade']],
+    ];
+    expect($stato())->toBe($atteso);
+
+    Schema::table('dispensa_sei_mesi_esercizio', function ($table) {
+        $table->dropForeign(['dispensa_id']);
+        $table->dropForeign(['esercizio_id']);
+    });
+    Schema::table('dispensa_sei_mesi_esercizio', fn ($table) => $table->dropUnique('dispensa_esercizio_unica'));
+    Schema::table('dispense_sei_mesi', fn ($table) => $table->dropForeign(['condominio_id']));
+    expect($stato()['dispensa_sei_mesi_esercizio'])->toBe(['indici' => [], 'chiavi' => []]);
+
+    $migration->up();
+    $migration->up();
+    expect($stato())->toBe($atteso);
+
+    $migration->down();
+    $migration->down();
+    expect(collect($tabelle)->filter(fn ($t) => Schema::hasTable($t))->all())->toBe([]);
+    $migration->up();
+    expect($stato())->toBe($atteso);
+});
+
+it('la migrazione dell\'imputazione e della natura dello storno interrotta dopo la prima colonna si riprende e mette le altre, una per nome; rifatta dopo il ritorno indietro le rimette', function () {
+    $path = database_path('migrations/2026_11_06_100000_add_imputazione_e_natura_storno_to_scritture_contabili_table.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_06_100000_add_imputazione_e_natura_storno_to_scritture_contabili_table');
+    $migration = require $path;
+    $colonne = fn () => collect(Schema::getColumnListing('scritture_contabili'))->filter(fn ($c) => in_array($c, ['imputazione', 'imputazione_nota', 'natura_storno'], true))->sort()->values()->all();
+    $tutte = ['imputazione', 'imputazione_nota', 'natura_storno'];
+    expect($colonne())->toBe($tutte);
+
+    // Interrotta dopo la prima: le altre due mancano.
+    Schema::table('scritture_contabili', fn ($table) => $table->dropColumn(['imputazione_nota', 'natura_storno']));
+    $migration->up();
+    $migration->up();
+    expect($colonne())->toBe($tutte);
+
+    $migration->down();
+    $migration->down();
+    expect($colonne())->toBe([]);
+
+    $migration->up();
+    expect($colonne())->toBe($tutte);
+});
+
+it('la migrazione del registro degli invii interrotta dopo la tabella e prima degli indici si riprende e li mette, uno per nome', function () {
+    $migration = require database_path('migrations/2026_11_05_100000_create_registro_invii_table.php');
+    $indici = fn () => collect(Schema::getIndexes('registro_invii'))->pluck('name')->filter(fn ($n) => str_starts_with($n, 'registro_invii_'))->sort()->values()->all();
+    $attesi = ['registro_invii_condominio_tipo_index', 'registro_invii_documento_index'];
+    expect($indici())->toBe($attesi);
+
+    Schema::table('registro_invii', function ($table) {
+        $table->dropIndex('registro_invii_documento_index');
+        $table->dropIndex('registro_invii_condominio_tipo_index');
+    });
+    $migration->up();
+    $migration->up();
+
+    expect($indici())->toBe($attesi);
+});
+
+it('la migrazione del registro degli invii interrotta dopo la tabella e prima delle chiavi esterne si riprende e mette una chiave sola per colonna', function () {
+    $path = database_path('migrations/2026_11_05_100000_create_registro_invii_table.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_05_100000_create_registro_invii_table');
+    $migration = require $path;
+    $chiavi = fn () => collect(Schema::getForeignKeys('registro_invii'))
+        ->mapWithKeys(fn ($k) => [implode(',', $k['columns']) => $k['foreign_table'] . ' ' . strtolower((string) $k['on_delete'])])
+        ->sortKeys()->all();
+    $attese = [
+        'anagrafica_id' => 'anagrafiche set null',
+        'condominio_id' => 'condomini cascade',
+        'emesso_da'     => 'users set null',
+        'mail_log_id'   => 'mail_logs set null',
+    ];
+    expect($chiavi())->toBe($attese);
+
+    Schema::table('registro_invii', function ($table) {
+        foreach (['condominio_id', 'anagrafica_id', 'mail_log_id', 'emesso_da'] as $colonna) {
+            $table->dropForeign([$colonna]);
+        }
+    });
+    expect($chiavi())->toBe([]);
+
+    $migration->up();
+    $migration->up();
+    expect($chiavi())->toBe($attese)
+        ->and(collect(Schema::getForeignKeys('registro_invii')))->toHaveCount(4);
+
+    $migration->down();
+    $migration->down();
+    expect(Schema::hasTable('registro_invii'))->toBeFalse();
+    $migration->up();
+    expect($chiavi())->toBe($attese);
+});
+
+it('Coda 438 — la migrazione dell\'esercizio del già versato interrotta fra i due statement (colonna sì, chiave esterna no) si riprende e mette una chiave sola, che azzera l\'esercizio', function () {
+    $path = database_path('migrations/2026_11_04_100000_add_esercizio_id_to_contributi_versati_table.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_04_100000_add_esercizio_id_to_contributi_versati_table');
+    $migration = require $path;
+    $legame = fn () => collect(Schema::getForeignKeys('contributi_versati'))->filter(fn ($k) => $k['columns'] === ['esercizio_id'])->values();
+    Schema::table('contributi_versati', fn ($table) => $table->dropForeign(['esercizio_id']));
+    expect($legame())->toHaveCount(0)
+        ->and(Schema::hasColumn('contributi_versati', 'esercizio_id'))->toBeTrue();
+
+    $migration->up();
+    $migration->up();
+
+    expect($legame())->toHaveCount(1)
+        ->and($legame()->first()['foreign_table'])->toBe('esercizi')
+        ->and($legame()->first()['foreign_columns'])->toBe(['id'])
+        ->and(strtolower((string) $legame()->first()['on_delete']))->toBe('set null');
+
+    // E il ritorno indietro, due volte, toglie colonna e chiave; rifatta, le rimette.
+    $migration->down();
+    $migration->down();
+    expect(Schema::hasColumn('contributi_versati', 'esercizio_id'))->toBeFalse();
+    $migration->up();
+    expect(Schema::hasColumn('contributi_versati', 'esercizio_id'))->toBeTrue()
+        ->and($legame())->toHaveCount(1);
+});
 
 it('decisione 55 — la migrazione del legame interrotta fra i due statement (colonna sì, chiave esterna no) si riprende e mette una chiave sola, che azzera il legame', function () {
     $migration = require database_path('migrations/2026_10_04_120000_add_anagrafica_immobile_id_to_righe_riparto_table.php');
@@ -360,4 +630,164 @@ it('Coda 436 — l\'interruzione dopo il travaso, con la chiave già tolta e la 
     expect(Schema::hasColumn('documenti', 'category_id'))->toBeFalse()
         ->and(DB::table('documento_categoria')->orderBy('documento_id')->get()->map(fn ($r) => [$r->documento_id, $r->categoria_documento_id])->all())
         ->toBe([[$a, $categorie[0]], [$b, $categorie[0]], [$c, $categorie[1]]]);
+});
+
+it('la migrazione delle impostazioni dello studio si riprende dopo un\'interruzione a metà, una proprietà alla volta; i testi delle lettere non sono impostazioni', function () {
+    $path = database_path('settings/2026_11_07_120000_add_studio_to_print_settings.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_07_120000_add_studio_to_print_settings');
+    // Il nome di prima, che portava anche i testi delle lettere, non c'è più: quella proprietà non è mai uscita.
+    expect(file_exists(database_path('settings/2026_11_07_120000_add_studio_e_testi_lettere_to_print_settings.php')))->toBeFalse();
+    $migration = require $path;
+    $proprieta = ['studio_nome', 'studio_indirizzo', 'studio_email', 'studio_pec', 'studio_telefono'];
+    $presenti = fn () => DB::table('settings')->where('group', 'print')->whereIn('name', $proprieta)->orderBy('name')->pluck('name')->all();
+    $tutte = collect($proprieta)->sort()->values()->all();
+    expect($presenti())->toBe($tutte)
+        ->and(DB::table('settings')->where('group', 'print')->where('name', 'testi_lettere')->exists())->toBeFalse();
+
+    // Interrotta dopo le prime due: le altre mancano. La ripresa le mette, una volta sola; il valore già scritto non si tocca.
+    DB::table('settings')->where('group', 'print')->where('name', 'studio_nome')->update(['payload' => json_encode('Studio Bianchi')]);
+    DB::table('settings')->where('group', 'print')->whereIn('name', ['studio_email', 'studio_pec', 'studio_telefono'])->delete();
+    $migration->up();
+    $migration->up();
+    expect($presenti())->toBe($tutte)
+        ->and(DB::table('settings')->where('group', 'print')->where('name', 'studio_nome')->value('payload'))->toBe(json_encode('Studio Bianchi'))
+        ->and(DB::table('settings')->where('group', 'print')->whereIn('name', $proprieta)->count())->toBe(5)
+        ->and(DB::table('settings')->where('group', 'print')->where('name', 'testi_lettere')->exists())->toBeFalse();
+
+    $migration->down();
+    $migration->down();
+    expect($presenti())->toBe([]);
+    $migration->up();
+    expect($presenti())->toBe($tutte);
+});
+
+it('un database dove la proprietà dei testi delle lettere fosse rimasta (una copia di prova): le impostazioni di stampa si leggono e si salvano lo stesso', function () {
+    // La migrazione di prima la scriveva; su una copia dove era passata la riga resta. La classe delle impostazioni non la chiede più.
+    DB::table('settings')->insert(['group' => 'print', 'name' => 'testi_lettere', 'locked' => false, 'payload' => json_encode(['sollecito' => 'Vecchio.']),
+        'created_at' => now(), 'updated_at' => now()]);
+    $settings = app(\App\Settings\PrintSettings::class);
+    $settings->studio_nome = 'Studio Bianchi';
+    $settings->save();
+
+    expect(app(\App\Settings\PrintSettings::class)->refresh()->studio_nome)->toBe('Studio Bianchi')
+        ->and(property_exists(\App\Settings\PrintSettings::class, 'testi_lettere'))->toBeFalse()
+        ->and(DB::table('settings')->where('group', 'print')->where('name', 'testi_lettere')->value('payload'))->toBe(json_encode(['sollecito' => 'Vecchio.']));
+});
+
+it('la migrazione del comune dello studio si riprende e non tocca un valore già scritto', function () {
+    $path = database_path('settings/2026_11_07_150000_add_studio_comune_to_print_settings.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_07_150000_add_studio_comune_to_print_settings');
+    $migration = require $path;
+    $presente = fn () => DB::table('settings')->where('group', 'print')->where('name', 'studio_comune')->count();
+    expect($presente())->toBe(1);
+    DB::table('settings')->where('group', 'print')->where('name', 'studio_comune')->update(['payload' => json_encode('Milano')]);
+    $migration->up();
+    expect($presente())->toBe(1)->and(DB::table('settings')->where('group', 'print')->where('name', 'studio_comune')->value('payload'))->toBe(json_encode('Milano'));
+    $migration->down();
+    $migration->down();
+    expect($presente())->toBe(0);
+    $migration->up();
+    $migration->up();
+    expect($presente())->toBe(1);
+});
+
+it('la migrazione della partita IVA, del codice fiscale, del sito e del logo dello studio si riprende dopo un\'interruzione a metà e non tocca un valore già scritto', function () {
+    $path = database_path('settings/2026_11_08_200000_add_carta_dello_studio_to_print_settings.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_08_200000_add_carta_dello_studio_to_print_settings');
+    $migration = require $path;
+    $proprieta = ['logo_stampe_path', 'studio_codice_fiscale', 'studio_partita_iva', 'studio_sito'];
+    $presenti = fn () => DB::table('settings')->where('group', 'print')->whereIn('name', $proprieta)->orderBy('name')->pluck('name')->all();
+    expect($presenti())->toBe($proprieta);
+
+    // Interrotta dopo la prima: le altre mancano. La ripresa le mette, una volta sola; il valore già scritto non si tocca.
+    DB::table('settings')->where('group', 'print')->where('name', 'studio_partita_iva')->update(['payload' => json_encode('01234567890')]);
+    DB::table('settings')->where('group', 'print')->whereIn('name', ['logo_stampe_path', 'studio_codice_fiscale', 'studio_sito'])->delete();
+    $migration->up();
+    $migration->up();
+    expect($presenti())->toBe($proprieta)
+        ->and(DB::table('settings')->where('group', 'print')->where('name', 'studio_partita_iva')->value('payload'))->toBe(json_encode('01234567890'))
+        ->and(DB::table('settings')->where('group', 'print')->whereIn('name', $proprieta)->count())->toBe(4);
+
+    $migration->down();
+    $migration->down();
+    expect($presenti())->toBe([]);
+    $migration->up();
+    expect($presenti())->toBe($proprieta)
+        ->and(app(\App\Settings\PrintSettings::class)->refresh()->logo_stampe_path)->toBeNull();
+});
+
+it('la migrazione delle impostazioni di stampa del 14/06/2026 si riesegue: è una classe senza nome, e non tocca la nota legale né la firma già scritte', function () {
+    $path = database_path('settings/2026_06_14_223000_create_print_settings.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_06_14_223000_create_print_settings');
+    // Già eseguita dalla catena del test: una classe con nome, caricata di nuovo, non si potrebbe dichiarare due volte.
+    $migration = require $path;
+    expect($migration)->toBeInstanceOf(\Spatie\LaravelSettings\Migrations\SettingsMigration::class);
+    DB::table('settings')->where('group', 'print')->where('name', 'nota_legale_stampe')->update(['payload' => json_encode('La nota dello studio')]);
+    DB::table('settings')->where('group', 'print')->where('name', 'firma_stampe_path')->delete();
+
+    $migration->up();
+    $migration->up();
+    expect(DB::table('settings')->where('group', 'print')->where('name', 'nota_legale_stampe')->value('payload'))->toBe(json_encode('La nota dello studio'))
+        ->and(DB::table('settings')->where('group', 'print')->whereIn('name', ['nota_legale_stampe', 'firma_stampe_path'])->count())->toBe(2);
+
+    $migration->down();
+    expect(DB::table('settings')->where('group', 'print')->whereIn('name', ['nota_legale_stampe', 'firma_stampe_path'])->count())->toBe(0);
+    $migration->up();
+    expect(DB::table('settings')->where('group', 'print')->where('name', 'nota_legale_stampe')->value('payload'))
+        ->toBe(json_encode('Professione esercitata ai sensi della legge 14 gennaio 2013, n.4'));
+});
+
+it('la migrazione delle carte dello studio interrotta dopo la tabella, senza una colonna e senza l\'indice, si riprende e li mette; la «Carta dello studio» una volta sola', function () {
+    $path = database_path('migrations/2026_11_08_210000_create_carte_stampa_table.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_08_210000_create_carte_stampa_table');
+    $migration = require $path;
+    $stato = fn () => [
+        'colonne' => collect(Schema::getColumnListing('carte_stampa'))->sort()->values()->all(),
+        'indici' => collect(Schema::getIndexes('carte_stampa'))->pluck('name')->filter(fn ($n) => str_starts_with($n, 'carte_stampa'))->sort()->values()->all(),
+        'carte' => DB::table('carte_stampa')->orderBy('id')->get(['nome', 'aspetto', 'mostra_logo', 'colore', 'predefinita'])
+            ->map(fn ($c) => [$c->nome, $c->aspetto, (bool) $c->mostra_logo, $c->colore, (bool) $c->predefinita])->all(),
+    ];
+    $atteso = [
+        'colonne' => ['aspetto', 'carta_pagine', 'carta_path', 'carta_tipo', 'colore', 'created_at', 'id', 'margine_alto', 'margine_basso', 'margine_destro',
+            'margine_sinistro', 'mostra_logo', 'nome', 'predefinita', 'updated_at'],
+        'indici' => ['carte_stampa_predefinita_index'],
+        'carte' => [['Carta dello studio', 'campi', true, null, true]],
+    ];
+    expect($stato())->toBe($atteso);
+
+    // Interrotta dopo la tabella: una colonna e l'indice mancano.
+    Schema::table('carte_stampa', fn ($table) => $table->dropIndex('carte_stampa_predefinita_index'));
+    Schema::table('carte_stampa', fn ($table) => $table->dropColumn('margine_destro'));
+    expect($stato()['indici'])->toBe([])->and($stato()['colonne'])->not->toContain('margine_destro');
+
+    $migration->up();
+    $migration->up();
+    expect($stato())->toBe($atteso);
+
+    $migration->down();
+    $migration->down();
+    expect(Schema::hasTable('carte_stampa'))->toBeFalse();
+    $migration->up();
+    expect($stato())->toBe($atteso);
+});
+
+it('la migrazione della carta per gruppo si riprende e non tocca una scelta già scritta', function () {
+    $path = database_path('settings/2026_11_08_210100_add_carta_per_gruppo_to_print_settings.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_08_210100_add_carta_per_gruppo_to_print_settings');
+    $migration = require $path;
+    $valore = fn () => DB::table('settings')->where('group', 'print')->where('name', 'carta_per_gruppo')->value('payload');
+    $vuoto = ['lettere' => null, 'ricevute_e_avvisi' => null, 'rendiconto_e_assemblea' => null, 'per_la_persona' => null, 'registri_e_elenchi' => null];
+    expect(json_decode((string) $valore(), true))->toBe($vuoto);
+
+    DB::table('settings')->where('group', 'print')->where('name', 'carta_per_gruppo')->update(['payload' => json_encode(['lettere' => 7] + $vuoto)]);
+    $migration->up();
+    $migration->up();
+    expect(json_decode((string) $valore(), true))->toBe(['lettere' => 7] + $vuoto)
+        ->and(DB::table('settings')->where('group', 'print')->where('name', 'carta_per_gruppo')->count())->toBe(1);
+
+    $migration->down();
+    $migration->down();
+    expect($valore())->toBeNull();
+    $migration->up();
+    expect(json_decode((string) $valore(), true))->toBe($vuoto);
 });

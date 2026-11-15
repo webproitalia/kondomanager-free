@@ -26,6 +26,8 @@ final class ArchivioDocumenti
 {
     public const CARTELLA = 'documenti';
 
+    public const TIPI_INLINE = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
     public function nomeDisco(): string
     {
         return (string) config('kondomanager.disco_documenti', 'local');
@@ -73,6 +75,53 @@ final class ArchivioDocumenti
         return $path;
     }
 
+    /**
+     * Salva un file caricato con un nome casuale e l'estensione del nome che il file aveva (già controllata da chi chiama, con `extensions:` e
+     * {@see \App\Support\FileComeIlNome}), non quella che `hashName()` indovina dal contenuto: un file che dice di essere un PDF resta `.pdf`,
+     * e uno che `finfo` non riconosce non resta senza estensione. Se la scrittura fallisce, solleva, come {@see salva()}.
+     *
+     * @throws \RuntimeException
+     */
+    public function salvaConLEstensioneDelNome(UploadedFile $file, string $cartella = self::CARTELLA): string
+    {
+        $estensione = strtolower($file->getClientOriginalExtension());
+        $path = $file->storeAs($cartella, \Illuminate\Support\Str::random(40) . ($estensione !== '' ? '.' . $estensione : ''), $this->nomeDisco());
+
+        if ($path === false || $path === '') {
+            throw new \RuntimeException("Impossibile scrivere il file sul disco «{$this->nomeDisco()}».");
+        }
+
+        return $path;
+    }
+
+    /**
+     * Salva un contenuto fatto dal programma (non caricato: per esempio il PDF di una lettera, conservato come la lettera è partita) con un
+     * nome casuale e restituisce il percorso relativo al disco. Se la scrittura fallisce, solleva, come {@see salva()}.
+     *
+     * @throws \RuntimeException
+     */
+    public function salvaContenuto(string $contenuto, string $estensione, string $cartella = self::CARTELLA): string
+    {
+        $path = trim($cartella, '/') . '/' . \Illuminate\Support\Str::random(40) . '.' . ltrim($estensione, '.');
+
+        if (! $this->disco()->put($path, $contenuto)) {
+            throw new \RuntimeException("Impossibile scrivere il file sul disco «{$this->nomeDisco()}».");
+        }
+
+        return $path;
+    }
+
+    /** Il contenuto di un file del disco dei documenti, o null se non c'è. */
+    public function leggi(?string $path): ?string
+    {
+        if (! $this->esiste($path)) {
+            return null;
+        }
+        $contenuto = $this->disco()->get($path);
+
+        return is_string($contenuto) ? $contenuto : null;
+    }
+
     public function esiste(?string $path): bool
     {
         return $path !== null && $path !== '' && $this->disco()->exists($path);
@@ -91,10 +140,43 @@ final class ArchivioDocumenti
      * ha `stream_reads`, così l'oggetto scorre verso il browser invece di essere scaricato per
      * intero sul server prima). Su S3 un file che non c'è o un bucket che non risponde sollevano:
      * i chiamanti lo catturano e rispondono con il loro messaggio.
+     *
+     * @param  array<string, string>  $headers
      */
-    public function scarica(string $path, string $nome): StreamedResponse
+    public function scarica(string $path, string $nome, array $headers = []): StreamedResponse
     {
-        return $this->disco()->download($path, $nome);
+        return $this->conStatus($this->disco()->download($path, $nome, $headers));
+    }
+
+    /**
+     * Apertura nel browser (`inline`) solo per i tipi consentiti (`image/jpeg`, `image/png`,
+     * `image/webp`, `application/pdf`), con `X-Content-Type-Options: nosniff`. Ogni altro tipo
+     * si consegna come scaricamento con `application/octet-stream`.
+     */
+    public function apri(string $path, string $nome, string $mimeType): StreamedResponse
+    {
+        if (! in_array($mimeType, self::TIPI_INLINE, true)) {
+            return $this->conStatus($this->disco()->download($path, $nome, [
+                'Content-Type'           => 'application/octet-stream',
+                'X-Content-Type-Options' => 'nosniff',
+            ]));
+        }
+
+        return $this->conStatus($this->disco()->response($path, $nome, [
+            'Content-Type'           => $mimeType,
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline'));
+    }
+
+    private function conStatus(StreamedResponse $risposta): StreamedResponse
+    {
+        return new class($risposta->getCallback(), $risposta->getStatusCode(), $risposta->headers->all()) extends StreamedResponse
+        {
+            public function status(): int
+            {
+                return $this->getStatusCode();
+            }
+        };
     }
 
     /**
@@ -108,6 +190,23 @@ final class ArchivioDocumenti
         $path = $file->store($cartella, $this->nomeDiscoPubblici());
 
         if ($path === false || $path === '') {
+            throw new \RuntimeException("Impossibile scrivere il file sul disco «{$this->nomeDiscoPubblici()}».");
+        }
+
+        return $path;
+    }
+
+    /**
+     * Un file pubblico scritto da un contenuto (il logo e la firma delle stampe, riscritti al caricamento), con un nome casuale nella cartella
+     * indicata. Solleva se la scrittura fallisce, per la stessa ragione di `salva()`.
+     *
+     * @throws \RuntimeException
+     */
+    public function salvaPubblicoContenuto(string $contenuto, string $cartella, string $estensione): string
+    {
+        $path = trim($cartella, '/').'/'.\Illuminate\Support\Str::random(40).'.'.$estensione;
+
+        if ($this->discoPubblici()->put($path, $contenuto) !== true) {
             throw new \RuntimeException("Impossibile scrivere il file sul disco «{$this->nomeDiscoPubblici()}».");
         }
 
@@ -142,9 +241,10 @@ final class ArchivioDocumenti
     }
 
     /**
-     * Un percorso su disco locale per chi vuole un file e non uno stream (mPDF con la firma delle
-     * stampe). Sul disco locale è il file stesso; altrove è una copia in `storage/framework/cache`,
-     * che si rifà a ogni chiamata: è una firma da pochi KB, non vale una cache.
+     * Un percorso su disco locale per chi vuole un file e non uno stream (mPDF con la firma e il logo
+     * delle stampe). Sul disco locale è il file stesso; altrove è una copia in `storage/framework/cache`,
+     * che si rifà a ogni chiamata: la firma è un'immagine da pochi KB, non vale una cache (il logo lo
+     * legge `CartaDiStampa` una volta per richiesta).
      */
     public function percorsoLocalePubblico(string $path): ?string
     {
@@ -174,14 +274,15 @@ final class ArchivioDocumenti
             }
 
             // Copia atomica: due stampe insieme non devono far leggere a mPDF un file a metà.
-            $temporaneo = tempnam($cartella, 'firma-');
+            $temporaneo = tempnam($cartella, 'stampe-');
             if ($temporaneo === false || file_put_contents($temporaneo, $contenuto) === false || ! rename($temporaneo, $locale)) {
                 return null;
             }
 
             return $locale;
         } catch (\Throwable $e) {
-            Log::warning('Firma delle stampe non leggibile dal disco '.$this->nomeDiscoPubblici().': stampa senza firma.', ['errore' => $e->getMessage()]);
+            // Lo chiamano la firma e il logo delle stampe: il percorso dice quale.
+            Log::warning('Immagine delle stampe non leggibile dal disco '.$this->nomeDiscoPubblici().': la stampa esce senza.', ['percorso' => $path, 'errore' => $e->getMessage()]);
 
             return null;
         }

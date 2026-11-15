@@ -1,7 +1,7 @@
 <?php
 
 /**
- * 1.11.0-beta.49, Fase 1-bis — i rilievi dell'estratto conto (`docs/piano_esecutivo_beta49.md`, «Fase 1-bis (11/10/2026)»):
+ * 1.11.0-beta.49, Fase 1-bis — i rilievi dell'estratto conto (`docs/verbali/1.11/piano_esecutivo_beta49.md`, «Fase 1-bis (11/10/2026)»):
  * K1, K3, K5 e S1, nelle forme riviste dopo le verifiche.
  *
  * - K1: un saldo dell'esercizio assorbito dal piano dell'esercizio dopo sparisce dall'estratto conto dell'esercizio di partenza.
@@ -453,7 +453,7 @@ it('S1 — un incasso stornato con il marcatore del riallineamento nella descriz
         ])->assertSessionHasNoErrors();
         $incasso = DB::table('scritture_contabili')->where('condominio_id', $s['c']->id)->where('tipo_movimento', 'incasso_rata')->latest('id')->first();
         expect($incasso->causale)->toBe($descrizione);
-        $this->actingAs($this->user)->post(route('admin.gestionale.movimenti-rate.storno', [$s['c'], $incasso->id]))->assertSessionHasNoErrors();
+        $this->actingAs($this->user)->post(route('admin.gestionale.movimenti-rate.storno', [$s['c'], $incasso->id]), stornoVersamentoTornato())->assertSessionHasNoErrors();
         $quota = RataQuote::findOrFail(rveQuota($s, $s['piano'], 'ugo', 1));
         $pagina = rveEstratto($this, $s, 'ugo');
         $pdf = rvePdf($this, $s, 'ugo');

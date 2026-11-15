@@ -1,12 +1,16 @@
 @extends('pdf.base')
+{{-- I titoli e i loro filetti hanno il colore della carta dello studio; senza un colore, quello di sempre. --}}
+@php
+    $coloreTitoli = \App\Services\PDF\Carta::coloreDi($carta ?? null, '#1e3a5f');
+@endphp
 
 @section('title', 'Distinta delle Spese')
 
 @section('content')
 
 {{-- INTESTAZIONE DOCUMENTO --}}
-<div style="margin-bottom: 18px; border-bottom: 2px solid #1e3a5f; padding-bottom: 10px;">
-    <h2 style="margin: 0; padding: 0; font-size: 14pt; color: #1e3a5f; letter-spacing: 0.5px;">
+<div style="margin-bottom: 18px; border-bottom: 2px solid {{ $coloreTitoli }}; padding-bottom: 10px;">
+    <h2 style="margin: 0; padding: 0; font-size: 14pt; color: {{ $coloreTitoli }}; letter-spacing: 0.5px;">
         DISTINTA DELLE SPESE
     </h2>
     <div style="font-size: 9pt; color: #444; margin-top: 4px;">
@@ -139,8 +143,8 @@
 
 {{-- NOTE LEGALI --}}
 <div style="margin-top: 24px; font-size: 7.5pt; color: #666; border-top: 1px solid #ccc; padding-top: 8px;">
-    Documento generato ai sensi dell'art. 1135 c.c. e dell'art. 1130-bis c.c. (rendiconto condominiale).<br>
-    Gli importi sono espressi in Euro (€) e si riferiscono al preventivo di spesa approvato dall'assemblea.
+    Documento generato ai sensi dell'art. 1135 c.c.: è il preventivo di spesa, non il rendiconto.<br>
+    Gli importi sono espressi in Euro (€) e si riferiscono al preventivo di spesa.
     @if($conEntrate)
         <br>Le entrate si sottraggono alle spese: il preventivo da ripartire fra i condòmini è la differenza.
     @endif

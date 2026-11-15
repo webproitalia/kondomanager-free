@@ -31,7 +31,7 @@ const props = defineProps<{
     condomini:  Building[];
     fatture:    { data: any[]; meta: any };
     stats:      { totale_aperte: number; totale_sfori: number; importo_da_pagare: number };
-    filters:    { stato_pagamento?: string; stato_approvazione?: string; search?: string };
+    filters:    { stato_pagamento?: string; stato_approvazione?: string; search?: string; con_unita?: string };
     regolazioniImmediate?: number;
     regolazioniSuVoceDiEntrata?: RegolazioneSuVoceDiEntrata[];
     esercizio?: { id: number } | null;
@@ -57,6 +57,8 @@ const pageGuides = [
 ];
 
 const sforiFilterActive = computed(() => props.filters.stato_approvazione === 'sforo_motivato');
+/** L'elenco senza il filtro delle fatture con una riga su un'unità. */
+const hrefTutteLeFatture = computed(() => route(generateRoute('gestionale.fatture.index'), { condominio: props.condominio.id }));
 
 // Ponte verso il Libro Giornale: le Regolazioni Immediate si creano dalla toolbar di
 // questa pagina ma non vi compaiono mai, perché non generano righe in fatture_passive.
@@ -85,6 +87,10 @@ const suUnaVoce = computed(() => new Set(regolazioniSuEntrata.value.map((r) => r
 
 const linkScrittura = (id: number) =>
     route(generateRoute('gestionale.scritture.show'), { condominio: props.condominio.id, scrittura: id });
+
+// Dopo lo storno della regolazione scritta a rovescio, l'incasso vero si registra con «Altro incasso»; dopo si torna qui.
+const linkIncassoDaTerzi = computed(() =>
+    route(generateRoute('gestionale.incassi-da-terzi.create'), { condominio: props.condominio.id, da: 'fatture' }));
 
 // L'avviso è già silenzioso per chi non usa le regolazioni immediate (compare solo
 // se ce ne sono). Ma chi le usa come strumento abituale lo vedrebbe a ogni visita,
@@ -243,8 +249,13 @@ const filterSfori = () => {
                                         Per correggere serve lo storno, che per una regolazione di un esercizio chiuso si registra in un esercizio aperto:
                                         oggi il condominio non ha un esercizio aperto, e lo storno si rifiuta.
                                     </p>
-                                    <p data-testo="entrata">
-                                        L'incasso vero di un'entrata, per esempio l'affitto dell'antenna, oggi non si registra nel programma.
+                                    <p v-if="props.esercizio" data-testo="entrata">
+                                        Poi registra l'incasso vero da qui:
+                                        <Link :href="linkIncassoDaTerzi" class="font-semibold underline underline-offset-2 hover:text-amber-950">«Incasso da terzi»</Link>,
+                                        che va sulla voce di entrata ed entra in banca.
+                                    </p>
+                                    <p v-else data-testo="entrata">
+                                        L'incasso vero, per esempio l'affitto dell'antenna, si registra con «Altro incasso», nella pagina degli incassi, quando il condominio ha un esercizio aperto.
                                     </p>
                                     <ul class="divide-y divide-amber-200 rounded-lg border border-amber-200 bg-white/70">
                                         <li
@@ -301,6 +312,14 @@ const filterSfori = () => {
                                     <X class="w-4 h-4" />
                                 </button>
                             </div>
+                        </div>
+
+ 
+                        <!-- Arrivati dalla riga delle spese personali del riepilogo: l'elenco è filtrato, e lo dice. Il filtro resta cambiando pagina o
+                             ordine (lo rimanda il server con gli altri), e si toglie da qui. -->
+                        <div v-if="filters.con_unita" class="mb-3 rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-900/20 p-3 text-[12.5px] text-sky-900 dark:text-sky-200 flex flex-wrap items-center justify-between gap-2" data-test="filtro-con-unita">
+                            <span>Solo le fatture con una riga su un'unità, cioè le spese per singole unità, di tutti gli esercizi.</span>
+                            <Link :href="hrefTutteLeFatture" class="font-semibold underline whitespace-nowrap">Tutte le fatture</Link>
                         </div>
 
                         <div>

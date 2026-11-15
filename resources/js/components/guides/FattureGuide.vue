@@ -80,7 +80,7 @@ defineEmits(['update:open']);
             <div class="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 flex gap-3 text-[13px]">
               <TriangleAlert class="w-5 h-5 text-amber-600 shrink-0" />
               <div>
-                <strong>Registrare non è deliberare.</strong> Uno sforo va portato in assemblea (art. 1135 c.c.): finché non lo si ratifica dal menu della riga («Ratifica assembleare»), la fattura resta nel contatore <em>Da ratificare</em> in cima alla pagina. La motivazione che hai scritto finisce nel rendiconto come nota, quindi vale la pena scriverla per chi la leggerà, non per chiudere il dialogo.
+                <strong>Registrare non è deliberare.</strong> Uno sforo va portato in assemblea (art. 1135 c.c.): finché non lo si ratifica dal menu della riga («Ratifica assembleare»), la fattura resta nel contatore <em>Da ratificare</em> in cima alla pagina. La motivazione resta scritta con la fattura, e il rendiconto non la stampa: in assemblea la porti tu. Vale la pena scriverla per chi la leggerà, non per chiudere il dialogo.
               </div>
             </div>
           </section>
@@ -138,7 +138,7 @@ defineEmits(['update:open']);
                 </li>
                 <li class="flex gap-2">
                   <ChevronRight class="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
-                  <span><strong>È in un piano rate che ha già incassato</strong> → usa lo storno: le rate del piano restano, e quanto i condòmini hanno versato per quella spesa si regola con una delibera.</span>
+                  <span><strong>È in un piano rate che ha già incassato</strong> → usa lo storno: le rate del piano restano, e quanto i condòmini hanno versato per quella spesa si regola con una delibera. Se però la fattura ha righe su unità specifiche (una spesa ad personam) che una rata emessa ha già chiesto, anche lo storno si rifiuta: il motivo dice la strada, che passa dal piano.</span>
                 </li>
                 <li class="flex gap-2">
                   <ChevronRight class="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
@@ -150,7 +150,7 @@ defineEmits(['update:open']);
                 </li>
                 <li class="flex gap-2">
                   <ChevronRight class="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
-                  <span><strong>Pagata o parzialmente pagata</strong> → storna prima il pagamento, da Pagamenti fornitori.</span>
+                  <span><strong>Pagata o parzialmente pagata</strong> → storna prima il pagamento, da Pagamenti.</span>
                 </li>
                 <li class="flex gap-2">
                   <ChevronRight class="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
@@ -166,6 +166,12 @@ defineEmits(['update:open']);
               non si storna: le rate del piano la chiederebbero ancora. Prima si toglie dal piano — lo si riporta in bozza, annullando le
               emissioni se ce ne sono, e lo si elimina — poi si storna la fattura, e le altre fatture del piano tornano disponibili per un
               piano nuovo.
+            </p>
+            <p class="mt-3">
+              Con gli incassi lo storno resta possibile, tranne un caso: la fattura con righe su unità specifiche (una spesa ad personam) che
+              una rata emessa ha già chiesto non si storna nemmeno così, perché lo storno toglierebbe la spesa dall'unità una seconda volta. Si
+              risale dal piano come dice il motivo: di norma si stornano gli incassi delle sue rate, si annullano le emissioni, si riporta il
+              piano in bozza e lo si elimina; poi si storna la fattura.
             </p>
           </section>
 

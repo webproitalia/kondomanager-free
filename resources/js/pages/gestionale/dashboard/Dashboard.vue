@@ -10,7 +10,7 @@ import { etichettaFabbisogno } from '@/lib/gestionale/pianiRate/totaliPerTipo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AlertTriangle, CheckCircle2, ArrowRight, X, Wallet, Info, Lightbulb, LayoutDashboard, Zap, ShieldAlert, Inbox, TriangleAlert, CalendarClock, Loader2, XCircle, TrendingDown, User, ArrowDownToLine, ArrowUpFromLine, Banknote, MessageSquare, Wrench, BookOpen, Link2 } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle2, ArrowRight, X, Wallet, Info, Lightbulb, LayoutDashboard, Zap, ShieldAlert, Inbox, TriangleAlert, CalendarClock, Loader2, XCircle, TrendingDown, User, ArrowDownToLine, ArrowUpFromLine, Banknote, MessageSquare, Files, Wrench, BookOpen, Link2 } from 'lucide-vue-next';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -395,7 +395,7 @@ onUnmounted(() => {
                                                                 <Info class="w-3 h-3 text-emerald-500/60 cursor-help outline-none shrink-0" />
                                                             </TooltipTrigger>
                                                             <TooltipContent>
-                                                                <p class="text-xs">Importo coperto tramite l'utilizzo di fondi di riserva o stanziato per il conguaglio di fine anno.</p>
+                                                                <p class="text-xs">Sfori senza una rata: coperti da un fondo di riserva, o lasciati al conguaglio per persona, calcolato nel rendiconto.</p>
                                                             </TooltipContent>
                                                         </Tooltip>
                                                     </TooltipProvider>
@@ -597,6 +597,7 @@ onUnmounted(() => {
                                                         <ArrowUpFromLine v-else-if="task.type === 'emissione_rata'" class="w-5 h-5 text-blue-500" />
                                                         <Banknote v-else-if="task.type === 'verifica_pagamento'" class="w-5 h-5 text-amber-500" />
                                                         <MessageSquare v-else-if="task.type === 'commento'" class="w-5 h-5 text-indigo-500" />
+                                                        <Files v-else-if="task.type === 'allegato'" class="w-5 h-5 text-indigo-500" />
                                                         <Wrench v-else-if="task.type === 'segnalazione_guasto'" class="w-5 h-5 text-orange-500" />
                                                         <CalendarClock v-else class="w-5 h-5" />
                                                     </div>
@@ -773,7 +774,7 @@ onUnmounted(() => {
                                                 class="text-[10px] font-bold text-slate-400 mr-auto">
                                                 {{ fat.strategia === 'fondo_riserva' 
                                                     ? 'Coperta dal fondo patrimoniale — nessuna rata richiesta' 
-                                                    : 'Verrà calcolata automaticamente a fine esercizio' }}
+                                                    : 'Entra nel conguaglio per persona, calcolato nel rendiconto' }}
                                             </span>
                                             <Link v-else :href="generatePath('gestionale/:condominio/esercizi/:esercizio/piani-rate/create', { condominio: condominio.id, esercizio: esercizio.id }) + `?tipo=straordinario&origine=dashboard&gestione_id=${fat.gestione_id}&fatture[]=${fat.id}`">
                                                 <Button size="sm" class="h-8 text-[10px] uppercase font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm">
@@ -856,7 +857,7 @@ onUnmounted(() => {
                                                     La spesa ha superato il preventivo. Emetti una rata integrativa per recuperare la differenza.
                                                 </template>
                                                 <template v-else-if="orfano.strategia === 'conguaglio'">
-                                                    Verrà conguagliata a fine esercizio nel rendiconto consuntivo.
+                                                    La differenza entra nel conguaglio per persona, se la voce ha una tabella (in una gestione straordinaria, quando l'opera è finita): si legge nella scheda «Conguaglio» del rendiconto, come proposta da approvare dall'assemblea.
                                                 </template>
                                                 <template v-else-if="orfano.strategia === 'fondo_riserva'">
                                                     Coperta dal fondo di riserva patrimoniale. Nessuna azione richiesta.
@@ -870,7 +871,14 @@ onUnmounted(() => {
                                                 </template>
                                             </p>
 
-                                            <Link v-if="!['conguaglio', 'fondo_riserva'].includes(orfano.strategia) && !orfano.spesa_negativa" 
+                                            <!-- La frase dice dove si legge il conguaglio: la porta alla scheda «Conguaglio» del rendiconto dell'esercizio. -->
+                                            <Link v-if="orfano.strategia === 'conguaglio'" data-test="apri-conguaglio"
+                                                :href="generatePath('gestionale/:condominio/esercizi/:esercizio/rendiconto/conguaglio', { condominio: condominio.id, esercizio: esercizio.id })">
+                                                <Button size="sm" variant="outline" class="h-8 text-[10px] uppercase font-bold shrink-0">
+                                                    Apri il conguaglio <ArrowRight class="w-3.5 h-3.5 ml-1.5" />
+                                                </Button>
+                                            </Link>
+                                            <Link v-else-if="!['conguaglio', 'fondo_riserva'].includes(orfano.strategia) && !orfano.spesa_negativa"
                                                 :href="generatePath('gestionale/:condominio/esercizi/:esercizio/piani-rate/create', { condominio: condominio.id, esercizio: esercizio.id }) + `?tipo=ordinario&origine=dashboard&gestione_id=${orfano.gestione_id ?? ''}&conto_id=${orfano.id}`">
                                                 <Button size="sm" class="h-8 text-[10px] uppercase font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shrink-0">
                                                     Gestisci sforo <ArrowRight class="w-3.5 h-3.5 ml-1.5" />

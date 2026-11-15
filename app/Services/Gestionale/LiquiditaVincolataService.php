@@ -35,11 +35,19 @@ use Illuminate\Support\Facades\DB;
  *
  * ⚠️ **I contributi versati non hanno una data di competenza.** `created_at` è quando sono stati
  * dichiarati — e viene azzerato da un risalvataggio — quindi non si taglia per data: R8 è un
- * controllo «a oggi». Per un esercizio chiuso resta esposto come segnalazione, con la nota.
+ * controllo «a oggi». Hanno un esercizio (`esercizio_id`), ma i vincoli già scritti senza non ne
+ * prendono uno (nessun riempimento): per un esercizio finito R8 resta da leggere, con la nota, e il
+ * programma non dà il residuo vincolato alla data. Il movimento di ogni fondo nell'esercizio (iniziale,
+ * accantonato, utilizzato, finale) la pagina lo mette accanto, con il vincolo e lo scoperto di qui
+ * ({@see StatoPatrimonialePaginaService}); il residuo vincolato di un'opera chiede anche l'importo
+ * votato, che il programma non ha.
  */
 class LiquiditaVincolataService
 {
     private const SOTTOTIPI = ['generico' => 'generico', 'vincolato_lavori' => 'vincolato ai lavori', 'tfr' => 'TFR', 'morosita' => 'morosità'];
+
+    /** L'etichetta di un fondo che non ha il sottotipo: la pagina la mostra, la stampa non scrive niente al suo posto ({@see ParoleDellaStampa::fondo()}). */
+    public const SOTTOTIPO_NON_INDICATO = 'sottotipo non indicato';
 
     /**
      * @param  array<int, array<string, mixed>>  $vociAttivo  le voci dell'attivo della fotografia
@@ -82,9 +90,10 @@ class LiquiditaVincolataService
                 $vincolato = $cassa->sottotipo_fondo !== 'generico';
                 $vincoloSuQuesto = (int) $vincolati->where('cassa_id', (int) $cassa->id)->sum('importo_cents');
                 $fondi[] = [
+                    'cassa_id' => (int) $cassa->id,
                     'cassa' => $cassa->nome,
                     'sottotipo' => $cassa->sottotipo_fondo,
-                    'sottotipo_label' => self::SOTTOTIPI[$cassa->sottotipo_fondo ?? ''] ?? 'sottotipo non indicato',
+                    'sottotipo_label' => self::SOTTOTIPI[$cassa->sottotipo_fondo ?? ''] ?? self::SOTTOTIPO_NON_INDICATO,
                     'saldo' => $saldo,
                     'vincolato' => $vincolato,
                     'vincolo_registrato' => $vincoloSuQuesto,

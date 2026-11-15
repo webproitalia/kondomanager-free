@@ -10,20 +10,21 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Il riepilogo finanziario dell'esercizio — D19 di docs/registri_contabili.md — la sezione 3b della
+ * Le entrate e le uscite per cassa dell'esercizio — D19 di docs/registri_contabili.md — la sezione 3b della
  * pagina Stato patrimoniale e il § 4 del fac-simile: per ciascuna cassa, disponibilità iniziale,
- * entrate, uscite, disponibilità finale. Art. 1130-bis c.c.: «la disponibilità iniziale di ciascuna
- * risorsa e di ciascun fondo, il totale delle entrate e delle uscite, la disponibilità finale».
+ * entrate, uscite, disponibilità finale. È un prospetto per cassa: il «riepilogo finanziario» dell'art.
+ * 1130-bis c.c. è un'altra cosa, per competenza ({@see RiepilogoPerCompetenza}).
  *
- * DUE PERIMETRI, DICHIARATI. L'INIZIALE è uno stock per data (D16): tutto ciò che è stato registrato
- * con data precedente all'inizio dell'esercizio, su tutti gli esercizi, più il `saldo_iniziale` in
- * colonna se l'apertura non è ancora a giornale. I FLUSSI (entrate, uscite) sono le righe delle
- * scritture DELL'ESERCIZIO — per `esercizio_id`, non per data — perché è il perimetro del Libro
- * Giornale e del consuntivo per voce: una fattura è costo dell'esercizio a cui è stata registrata,
- * ovunque cada la sua data. La revisione della beta.25 ha trovato che il taglio per data faceva
- * dire alla stessa fattura «costo 2025» qui e «costo 2026» nel giornale. Il finale è iniziale +
- * entrate − uscite; se non coincide con lo stock alla data di fine è perché ci sono movimenti datati
- * fuori dal periodo del loro esercizio — ed è R2 a misurarlo, non questa classe a nasconderlo.
+ * UN PERIMETRO, PER ESERCIZIO. L'INIZIALE è il riporto ({@see RiportoDiCassa}, la forma per cassa): le
+ * righe di cassa delle scritture degli esercizi che cominciano prima (o l'apertura di questo esercizio
+ * su quella cassa), più il `saldo_iniziale` in colonna se l'apertura non è ancora a giornale. È lo
+ * stesso fatto del riporto del registro di contabilità, con la stessa regola. I FLUSSI (entrate,
+ * uscite) sono le righe delle scritture DELL'ESERCIZIO — per `esercizio_id`, non per data — perché è il
+ * perimetro del Libro Giornale e del consuntivo per voce. Fino alla 1.12 l'iniziale era per data, e un
+ * incasso del 28/12 scritto nell'esercizio dopo contava due volte: nell'iniziale (la data) e nelle
+ * entrate (l'esercizio). Il finale è iniziale + entrate − uscite; se non coincide con lo stock alla
+ * data di fine è perché ci sono movimenti datati fuori dal periodo del loro esercizio — ed è R2 a
+ * misurarlo, non questa classe a nasconderlo.
  *
  * ⚠️ **L'apertura vale come iniziale, mai come flusso.** La scrittura di apertura di una cassa (tipo
  * `apertura`) è la disponibilità con cui si comincia: entra nell'iniziale a qualunque data sia
@@ -60,6 +61,8 @@ class RiepilogoFinanziarioService
      *   righe: array<int, array<string, mixed>>,
      *   totale: array{iniziale:int, entrate:int, uscite:int, finale:int},
      *   giroconti: array{entrate:int, uscite:int},
+     *   giroconti_fra_fondi: int,
+     *   giroconti_dei_fondi: array<int, array{entrata:int, uscita:int}>,
      *   stornate: array{coppie:int, importo:int},
      *   piede_quadra: bool,
      *   casse_reali_negative: array<int, array{cassa:string, minimo:int, data:?string}>
@@ -119,14 +122,8 @@ class RiepilogoFinanziarioService
             $stornate = ['coppie' => $padriConCassa->count(), 'importo' => (int) $padriConCassa->sum('importo')];
         }
 
-        // 1. Iniziale per conto: apertura (a qualunque data) + righe datate prima dell'inizio.
-        $iniziali = DB::table('righe_scritture as rs')
-            ->join('scritture_contabili as sc', fn ($j) => $j->on('rs.scrittura_id', '=', 'sc.id')->whereNull('sc.deleted_at'))
-            ->whereIn('rs.conto_contabile_id', $contiCassa)
-            ->where(fn ($q) => $q->where('sc.tipo_movimento', 'apertura')->orWhere('sc.data_competenza', '<', $dal))
-            ->groupBy('rs.conto_contabile_id')
-            ->select('rs.conto_contabile_id', DB::raw("COALESCE(SUM(CASE WHEN rs.tipo_riga = 'dare' THEN rs.importo ELSE -rs.importo END), 0) as netto"))
-            ->pluck('netto', 'conto_contabile_id');
+        // 1. Iniziale per conto: il riporto, la stessa regola del registro di contabilità (per esercizio).
+        $iniziali = app(RiportoDiCassa::class)->perConto($esercizio);
 
         // 2. Flussi per conto: le scritture dell'esercizio, senza le aperture.
         $flussi = DB::table('righe_scritture as rs')
@@ -141,7 +138,10 @@ class RiepilogoFinanziarioService
                 DB::raw("COALESCE(SUM(CASE WHEN rs.tipo_riga = 'avere' THEN rs.importo ELSE 0 END), 0) as uscite"))
             ->get()->keyBy('conto_contabile_id');
 
-        // 3. La parte interna, scrittura per scrittura: min(dare di cassa, avere di cassa).
+        // 3. La parte interna, scrittura per scrittura: min(dare di cassa, avere di cassa). La stessa compensazione sulle sole casse fondo dice quanto
+        //    è passato da un fondo a un altro: nel movimento dei fondi è accantonato del fondo che riceve e utilizzato di quello che dà.
+        $contiFondo = $casse->where('tipo', 'fondo')->pluck('conto_contabile_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $inFondo = $contiFondo === [] ? '0 = 1' : 'rs.conto_contabile_id IN ('.implode(',', $contiFondo).')';
         $perScrittura = DB::table('righe_scritture as rs')
             ->join('scritture_contabili as sc', fn ($j) => $j->on('rs.scrittura_id', '=', 'sc.id')->whereNull('sc.deleted_at'))
             ->whereIn('rs.conto_contabile_id', $contiCassa)
@@ -151,11 +151,41 @@ class RiepilogoFinanziarioService
             ->groupBy('rs.scrittura_id')
             ->select('rs.scrittura_id',
                 DB::raw("COALESCE(SUM(CASE WHEN rs.tipo_riga = 'dare' THEN rs.importo ELSE 0 END), 0) as dare"),
-                DB::raw("COALESCE(SUM(CASE WHEN rs.tipo_riga = 'avere' THEN rs.importo ELSE 0 END), 0) as avere"))
+                DB::raw("COALESCE(SUM(CASE WHEN rs.tipo_riga = 'avere' THEN rs.importo ELSE 0 END), 0) as avere"),
+                DB::raw("COALESCE(SUM(CASE WHEN rs.tipo_riga = 'dare' AND {$inFondo} THEN rs.importo ELSE 0 END), 0) as dare_fondi"),
+                DB::raw("COALESCE(SUM(CASE WHEN rs.tipo_riga = 'avere' AND {$inFondo} THEN rs.importo ELSE 0 END), 0) as avere_fondi"))
             ->get();
         $interno = 0;
+        $fraFondi = 0;
+        $conGiroconto = [];
         foreach ($perScrittura as $sc) {
             $interno += min((int) $sc->dare, (int) $sc->avere);
+            $fraFondi += min((int) $sc->dare_fondi, (int) $sc->avere_fondi);
+            if (min((int) $sc->dare_fondi, (int) $sc->avere_fondi) > 0) {
+                $conGiroconto[] = (int) $sc->scrittura_id;
+            }
+        }
+        // Per ogni fondo, la parte dei giroconti da un fondo a un altro: in entrata e in uscita, scrittura per scrittura (la parte compensata fra le righe
+        // dei fondi, divisa fra i fondi della scrittura in proporzione alle loro righe). Il movimento dei fondi la toglie da accantonato e utilizzato.
+        $giroconti = [];
+        if ($conGiroconto !== []) {
+            $perConto = DB::table('righe_scritture')->whereIn('scrittura_id', $conGiroconto)->whereIn('conto_contabile_id', $contiFondo)
+                ->groupBy('scrittura_id', 'conto_contabile_id')
+                ->select('scrittura_id', 'conto_contabile_id',
+                    DB::raw("COALESCE(SUM(CASE WHEN tipo_riga = 'dare' THEN importo ELSE 0 END), 0) as dare"),
+                    DB::raw("COALESCE(SUM(CASE WHEN tipo_riga = 'avere' THEN importo ELSE 0 END), 0) as avere"))
+                ->get()->groupBy('scrittura_id');
+            foreach ($perConto as $righeFondi) {
+                $dare = $righeFondi->mapWithKeys(fn ($r) => [(int) $r->conto_contabile_id => (int) $r->dare])->filter()->all();
+                $avere = $righeFondi->mapWithKeys(fn ($r) => [(int) $r->conto_contabile_id => (int) $r->avere])->filter()->all();
+                $parte = min(array_sum($dare), array_sum($avere));
+                foreach ([['entrata', $dare], ['uscita', $avere]] as [$verso, $pesi]) {
+                    foreach (\App\Helpers\MoneyHelper::ripartisciPerQuote($parte, $pesi) as $conto => $cifra) {
+                        $giroconti[(int) $conto][$verso] = ($giroconti[(int) $conto][$verso] ?? 0) + (int) $cifra;
+                    }
+                }
+            }
+            $giroconti = array_map(fn (array $g) => ['entrata' => (int) ($g['entrata'] ?? 0), 'uscita' => (int) ($g['uscita'] ?? 0)], $giroconti);
         }
 
         // 4. Il minimo giorno per giorno delle casse reali.
@@ -229,6 +259,8 @@ class RiepilogoFinanziarioService
             'righe' => $righe,
             'totale' => $totale,
             'giroconti' => ['entrate' => $interno, 'uscite' => $interno],
+            'giroconti_fra_fondi' => $fraFondi,
+            'giroconti_dei_fondi' => $giroconti,
             'stornate' => $stornate,
             'piede_quadra' => $piedeQuadra,
             'casse_reali_negative' => $negative,
@@ -293,7 +325,7 @@ class RiepilogoFinanziarioService
         return [
             'dal' => $dal, 'al' => $al, 'stato_esercizio' => $stato,
             'righe' => [], 'totale' => ['iniziale' => 0, 'entrate' => 0, 'uscite' => 0, 'finale' => 0],
-            'giroconti' => ['entrate' => 0, 'uscite' => 0], 'stornate' => ['coppie' => 0, 'importo' => 0], 'piede_quadra' => true, 'casse_reali_negative' => [],
+            'giroconti' => ['entrate' => 0, 'uscite' => 0], 'giroconti_fra_fondi' => 0, 'giroconti_dei_fondi' => [], 'stornate' => ['coppie' => 0, 'importo' => 0], 'piede_quadra' => true, 'casse_reali_negative' => [],
         ];
     }
 }

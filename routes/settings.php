@@ -2,6 +2,7 @@
 
 use App\Enums\Permission;
 use App\Http\Controllers\Impostazioni\BackupSettingsController;
+use App\Http\Controllers\Impostazioni\CarteStampaController;
 use App\Http\Controllers\Impostazioni\CronSettingsController;
 use App\Http\Controllers\Impostazioni\ImpostazioniController;
 use App\Http\Controllers\Impostazioni\ImpostazioniGeneraliController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Impostazioni\ImpostazioniStampeController;
 use App\Http\Controllers\Impostazioni\InstallazioneController;
 use App\Http\Controllers\Impostazioni\LogsController;
 use App\Http\Controllers\Impostazioni\MailSettingsController;
+use App\Http\Controllers\Impostazioni\ModelliLettereController;
 use App\Http\Controllers\Impostazioni\RestoreController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -61,12 +63,41 @@ Route::middleware('auth')->group(function () {
     Route::get('impostazioni/stampe', [ImpostazioniStampeController::class, 'index'])
         ->name('impostazioni.stampe');
 
+    // I modelli delle lettere ai condòmini (1.12.0-beta.4), da «Impostazioni → Stampe»: li vede chi entra nel pannello, come nella finestra
+    // delle lettere; crearli, cambiarli ed eliminarli è di chi gestisce le impostazioni di stampa (il controllo sta nel controller).
+    // `{modello}` arriva grezzo: che sia un modello delle lettere lo controlla il controller (404).
+    Route::middleware('role_or_permission:amministratore|collaboratore|'.Permission::ACCESS_ADMIN_PANEL->value)->group(function () {
+        Route::get('impostazioni/stampe/modelli-lettere', [ModelliLettereController::class, 'index'])
+            ->name('impostazioni.stampe.modelli-lettere');
+        Route::post('impostazioni/stampe/modelli-lettere', [ModelliLettereController::class, 'store'])
+            ->name('impostazioni.stampe.modelli-lettere.store');
+        Route::put('impostazioni/stampe/modelli-lettere/{modello}', [ModelliLettereController::class, 'update'])
+            ->name('impostazioni.stampe.modelli-lettere.update');
+        Route::delete('impostazioni/stampe/modelli-lettere/{modello}', [ModelliLettereController::class, 'destroy'])
+            ->name('impostazioni.stampe.modelli-lettere.destroy');
+    });
+
     // «Questa installazione»: limiti, spazio, funzioni accese (1.11.0-beta.33).
     Route::get('impostazioni/installazione', InstallazioneController::class)
         ->name('impostazioni.installazione');
 
     Route::post('impostazioni/stampe', [ImpostazioniStampeController::class, 'store'])
         ->name('impostazioni.stampe.store');
+
+    // Le carte dello studio, da «Impostazioni → Stampe»: crearle, cambiarle, eliminarle, sceglierle per i gruppi di documenti e provarle è di chi
+    // gestisce le impostazioni. `{carta}` arriva grezzo: che sia una carta lo controlla il controller (404).
+    Route::middleware('permission:'.Permission::MANAGE_GENERAL_SETTINGS->value)->group(function () {
+        Route::post('impostazioni/stampe/carte', [CarteStampaController::class, 'store'])
+            ->name('impostazioni.stampe.carte.store');
+        Route::put('impostazioni/stampe/carte/{carta}', [CarteStampaController::class, 'update'])
+            ->name('impostazioni.stampe.carte.update');
+        Route::delete('impostazioni/stampe/carte/{carta}', [CarteStampaController::class, 'destroy'])
+            ->name('impostazioni.stampe.carte.destroy');
+        Route::get('impostazioni/stampe/carte/{carta}/prova', [CarteStampaController::class, 'prova'])
+            ->name('impostazioni.stampe.carte.prova');
+        Route::put('impostazioni/stampe/carte-per-documento', [CarteStampaController::class, 'perGruppo'])
+            ->name('impostazioni.stampe.carte.gruppi');
+    });
 
     // Cron, posta e registro delle email: fino alla 1.11.0-beta.38 avevano solo `auth`, e i tre
     // controller nessun controllo. Qualunque utente con il login (condòmino, fornitore,

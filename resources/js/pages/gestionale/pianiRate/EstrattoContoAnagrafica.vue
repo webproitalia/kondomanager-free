@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
-import { computed, ref, watch } from 'vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { computed, nextTick, ref, watch } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import GestionaleLayout from '@/layouts/GestionaleLayout.vue';
 import PageHeaderGuide, { type GuideItem } from '@/components/PageHeaderGuide.vue';
 import { usePermission } from "@/composables/permissions";
@@ -24,6 +24,14 @@ import type { Building } from '@/types/buildings';
 import type { Anagrafica } from '@/types/anagrafiche';
 import type { Esercizio } from '@/types/gestionale/esercizi';
 import { statoRigaEstratto, type TonoStato } from '@/lib/gestionale/pianiRate/statoRigaEstratto';
+import { oggiLocale } from '@/lib/giorno';
+import LettereDialog from '@/components/gestionale/lettere/LettereDialog.vue';
+import RegistroLettere, { type LetteraDelRegistro } from '@/components/gestionale/lettere/RegistroLettere.vue';
+import AccordiDellaPersona from '@/components/gestionale/accordi/AccordiDellaPersona.vue';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { testoUltimaLettera, type UltimaLettera } from '@/lib/gestionale/lettere/lettere';
+import { numeroDellaScheda, type DocumentoInviato } from '@/lib/gestionale/lettere/corrispondenza';
+import type { AccordoRientro } from '@/lib/gestionale/debiti/accordiRientro';
 
 const props = defineProps<{
   condominio: Building;
@@ -62,7 +70,35 @@ const props = defineProps<{
   solidarieta?: Array<{ subentro_id: number; immobile: string; uscente: string | null; entrante: string | null; decorrenza: string; esercizi: string; residuo_uscente_cents: number; residuo_uscente_formattato: string; residuo_lordo_cents: number; coppia_cents: number; testo: string }>;
   /** Coda 167, beta.40: i versamenti che questa persona ha fatto per il debito di un'altra — fuori dal libro, perché non erano suo debito. */
   versamenti_per_altri?: Array<{ scrittura_id: number; data: string | null; protocollo: string | null; per_conto_di: string; importo_cents: number; importo_formattato: string; stornato: boolean }>;
+  /** 1.12.0-beta.4: le lettere a questa persona in questo condominio, dalla più recente. */
+  lettere?: LetteraDelRegistro[];
+  /** Coda 533: le ricevute, gli avvisi di compensazione e «non serve comunicarla» della persona, per la scheda «Corrispondenza». */
+  documenti?: DocumentoInviato[];
+  /** Coda 533: l'ultima lettera di oggi e quella in coda o non partita dopo, come la colonna «Ultima lettera» di «Rate scadute». */
+  ultima_lettera?: { ultima: UltimaLettera | null; in_sospeso: UltimaLettera | null };
+  /** Il giorno dell'amministratore, dal server. */
+  oggi?: string;
+  /** Gli accordi di rientro della persona in questo condominio, anche chiusi o riusciti, con il segno di oggi. */
+  accordi_rientro?: Array<AccordoRientro & { in_corso: boolean }>;
 }>();
+
+// Le lettere: «Prepara una lettera» apre la finestra per questa persona sola.
+const finestraLettera = ref(false);
+
+// Coda 533: le due schede, «Movimenti contabili» (di serie) e «Corrispondenza (N)». La scheda non si ricorda; `?scheda=corrispondenza`
+// nell'indirizzo apre la seconda (il collegamento «Vedi la corrispondenza» di «Rate scadute»). N si conta con la funzione che fa l'elenco.
+const indirizzoDellaPagina = (usePage() as { url?: string }).url ?? '';
+const scheda = ref(new URLSearchParams(indirizzoDellaPagina.split('?')[1] ?? '').get('scheda') === 'corrispondenza' ? 'corrispondenza' : 'movimenti');
+const numeroCorrispondenza = computed(() => numeroDellaScheda(props.lettere ?? [], props.documenti ?? []));
+// «Vedi la corrispondenza» in testa: fra la riga e le schede ci sono le note della persona, e al telefono le schede sono sotto lo schermo; dopo il
+// cambio di scheda la pagina le porta in vista.
+const schede = ref<HTMLElement | null>(null);
+async function apriCorrispondenza() {
+    scheda.value = 'corrispondenza';
+    await nextTick();
+    schede.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+}
+const oggiDellaPagina = props.oggi ?? oggiLocale();
 
 // --- Rimborso del credito (B2, S6, voce 9) ------------------------------------------------------------
 const rimborsoAperto = ref(false);
@@ -71,7 +107,8 @@ const formRimborso = useForm({
     cassa_id: (props.rimborso?.casse.length === 1 ? props.rimborso.casse[0].id : null) as number | null,
     // Non `data`: `useForm()` espone già un metodo `data()`, e un campo con quel nome lo copre — il
     // v-model legava una funzione e il campo restava vuoto.
-    data_rimborso: new Date().toISOString().substring(0, 10),
+    // Oggi nel calendario di chi usa la pagina (1.12.0-beta.3), non il giorno di Greenwich.
+    data_rimborso: oggiLocale(),
     importo: props.rimborso?.quote[0]?.credito_euro ?? '',
     nota: '',
 });
@@ -137,6 +174,8 @@ const goBack = () => {
     if (window.history.length > 1) window.history.back();
     else router.visit(generatePath('gestionale/:condominio/piani-rate', { condominio: props.condominio.id }));
 };
+
+const rateScaduteDellaPersona = computed(() => route(generateRoute('gestionale.rate-scadute.index'), { condominio: props.condominio.id, anagrafica_id: props.anagrafica.id }));
 
 const printPDF = () => {
     const url = route('admin.gestionale.anagrafiche.estratto-conto.print', {
@@ -279,6 +318,38 @@ const getImportoStyle = (riga: any) => {
                 backText="Indietro"
             >
                 <template #actions>
+                    <!-- Le lettere a questa persona e l'elenco delle sue rate scadute in un menu solo: due pulsanti in più facevano uscire la fila dallo schermo. -->
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <Button variant="outline" data-testid="menu-lettere" class="h-8 px-3 border-slate-200 text-slate-700 bg-white hover:bg-slate-50 shadow-sm shrink-0 gap-2">
+                                <Mail class="w-4 h-4" />
+                                <span class="hidden sm:inline">Lettere</span>
+                                <ChevronDown class="w-3 h-3 opacity-60" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-60 shadow-xl rounded-xl border-slate-100 p-1.5">
+                            <DropdownMenuItem
+                                data-testid="prepara-una-lettera"
+                                @click="finestraLettera = true"
+                                class="cursor-pointer flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-indigo-50 focus:bg-indigo-50 text-slate-700">
+                                <Mail class="w-3.5 h-3.5 text-indigo-500" />
+                                <div>
+                                    <div class="text-xs font-medium">Prepara una lettera</div>
+                                    <div class="text-[10px] text-slate-400">Promemoria, sollecito, diffida, messa in mora</div>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem as-child>
+                                <Link :href="rateScaduteDellaPersona" data-testid="rate-scadute-della-persona"
+                                   class="cursor-pointer flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-indigo-50 focus:bg-indigo-50 text-slate-700">
+                                    <AlertCircle class="w-3.5 h-3.5 text-indigo-500" />
+                                    <div>
+                                        <div class="text-xs font-medium">Rate scadute</div>
+                                        <div class="text-[10px] text-slate-400">L'elenco, con questa persona sola</div>
+                                    </div>
+                                </Link>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
                             <Button variant="outline" class="h-8 px-3 border-slate-200 text-slate-700 bg-white hover:bg-slate-50 shadow-sm shrink-0 gap-2">
@@ -432,6 +503,18 @@ const getImportoStyle = (riga: any) => {
             </div>
         </div>
 
+            <!-- Coda 533: l'ultima lettera, con la fonte e il testo della colonna «Ultima lettera» di «Rate scadute». -->
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs" data-testid="ultima-lettera-in-testa">
+                <!-- Con la sola lettera in coda o non partita, il testo della colonna («Nessuna lettera») e sotto «poi: …». -->
+                <template v-if="ultima_lettera?.ultima || ultima_lettera?.in_sospeso">
+                    <span class="font-semibold">Ultima lettera:</span>
+                    <span>{{ testoUltimaLettera(ultima_lettera?.ultima) }}</span>
+                </template>
+                <span v-else>Nessuna lettera a questa persona in questo condominio.</span>
+                <span v-if="ultima_lettera?.in_sospeso" class="text-amber-700 dark:text-amber-400">poi: {{ testoUltimaLettera(ultima_lettera.in_sospeso) }}</span>
+                <button v-if="numeroCorrispondenza > 0" type="button" class="ml-auto underline" data-testid="vedi-la-corrispondenza" @click="apriCorrispondenza">Vedi la corrispondenza</button>
+            </div>
+
             <!-- Coda 167, beta.40: i versamenti fatti per il debito di un altro. Chiudono le quote di chi doveva e non toccano il saldo di questa persona: per questo stanno qui e non nel libro qui sotto. -->
             <div v-if="versamenti_per_altri && versamenti_per_altri.length" class="rounded-lg border border-sky-200 bg-sky-50/70 dark:border-sky-900/40 dark:bg-sky-950/20 px-4 py-3 flex items-start gap-3">
                 <Banknote class="w-4 h-4 mt-0.5 shrink-0 text-sky-600" />
@@ -447,6 +530,10 @@ const getImportoStyle = (riga: any) => {
                 </div>
             </div>
 
+            <!-- Gli accordi di rientro della persona, anche quando non ha più rate scadute: il segno e i versati oltre il capitale. -->
+            <AccordiDellaPersona :condominio-id="Number(condominio.id)" :persona="{ id: Number(anagrafica.id), nome: anagrafica.nome }" :accordi="accordi_rientro ?? []"
+                :oggi="oggiDellaPagina" @fatto="router.reload({ only: ['accordi_rientro', 'lettere', 'ultima_lettera'] })" />
+
             <!-- B2, S7: la nota calcolata dell'art. 63 co. 4 — chi è entrato risponde in solido con chi è uscito. Non è una quota né un sollecito. -->
             <div v-if="solidarieta && solidarieta.length" class="space-y-2">
                 <div v-for="n in solidarieta" :key="n.subentro_id" class="rounded-lg border border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20 px-4 py-3 flex items-start gap-3">
@@ -458,6 +545,19 @@ const getImportoStyle = (riga: any) => {
                 </div>
             </div>
 
+        <!-- Coda 533: i movimenti e la corrispondenza in due schede; si apre quella dei movimenti. -->
+        <div ref="schede">
+        <Tabs v-model="scheda" class="space-y-4">
+            <TabsList class="bg-muted p-1 rounded-md">
+                <TabsTrigger value="movimenti" data-testid="scheda-movimenti">Movimenti contabili</TabsTrigger>
+                <TabsTrigger value="corrispondenza" data-testid="scheda-corrispondenza">Corrispondenza ({{ numeroCorrispondenza }})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="corrispondenza" class="mt-0">
+                <!-- Le lettere a questa persona (con il residuo di oggi delle stesse rate), le ricevute e gli avvisi. -->
+                <RegistroLettere :condominio-id="Number(condominio.id)" :lettere="lettere ?? []" :documenti="documenti ?? []" :persona-id="Number(anagrafica.id)"
+                    :oggi="oggiDellaPagina" />
+            </TabsContent>
+            <TabsContent value="movimenti" class="mt-0 space-y-6">
         <div class="flex flex-wrap gap-4 text-xs text-gray-500 items-center bg-gray-50/80 p-3 rounded-lg border border-dashed border-gray-200">
             <span class="font-bold uppercase tracking-wider text-[10px] text-gray-400 mr-1">Legenda:</span>
             <div class="flex items-center gap-1.5"><div class="w-5 h-5 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 shadow-sm"><FileText class="w-3 h-3" /></div><span>Emissione</span></div>
@@ -646,6 +746,9 @@ const getImportoStyle = (riga: any) => {
                 </div>
             </div>
         </div>
+            </TabsContent>
+        </Tabs>
+        </div>
         </div>
 
         <!-- B2, S6: il modulo del rimborso -->
@@ -751,6 +854,9 @@ const getImportoStyle = (riga: any) => {
                 </form>
             </DialogContent>
         </Dialog>
+
+        <LettereDialog v-model:open="finestraLettera" :condominio-id="Number(condominio.id)" :persona="{ id: Number(anagrafica.id), nome: anagrafica.nome }" :oggi="oggiDellaPagina"
+            @fatto="router.reload({ only: ['lettere', 'ultima_lettera'] })" />
 
         <ConfirmDialog
             :model-value="stornoAperto"

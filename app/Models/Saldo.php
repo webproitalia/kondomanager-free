@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Modello Saldo
  * * Rappresenta un singolo "cassetto" finanziario del Wallet di un condòmino.
  * A differenza delle versioni precedenti, ogni saldo è ora vincolato a una specifica
- * gestione (Ordinaria, Straordinaria, ecc.) per garantire la separazione dei fondi
- * richiesta dall'Art. 1130-bis c.c.
+ * gestione (Ordinaria, Straordinaria, ecc.): un credito maturato su una gestione non copre
+ * da solo un debito su un'altra.
  */
 class Saldo extends Model
 {
@@ -37,7 +37,13 @@ class Saldo extends Model
         'origine',        // 'manuale', 'importato', 'automatico'
         'is_applicato',   // Se true, il saldo è bloccato perché già inserito in un piano rate (Novità v1.9)
         'fornitore_id',
-        'descrizione'
+        'descrizione',
+        // L'origine del pregresso dichiarata dall'amministratore (1.12.0-beta.4): esercizio, con_il_piano, prima_del_primo; nulla = non
+        // dichiarata. Non tocca l'importo: si dichiara anche su un saldo fermo in un piano emesso. Chi e quando, accanto.
+        'origine_dichiarata',
+        'esercizio_origine_id',
+        'origine_dichiarata_da',
+        'origine_dichiarata_il',
     ];
 
     /**
@@ -49,9 +55,16 @@ class Saldo extends Model
         'saldo_finale'   => 'integer',
         'is_applicato'   => 'boolean',
         'origine'        => 'string',
+        'origine_dichiarata_il' => 'datetime',
     ];
 
     // --- RELAZIONI ---
+
+    /** L'esercizio d'origine del pregresso, dichiarato dall'amministratore (1.12.0-beta.4). */
+    public function esercizioOrigine(): BelongsTo
+    {
+        return $this->belongsTo(Esercizio::class, 'esercizio_origine_id');
+    }
 
     /**
      * Il passaggio di titolarità da cui nasce questa riga di conguaglio (B2, 1.11.0-beta.31). Le due

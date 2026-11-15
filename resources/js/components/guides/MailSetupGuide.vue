@@ -38,7 +38,7 @@ defineEmits(['update:open']);
                 <div>
                   <h4 class="font-bold text-slate-900 dark:text-white mb-1">SMTP (Raccomandato per produzione)</h4>
                   <p class="text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Si collega direttamente al server del tuo gestore posta (Aruba, Gmail, Outlook, SMTP2GO, ecc.). Offre il 100% di tracciabilità, cifratura SSL/TLS sicura e previene il blocco delle notifiche di sollecito e ricevuta.
+                    Si collega direttamente al server del tuo gestore posta (Aruba, Gmail, Outlook, SMTP2GO, ecc.), con cifratura SSL/TLS. Il programma registra ogni messaggio che il server accetta, e senza un server lo segna come non partito; «accettato» non vuol dire «consegnato». Riduce il rischio che notifiche e ricevute finiscano nella posta indesiderata.
                   </p>
                 </div>
               </div>
@@ -97,10 +97,13 @@ defineEmits(['update:open']);
             </h3>
             <ul class="space-y-2 list-disc pl-5 text-xs text-slate-600 dark:text-slate-400">
               <li>
-                <strong>Coerenza dell'indirizzo "From":</strong> Assicurati che l'indirizzo <em>"Mittente (Address)"</em> sia identico all'account con cui ti autentichi nel server SMTP.
+                <strong>Indirizzo "Mittente (Address)":</strong> dipende dal gestore. Con una casella di posta (Aruba, Gmail) è l'indirizzo della casella con cui ti autentichi (con Gmail, anche un alias che hai aggiunto nell'account). Con un servizio di invio (SMTP2GO, Brevo, Mailgun) il nome utente è quello che ti dà il servizio, anche quando ha la forma di un indirizzo email: il mittente dev'essere un indirizzo, o un dominio, che hai verificato nel pannello del servizio, altrimenti il servizio rifiuta l'invio anche se server e password sono giusti.
               </li>
               <li>
                 <strong>Pulsante di prova:</strong> Prima di salvare la configurazione, digita il tuo indirizzo personale ed esegui il test per verificare la connessione immediata.
+              </li>
+              <li>
+                <strong>Se la prova fallisce:</strong> il motivo è scritto sotto la prova e, se la prova arriva all'invio, anche in «Audit & Logs di Sistema», scheda «Email Logs».
               </li>
             </ul>
           </section>

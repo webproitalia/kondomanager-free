@@ -15,6 +15,8 @@ use App\Http\Controllers\Gestionale\Movimenti\FatturaPassivaController;
 use App\Http\Controllers\Gestionale\Movimenti\FetchFattureSimiliController;
 use App\Http\Controllers\Gestionale\Movimenti\ImportaFatturaXmlController;
 use App\Http\Controllers\Gestionale\Movimenti\GirocontoController;
+use App\Http\Controllers\Gestionale\Movimenti\CommissioniSenzaVoceController;
+use App\Http\Controllers\Gestionale\Movimenti\IncassoDaTerziController;
 use App\Http\Controllers\Gestionale\Movimenti\IncassoRateController;
 use App\Http\Controllers\Gestionale\Movimenti\MovimentiController;
 use App\Http\Controllers\Gestionale\Movimenti\PagamentoFornitoreController;
@@ -22,12 +24,14 @@ use App\Http\Controllers\Gestionale\Movimenti\MastrinoController;
 use App\Http\Controllers\Gestionale\Movimenti\RegistroContabilitaController;
 use App\Http\Controllers\Gestionale\Movimenti\RiallineaCreditiController;
 use App\Http\Controllers\Gestionale\Movimenti\StatoPatrimonialeController;
+use App\Http\Controllers\Gestionale\Movimenti\RiepilogoPerCompetenzaController;
 use App\Http\Controllers\Gestionale\Movimenti\RegolazioneImmediataController;
 use App\Http\Controllers\Gestionale\Movimenti\DelegaF24Controller;
 use App\Http\Controllers\Gestionale\Movimenti\DelegaF24PrintController;
 use App\Http\Controllers\Gestionale\Movimenti\ScritturaContabileController;
 use App\Http\Controllers\Gestionale\Movimenti\SituazioneDebitoriaController;
 use App\Http\Controllers\Gestionale\Movimenti\RateDiChiHaVersatoController;
+use App\Http\Controllers\Gestionale\Movimenti\RicevuteIncassiController;
 use App\Http\Controllers\Gestionale\Movimenti\StornoFatturaController;
 use App\Http\Controllers\Gestionale\Movimenti\StornoIncassoController;
 use App\Http\Controllers\Gestionale\Movimenti\StornoPagamentoController;
@@ -145,6 +149,18 @@ Route::prefix('/gestionale/{condominio}')
     // di proposito quando più piani rivendicano gli stessi saldi).
     Route::post('saldi/{saldo}/sblocca', [SaldoInizialeController::class, 'sblocca'])
         ->name('saldi.sblocca');
+
+    // 1.12.0-beta.4: «Dichiara l'origine» del pregresso, su uno o più saldi; non tocca l'importo, quindi vale anche per un saldo fermo in un
+    // piano emesso. I saldi arrivano nella richiesta: che siano di questo condominio lo controlla il controller (404).
+    Route::post('saldi/origine', \App\Http\Controllers\Gestionale\Saldi\DichiaraOrigineSaldiController::class)
+        ->name('saldi.origine');
+
+    // 1.12.0-beta.4: la dispensa dell'assemblea dall'agire entro sei mesi (art. 1129 c. 9): l'elenco, la registrazione, la revoca, il verbale.
+    // `{dispensa}` arriva grezzo: che sia di questo condominio lo controlla il controller (404).
+    Route::get('dispense-sei-mesi', [\App\Http\Controllers\Gestionale\Esercizi\DispensaSeiMesiController::class, 'index'])->name('dispense.index');
+    Route::post('dispense-sei-mesi', [\App\Http\Controllers\Gestionale\Esercizi\DispensaSeiMesiController::class, 'store'])->name('dispense.store');
+    Route::post('dispense-sei-mesi/{dispensa}/revoca', [\App\Http\Controllers\Gestionale\Esercizi\DispensaSeiMesiController::class, 'revoca'])->name('dispense.revoca');
+    Route::get('dispense-sei-mesi/{dispensa}/verbale', [\App\Http\Controllers\Gestionale\Esercizi\DispensaSeiMesiController::class, 'verbale'])->name('dispense.verbale');
 
     // Già versato per voce di spesa: alimenta il netting del riparto (beta.26).
     Route::get('contributi', [\App\Http\Controllers\Gestionale\Contributi\ContributoVersatoController::class, 'index'])
@@ -375,7 +391,7 @@ Route::prefix('/gestionale/{condominio}')
         ->name('esercizi.scritture.print');
 
     // Registro di contabilità (art. 1130, comma 1, n. 7 c.c.) — punto 1 della sequenza di
-    // docs/registri_contabili.md. È la voce "Prima nota" del menu Movimenti.
+    // docs/registri_contabili.md. È la voce «Registro di contabilità» del menu Movimenti.
     Route::get('esercizi/{esercizio}/registro-contabilita', [RegistroContabilitaController::class, 'index'])
         ->name('esercizi.registro-contabilita.index');
 
@@ -399,6 +415,58 @@ Route::prefix('/gestionale/{condominio}')
 
     Route::get('esercizi/{esercizio}/fascicolo-bilancio/print', [\App\Http\Controllers\Gestionale\Fascicolo\FascicoloBilancioController::class, 'stampa'])
         ->name('esercizi.fascicolo-bilancio.print');
+
+    // Il rendiconto: la sintesi (l'esito dei controlli, i riquadri, il prospetto della gestione), la cassa e i controlli, una scheda per richiesta;
+    // il fascicolo per l'assemblea in un PDF solo. Dietro il pannello, mai fra le rotte del portale.
+    Route::get('esercizi/{esercizio}/rendiconto', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoController::class, 'sintesi'])
+        ->name('esercizi.rendiconto.sintesi');
+    Route::get('esercizi/{esercizio}/rendiconto/cassa', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoController::class, 'cassa'])
+        ->name('esercizi.rendiconto.cassa');
+    Route::get('esercizi/{esercizio}/rendiconto/controlli', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoController::class, 'controlli'])
+        ->name('esercizi.rendiconto.controlli');
+    Route::get('esercizi/{esercizio}/rendiconto/fascicolo', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoController::class, 'fascicolo'])
+        ->name('esercizi.rendiconto.fascicolo');
+
+    // Il rendiconto: il riepilogo finanziario per competenza, una scheda con la sua richiesta, e la sua stampa.
+    Route::get('esercizi/{esercizio}/rendiconto/riepilogo-finanziario', [RiepilogoPerCompetenzaController::class, 'index'])
+        ->name('esercizi.rendiconto.riepilogo');
+    Route::get('esercizi/{esercizio}/rendiconto/riepilogo-finanziario/stampa', [RiepilogoPerCompetenzaController::class, 'stampa'])
+        ->name('esercizi.rendiconto.riepilogo.stampa');
+
+    // Il rendiconto: la scheda «Condòmini», le posizioni (§ 9) e i crediti per anzianità (§ 10), con le loro stampe. Sono i dati di tutti i
+    // condòmini: qui, dietro il pannello, mai fra le rotte del portale.
+    Route::get('esercizi/{esercizio}/rendiconto/condomini', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoCondominiController::class, 'index'])
+        ->name('esercizi.rendiconto.condomini');
+    Route::get('esercizi/{esercizio}/rendiconto/condomini/posizioni/stampa', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoCondominiController::class, 'stampaPosizioni'])
+        ->name('esercizi.rendiconto.condomini.posizioni.stampa');
+    Route::get('esercizi/{esercizio}/rendiconto/condomini/crediti/stampa', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoCondominiController::class, 'stampaCrediti'])
+        ->name('esercizi.rendiconto.condomini.crediti.stampa');
+
+    // Il rendiconto: la scheda «Conguaglio», la proposta di conguaglio per persona e unità, con le sue due stampe e il foglio della persona, uno per uno o
+    // in un archivio. Sono i dati di tutti i condòmini: qui, dietro il pannello, mai fra le rotte del portale.
+    Route::get('esercizi/{esercizio}/rendiconto/conguaglio', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioController::class, 'index'])
+        ->name('esercizi.rendiconto.conguaglio');
+    Route::get('esercizi/{esercizio}/rendiconto/conguaglio/stampa', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioController::class, 'stampaPerPersona'])
+        ->name('esercizi.rendiconto.conguaglio.stampa');
+    Route::get('esercizi/{esercizio}/rendiconto/conguaglio/per-tabella/stampa', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioController::class, 'stampaPerTabella'])
+        ->name('esercizi.rendiconto.conguaglio.per-tabella.stampa');
+    Route::get('esercizi/{esercizio}/rendiconto/conguaglio/fogli', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioController::class, 'fogli'])
+        ->name('esercizi.rendiconto.conguaglio.fogli');
+    Route::get('esercizi/{esercizio}/rendiconto/conguaglio/fogli/{persona}', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioController::class, 'foglio'])
+        ->whereNumber('persona')->name('esercizi.rendiconto.conguaglio.foglio');
+    // I fogli per email: la finestra, l'anteprima, l'invio, il rinvio dei non partiti, lo stato degli invii che la scheda rilegge e il PDF partito.
+    Route::get('esercizi/{esercizio}/rendiconto/conguaglio/invio/opzioni', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioInvioController::class, 'opzioni'])
+        ->name('esercizi.rendiconto.conguaglio.invio.opzioni');
+    Route::post('esercizi/{esercizio}/rendiconto/conguaglio/invio/anteprima', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioInvioController::class, 'anteprima'])
+        ->name('esercizi.rendiconto.conguaglio.invio.anteprima');
+    Route::post('esercizi/{esercizio}/rendiconto/conguaglio/invio', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioInvioController::class, 'invia'])
+        ->name('esercizi.rendiconto.conguaglio.invio');
+    Route::post('esercizi/{esercizio}/rendiconto/conguaglio/invio/riprova', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioInvioController::class, 'riprova'])
+        ->name('esercizi.rendiconto.conguaglio.invio.riprova');
+    Route::get('esercizi/{esercizio}/rendiconto/conguaglio/invio/stato', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioInvioController::class, 'stato'])
+        ->name('esercizi.rendiconto.conguaglio.invio.stato');
+    Route::get('esercizi/{esercizio}/rendiconto/conguaglio/invio/{invio}/pdf', [\App\Http\Controllers\Gestionale\Movimenti\RendicontoConguaglioInvioController::class, 'pdf'])
+        ->whereNumber('invio')->name('esercizi.rendiconto.conguaglio.invio.pdf');
 
     // Il mastrino di un conto contabile — punto 2 di docs/registri_contabili.md (D21), beta.26.
     // Pagina figlia dello Stato patrimoniale, non una voce della barra. Il conto si risolve
@@ -429,12 +497,86 @@ Route::prefix('/gestionale/{condominio}')
         ->only(['index', 'create', 'store', 'show'])
         ->parameters(['movimenti-rate' => 'scrittura']);
 
+    // 1.12.0-beta.3 (decisioni 217 e 218): prima di salvare, il modulo chiede se la distribuzione segue l'ordine delle scadenze. Sola lettura.
+    Route::post('movimenti-rate/ordine', \App\Http\Controllers\Gestionale\Movimenti\OrdineImputazioneController::class)
+        ->name('movimenti-rate.ordine');
+
     Route::post('movimenti-rate/{scrittura}/storno', StornoIncassoController::class)
         ->name('movimenti-rate.storno');
 
     // Coda 209 (1.11.0-beta.49, decisione 75.5): l'avviso della conferma dello storno, in sola lettura.
     Route::get('movimenti-rate/{scrittura}/storno/anteprima', [StornoIncassoController::class, 'anteprima'])
         ->name('movimenti-rate.storno.anteprima');
+
+    // 1.12.0-beta.2 (decisioni 197, 200, 201): le ricevute degli incassi, una o tante, stampate o inviate per email. `{scrittura}` e `{invio}`
+    // arrivano grezzi, come nelle rotte degli incassi: il controllo che siano di questo condominio lo fa il controller (404).
+    Route::get('ricevute', [RicevuteIncassiController::class, 'index'])->name('ricevute.index');
+    // I PDF si chiedono con un POST (la stampa scrive il registro). Un GET sullo stesso indirizzo è la scheda di un PDF ricaricata, riaperta
+    // dalla cronologia o copiata: non rifà niente e non scrive niente, riporta alla pagina delle ricevute con una frase, invece del 405. Stanno
+    // prima delle rotte con `{scrittura}`, perché nessuna le prenda; i nomi sono loro, perché quelli delle POST restano dei POST.
+    Route::get('ricevute/stampa', [RicevuteIncassiController::class, 'riapriPdf'])->defaults('pdf', 'stampa')->name('ricevute.stampa.riapri');
+    Route::get('ricevute/pdf-anteprima', [RicevuteIncassiController::class, 'riapriPdf'])->defaults('pdf', 'pdf-anteprima')->name('ricevute.pdf-anteprima.riapri');
+    Route::get('ricevute/pdf-per-persona', [RicevuteIncassiController::class, 'riapriPdf'])->defaults('pdf', 'pdf-per-persona')->name('ricevute.pdf-per-persona.riapri');
+    Route::get('ricevute/{scrittura}/opzioni', [RicevuteIncassiController::class, 'opzioni'])->name('ricevute.opzioni');
+    Route::post('ricevute/anteprima', [RicevuteIncassiController::class, 'anteprima'])->name('ricevute.anteprima');
+    Route::post('ricevute/stampa', [RicevuteIncassiController::class, 'stampa'])->name('ricevute.stampa');
+    // Lo stesso PDF della stampa, che non è una ricevuta: non scrive il registro, quindi non brucia l'originale (decisione 204).
+    Route::post('ricevute/pdf-anteprima', [RicevuteIncassiController::class, 'anteprimaPdf'])->name('ricevute.pdf-anteprima');
+    // Un PDF per persona in un archivio .zip, con l'elenco degli indirizzi, per chi le manda dal suo programma di posta (decisione 207.2).
+    Route::post('ricevute/pdf-per-persona', [RicevuteIncassiController::class, 'pdfPerPersona'])->name('ricevute.pdf-per-persona');
+    Route::post('ricevute/invia', [RicevuteIncassiController::class, 'invia'])->name('ricevute.invia');
+    Route::post('ricevute/prova', [RicevuteIncassiController::class, 'provaAMe'])->name('ricevute.prova');
+    Route::post('ricevute/riprova', [RicevuteIncassiController::class, 'riprova'])->name('ricevute.riprova');
+    // L'invio a un indirizzo scritto a mano ha un limite di dieci al minuto per utente (decisione 204), che il controller conta per questa rotta, per
+    // «Invia di nuovo» e per «Riprova» (`LimiteAltroIndirizzo`).
+    Route::post('ricevute/{scrittura}/invia', [RicevuteIncassiController::class, 'inviaUna'])->name('ricevute.invia-una');
+    Route::post('ricevute/invii/{invio}/di-nuovo', [RicevuteIncassiController::class, 'inviaDiNuovo'])->name('ricevute.invia-di-nuovo');
+    // «Non serve comunicarla»: l'avviso delle annullate da comunicare per questa ricevuta si spegne (decisione 205).
+    Route::post('ricevute/{scrittura}/non-serve-comunicarla', [RicevuteIncassiController::class, 'nonServeComunicarla'])->name('ricevute.non-serve-comunicarla');
+
+    // 1.12.0-beta.4: gli avvisi di compensazione, dalla sezione «Compensazioni senza avviso» della pagina delle ricevute: la stampa (un POST: scrive il
+    // registro) e l'invio per email. Le compensazioni arrivano nella richiesta: che siano di questo condominio lo controlla il servizio (404).
+    Route::post('compensazioni/avvisi/stampa', [\App\Http\Controllers\Gestionale\Movimenti\AvvisiCompensazioneController::class, 'stampa'])->name('ricevute.avvisi-compensazione.stampa');
+    Route::post('compensazioni/avvisi/invia', [\App\Http\Controllers\Gestionale\Movimenti\AvvisiCompensazioneController::class, 'invia'])->name('ricevute.avvisi-compensazione.invia');
+
+    // 1.12.0-beta.4: le rate scadute, una riga per persona, con i filtri nell'indirizzo; la vista «In scadenza nei prossimi N giorni»; la
+    // stampa dell'elenco (un GET: non scrive niente). Solo nel pannello, mai fra le rotte del portale.
+    Route::get('rate-scadute', [\App\Http\Controllers\Gestionale\Movimenti\RateScaduteController::class, 'index'])->name('rate-scadute.index');
+    Route::get('rate-scadute/stampa', [\App\Http\Controllers\Gestionale\Movimenti\RateScaduteController::class, 'stampa'])->name('rate-scadute.stampa');
+
+    // 1.12.0-beta.4: l'accordo di rientro di una persona, dalla riga delle rate scadute: gli accordi e le rate che un accordo può coprire, la
+    // registrazione, l'autorizzazione dell'assemblea arrivata dopo, la chiusura, la scansione firmata. `{accordo}` arriva grezzo: che sia di
+    // questo condominio lo controlla il controller (404).
+    Route::get('accordi-rientro', [\App\Http\Controllers\Gestionale\Movimenti\AccordiRientroController::class, 'index'])->name('accordi-rientro.index');
+    Route::post('accordi-rientro', [\App\Http\Controllers\Gestionale\Movimenti\AccordiRientroController::class, 'store'])->name('accordi-rientro.store');
+    Route::post('accordi-rientro/{accordo}/autorizza', [\App\Http\Controllers\Gestionale\Movimenti\AccordiRientroController::class, 'autorizza'])->name('accordi-rientro.autorizza');
+    Route::post('accordi-rientro/{accordo}/chiudi', [\App\Http\Controllers\Gestionale\Movimenti\AccordiRientroController::class, 'chiudi'])->name('accordi-rientro.chiudi');
+    Route::get('accordi-rientro/{accordo}/documento', [\App\Http\Controllers\Gestionale\Movimenti\AccordiRientroController::class, 'documento'])->name('accordi-rientro.documento');
+
+    // 1.12.0-beta.4: le lettere ai condòmini (promemoria, sollecito, diffida, messa in mora) dalle rate scadute e dall'estratto conto. Il PDF si
+    // chiede con un POST (la stampa scrive il registro); un GET sugli stessi indirizzi riporta alle rate scadute con una frase. `{invio}` e
+    // `{documento}` arrivano grezzi: che siano di questo condominio e di una lettera lo controlla il controller (404).
+    Route::get('lettere/opzioni', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'opzioni'])->name('lettere.opzioni');
+    Route::post('lettere/anteprima', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'anteprima'])->name('lettere.anteprima');
+    Route::get('lettere/stampa', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'riapriPdf'])->name('lettere.stampa.riapri');
+    Route::get('lettere/pdf-anteprima', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'riapriPdf'])->name('lettere.pdf-anteprima.riapri');
+    Route::get('lettere/pdf-per-persona', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'riapriPdf'])->name('lettere.pdf-per-persona.riapri');
+    Route::post('lettere/stampa', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'stampa'])->name('lettere.stampa');
+    Route::post('lettere/pdf-anteprima', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'anteprimaPdf'])->name('lettere.pdf-anteprima');
+    Route::post('lettere/pdf-per-persona', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'pdfPerPersona'])->name('lettere.pdf-per-persona');
+    Route::post('lettere/invia', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'invia'])->name('lettere.invia');
+    Route::post('lettere/prova', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'prova'])->name('lettere.prova');
+    Route::post('lettere/riprova', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'riprova'])->name('lettere.riprova');
+    // «Salva come modello…» e «Aggiorna» dalla finestra. `{modello}` arriva grezzo: che sia di questo condominio, o per tutti, lo controlla il controller (404).
+    Route::post('lettere/modelli', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'salvaModello'])->name('lettere.modelli.store');
+    Route::put('lettere/modelli/{modello}', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'aggiornaModello'])->name('lettere.modelli.update');
+    Route::post('lettere/spedizione', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'spedizione'])->name('lettere.spedizione');
+    Route::post('lettere/invii/{invio}/di-nuovo', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'inviaDiNuovo'])->name('lettere.invia-di-nuovo');
+    Route::post('lettere/invii/{invio}/spedizione', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'correggiSpedizione'])->name('lettere.spedizione.correggi');
+    Route::get('lettere/invii/{invio}/pdf', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'pdfConservato'])->name('lettere.pdf');
+    Route::post('lettere/invii/{invio}/prove', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'allegaProva'])->name('lettere.prove.store');
+    Route::get('lettere/invii/{invio}/prove/{documento}', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'scaricaProva'])->name('lettere.prove.scarica');
+    Route::delete('lettere/invii/{invio}/prove/{documento}', [\App\Http\Controllers\Gestionale\Movimenti\LettereController::class, 'togliProva'])->name('lettere.prove.togli');
 
     // La conferma della card «Crediti da riallineare» della pagina «Incassi rate» (decisioni 75.1 e 76.1).
     Route::post('/riallinea-crediti', RiallineaCreditiController::class)
@@ -452,6 +594,23 @@ Route::prefix('/gestionale/{condominio}')
 
     Route::post('/regolazioni-immediate/{scrittura}/storno', [RegolazioneImmediataController::class, 'storno'])
         ->name('regolazioni-immediate.storno');
+
+    // --- INCASSO DA TERZI: l'affitto dell'antenna, gli interessi, un rimborso (cassa → voce di entrata, senza rate) ---
+    Route::get('/incassi-da-terzi/create', [IncassoDaTerziController::class, 'create'])
+        ->name('incassi-da-terzi.create');
+
+    Route::post('/incassi-da-terzi', [IncassoDaTerziController::class, 'store'])
+        ->name('incassi-da-terzi.store');
+
+    Route::post('/incassi-da-terzi/{scrittura}/storno', [IncassoDaTerziController::class, 'storno'])
+        ->name('incassi-da-terzi.storno');
+
+    // Le commissioni dei pagamenti scritte senza voce, per assegnarla a mano negli esercizi aperti: un elenco per esercizio.
+    Route::get('esercizi/{esercizio}/commissioni-senza-voce', [CommissioniSenzaVoceController::class, 'index'])
+        ->name('esercizi.commissioni-senza-voce.index');
+
+    Route::post('esercizi/{esercizio}/commissioni-senza-voce/assegna', [CommissioniSenzaVoceController::class, 'assegna'])
+        ->name('esercizi.commissioni-senza-voce.assegna');
 
     // --- GIROCONTI: spostamenti di liquidità fra casse (fondi = partizioni del c/c) ---
     Route::get('/giroconti', [GirocontoController::class, 'index'])

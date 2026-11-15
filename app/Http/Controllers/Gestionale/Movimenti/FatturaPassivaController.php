@@ -124,6 +124,9 @@ class FatturaPassivaController extends Controller
             ))
             ->when($request->data_da, fn ($q, $v) => $q->whereDate('data_documento', '>=', $v))
             ->when($request->data_a, fn ($q, $v) => $q->whereDate('data_documento', '<=', $v))
+            // Le fatture con una riga su un'unità: le spese personali (la riga «Spese personali chieste con le rate» del riepilogo porta qui).
+            ->when($request->boolean('con_unita'), fn ($q) => $q->whereExists(fn ($r) => $r->select(\Illuminate\Support\Facades\DB::raw(1))->from('righe_fattura')
+                ->whereColumn('righe_fattura.fattura_passiva_id', 'fatture_passive.id')->whereNotNull('righe_fattura.immobile_id')))
             ->tap(fn ($q) => $this->ordina($q, $ordinamento, self::colonneOrdinabili(), predefinita: 'data_documento', versoPredefinito: 'desc'))
             // ⚠️ **`per_page` era cablato a 20**: il selettore delle righe cambiava e l'elenco
             // restava fermo. È la variante più muta dei difetti segnalati sul forum — il
@@ -198,7 +201,7 @@ class FatturaPassivaController extends Controller
                 'value' => $c->value,
                 'label' => $c->label(),
             ])->values(),
-            'filters' => $request->only(['stato_pagamento', 'stato_approvazione', 'search', 'data_da', 'data_a']),
+            'filters' => $request->only(['stato_pagamento', 'stato_approvazione', 'search', 'data_da', 'data_a', 'con_unita']),
         ]);
     }
 
@@ -207,7 +210,6 @@ class FatturaPassivaController extends Controller
      *
      * Prepara e calcola dinamicamente:
      * - I saldi residui reali per il controllo sfori (Budget Cap).
-     * - Il protocollo contabile suggerito per l'anno in corso.
      * - I fondi di riserva e le capienze per le fatture pregresse (Rata 0).
      * - Lo storico recente per la prevenzione dei duplicati.
      *
@@ -218,22 +220,6 @@ class FatturaPassivaController extends Controller
     {
         $listaCondomini = CondominioResource::collection($this->getCondomini())->resolve();
         $esercizio = $this->getEsercizioCorrente($condominio);
-
-        // --- AUTOGENERAZIONE NUMERO PROTOCOLLO ---
-        $annoInCorso = date('Y');
-        $ultimoProtocollo = FatturaPassiva::where('condominio_id', $condominio->id)
-            ->whereYear('created_at', $annoInCorso)
-            ->whereNotNull('numero_protocollo')
-            ->orderBy('id', 'desc')
-            ->value('numero_protocollo');
-
-        if ($ultimoProtocollo && preg_match('/-(\d+)$/', $ultimoProtocollo, $matches)) {
-            $nextNum = str_pad((int) $matches[1] + 1, 4, '0', STR_PAD_LEFT);
-            $protocolloSuggerito = "PR-{$annoInCorso}-{$nextNum}";
-        } else {
-            $protocolloSuggerito = "PR-{$annoInCorso}-0001";
-        }
-        // ------------------------------------------
 
         $contestoBudget = $this->prepareContestoBudget($condominio, $esercizio);
 
@@ -910,6 +896,14 @@ class FatturaPassivaController extends Controller
             ->groupBy('target_id')
             ->selectRaw('target_id, SUM(importo_cents) as totale')
             ->pluck('totale', 'target_id');
+        // Coda 438 (decisione 183.1): lo stesso per esercizio, `tutti` per le righe senza esercizio. La pagina toglie quello che vale nell'esercizio
+        // scelto sul modulo: il già versato di un altro esercizio la rata integrativa di questo non lo toglie.
+        $giaVersatoPerEsercizio = ContributoVersato::where('target_type', Conto::class)
+            ->groupBy('target_id', 'esercizio_id')
+            ->selectRaw('target_id, esercizio_id, SUM(importo_cents) as totale')
+            ->get()
+            ->groupBy('target_id')
+            ->map(fn ($righe) => $righe->mapWithKeys(fn ($r) => [$r->esercizio_id === null ? 'tutti' : (string) $r->esercizio_id => (int) $r->totale])->all());
 
         // 5. Conti con residuo budget e storico movimenti recenti
         // Il capitolo di una fattura è una voce di spesa: le entrate non si offrono. In modifica restano le voci che le righe hanno già, anche
@@ -928,7 +922,7 @@ class FatturaPassivaController extends Controller
             $conti->mapWithKeys(fn ($c) => [(int) $c->id => $c->parent_id !== null ? (int) $c->parent_id : null])->all(),
         );
         $conti = $conti
-            ->map(function ($conto) use ($ultimeSpese, $spesePerConto, $giaVersatoPerConto, $competenzePiano) {
+            ->map(function ($conto) use ($ultimeSpese, $spesePerConto, $giaVersatoPerConto, $giaVersatoPerEsercizio, $competenzePiano) {
                 $budgetApprovato = $conto->importo ?? 0;
                 $spesaAttuale = $spesePerConto->get($conto->id, 0);
                 $residuo = $budgetApprovato - $spesaAttuale;
@@ -957,6 +951,7 @@ class FatturaPassivaController extends Controller
                     'is_capiente' => $residuo >= 0,
                     'ultimi_movimenti' => $storicoRecente,
                     'gia_versato_cents' => (int) ($giaVersatoPerConto->get($conto->id) ?? 0),
+                    'gia_versato_per_esercizio' => (object) ($giaVersatoPerEsercizio->get($conto->id) ?? []),
                     'competenza_piano' => $competenzePiano[(int) $conto->id] ?? null,
                 ];
             })
