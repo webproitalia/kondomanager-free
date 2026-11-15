@@ -94,9 +94,15 @@ class VociFraPiuPiani
     {
         $quadro = $this->quadro($piano, $esercizio);
         $eccedenze = [];
+        $mioEsercizio = $this->esercizioDi($piano, $esercizio)?->id;
 
         foreach ($quadro['voci'] as $voceId => $v) {
             if ($v['altri'] === []) {
+                continue;
+            }
+            // Una voce con un già versato ha la sua guardia, dalla 1.12 (`CalcoloQuoteService::guardiaSovraFinanziamentoGiaVersato`): dice la
+            // stessa cosa con le cifre del già versato e l'esercizio a cui vale. Qui si lascia a lei, per non dare due frasi diverse.
+            if (\App\Models\Gestionale\ContributoVersato::ambitoNellEsercizio((int) $voceId, $mioEsercizio) !== null) {
                 continue;
             }
             if ($v['oltre'] > 0) {

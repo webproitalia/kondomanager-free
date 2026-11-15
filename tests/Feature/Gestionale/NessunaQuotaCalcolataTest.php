@@ -102,14 +102,14 @@ it('⚠️ le unità senza titolare: il rifiuto ne nomina dieci, con il ruolo ri
     expect(session('errors')->get('quote.unita_senza_titolare'))->toHaveCount(12);
 });
 
-it('⚠️ il piano senza voci, con tutte le voci già in un altro piano dello stesso esercizio, lo dice', function () {
+it('il piano senza voci, con tutte le voci già in un altro piano dello stesso esercizio, lo dice (con la frase della 1.12)', function () {
     $s = b52tScenario($this);
     nqcCrea($this, $s, [$s['spesa'], $s['entrata']], ['accetta_destinatari' => true, 'nota_destinatari' => 'Piano di prova'])->assertSessionHasNoErrors();
 
-    $r = nqcCrea($this, $s, [], ['nome' => 'Integrativo', 'capitoli_config' => []]);
+    nqcCrea($this, $s, [], ['nome' => 'Integrativo', 'capitoli_config' => []]);
 
-    expect(session('message')['message'])->toBe('Impossibile generare il piano rate «Integrativo»: nessuna quota calcolata, perché nessuna spesa del piano ha qualcuno a cui andare. Il piano non ha voci, perché tutte le voci della gestione sono già in un altro piano attivo: «Preventivo 2026». Scegli le voci del piano, ciascuna con la sua parte, oppure togli le voci dall\'altro piano. Poi genera di nuovo il piano.');
-    $r->assertSessionHasErrors('quote.piano_senza_voci');
+    // Dalla 1.12 questo caso ha il suo rifiuto a monte (Coda 438, AD3), che arriva prima del nostro elenco delle mancanze: lo si lascia a lui.
+    expect(session('message')['message'])->toContain('tutte le voci di questa gestione sono già nel piano «Preventivo 2026»');
 });
 
 it('⚠️ un agente che crea il piano senza la presa d\'atto riceve il rifiuto con le parole, non un «ok» con il rimando alla home', function () {

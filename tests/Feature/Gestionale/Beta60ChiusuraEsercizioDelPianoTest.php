@@ -507,7 +507,8 @@ it('controprova — una voce nuova, non in altri piani, accanto alle voci del pi
 
     // «Varie» (€ 0,00) non è in nessun piano: non tutte le voci sono impegnate, e il rifiuto è quello di sempre.
     $r = $this->actingAs($this->user)->from('/piano')->post(route('admin.gestionale.esercizi.piani-rate.regenerate', [$s['c'], $s['es']['2027'], $p27]));
-    expect(b60eErrore($r))->toBe('Errore durante il ricalcolo: '.B60E_NESSUNA_QUOTA)
+    // Web Pro Italia (15/11/2026): «nessuna quota calcolata» dice la causa vera (`MancanzeDelRiparto`) al posto delle tre verifiche generiche.
+    expect(b60eErrore($r))->toBe('Impossibile generare il piano rate «Integrativo 2027»: nessuna quota calcolata, perché nessuna spesa del piano ha qualcuno a cui andare. 1 voce senza importo: «Varie». Scrivi il preventivo della voce nel piano dei conti, o un importo nel piano. Poi genera di nuovo il piano.')
         ->and($p27->rate()->count())->toBe(0);
 })->with(B60E_ORDINI);
 
