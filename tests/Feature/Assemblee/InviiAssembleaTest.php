@@ -595,7 +595,8 @@ it('senza il servizio della coda partono al massimo cinquanta messaggi per volta
     foreach (range(1, 26) as $n) {
         $unita['Int. '.$n] = ['millesimi' => '38', 'titolari' => [sprintf('Persona %02d', $n) => 'proprietario']];
     }
-    $s = asmCondominio($unita, ['convocazione_tenuta' => 'prima', 'presidente' => 'P', 'segretario' => 'S', 'stato' => 'chiusa']);
+    // Con le ore di inizio e di fine: dal 17/11/2026 un verbale senza non si manda in approvazione.
+    $s = asmCondominio($unita, ['convocazione_tenuta' => 'prima', 'presidente' => 'P', 'segretario' => 'S', 'stato' => 'chiusa', 'ora_inizio' => '18:30', 'ora_fine' => '19:30']);
     $a = $s['assemblea'];
     foreach ($s['persone'] as $nome => $p) {
         $p->forceFill(['email_secondaria' => 'bis-'.$p->email])->save();
