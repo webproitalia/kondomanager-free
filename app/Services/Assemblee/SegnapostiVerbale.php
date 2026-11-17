@@ -107,18 +107,8 @@ final class SegnapostiVerbale
         );
 
         $luogo = trim((string) $assemblea->luogo);
-        // Chi scrive il luogo spesso mette già «presso…», «nella…», «in…»: non si ripete («presso presso la sala»).
-        $conPresso = preg_match('/^(presso|nell[aeo\']?|nei|negli|in|al|all[aeo\']?|ai|agli|sul|sull[aeo\']?)\b/iu', $luogo) === 1 ? $luogo : 'presso '.($luogo !== '' ? $luogo : self::VUOTO);
-        $dove = match ($assemblea->modalita) {
-            'videoconferenza' => 'in videoconferenza'.($luogo !== '' ? ' ('.$luogo.')' : ''),
-            'mista' => $conPresso.' e in videoconferenza',
-            default => $conPresso,
-        };
-
-        $indirizzo = trim(implode(', ', array_filter([
-            trim((string) $c->indirizzo),
-            trim(implode(' ', array_filter([$c->cap, $c->comune, filled($c->provincia) ? '('.$c->provincia.')' : null]))),
-        ])));
+        $dove = self::dove($assemblea);
+        $indirizzo = self::indirizzoDelCondominio($c);
 
         $elenco = $this->elencoPresenti($assemblea);
         $presidente = filled($assemblea->presidente) ? trim((string) $assemblea->presidente) : self::VUOTO;
@@ -254,12 +244,38 @@ final class SegnapostiVerbale
         return ['righe' => $righe, 'assenti' => $assenti];
     }
 
-    private static function giorno(Carbon $data): string
+    /**
+     * Il luogo con la modalità, come si scrive in una frase: «presso …», «in videoconferenza», «presso … e in
+     * videoconferenza». Lo usano il verbale e l'avviso di convocazione.
+     */
+    public static function dove(Assemblea $assemblea): string
+    {
+        $luogo = trim((string) $assemblea->luogo);
+        // Chi scrive il luogo spesso mette già «presso…», «nella…», «in…»: non si ripete («presso presso la sala»).
+        $conPresso = preg_match('/^(presso|nell[aeo\']?|nei|negli|in|al|all[aeo\']?|ai|agli|sul|sull[aeo\']?)\b/iu', $luogo) === 1 ? $luogo : 'presso '.($luogo !== '' ? $luogo : self::VUOTO);
+
+        return match ($assemblea->modalita) {
+            'videoconferenza' => 'in videoconferenza'.($luogo !== '' ? ' ('.$luogo.')' : ''),
+            'mista' => $conPresso.' e in videoconferenza',
+            default => $conPresso,
+        };
+    }
+
+    /** Indirizzo, CAP, comune e provincia del condominio su una riga. */
+    public static function indirizzoDelCondominio(\App\Models\Condominio $c): string
+    {
+        return trim(implode(', ', array_filter([
+            trim((string) $c->indirizzo),
+            trim(implode(' ', array_filter([$c->cap, $c->comune, filled($c->provincia) ? '('.$c->provincia.')' : null]))),
+        ])));
+    }
+
+    public static function giorno(Carbon $data): string
     {
         return $data->locale('it')->translatedFormat('j F Y');
     }
 
-    private static function giornoEOra(Carbon $data): string
+    public static function giornoEOra(Carbon $data): string
     {
         $ora = $data->format('H:i');
 

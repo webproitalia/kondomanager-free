@@ -68,6 +68,18 @@ class RegistroInvio extends Model
      */
     public const TIPO_FOGLIO_CONGUAGLIO = 'foglio_conguaglio';
 
+    /**
+     * Le comunicazioni dell'assemblea (Web Pro Italia, 17/11/2026): l'avviso di convocazione e il verbale approvato mandati a una persona.
+     * Il «documentabile» è l'assemblea. Una riga per indirizzo se va per email (con il gettone, come i fogli del conguaglio); una riga di
+     * canale `stampa` e stato `spedita` per la spedizione registrata a mano (raccomandata, PEC mandata fuori dal programma, consegna a mano),
+     * con `dati.spedizione`. Le legge e le scrive solo {@see \App\Services\Assemblee\InviiAssemblea}.
+     */
+    public const TIPO_CONVOCAZIONE_ASSEMBLEA = 'convocazione_assemblea';
+    public const TIPO_VERBALE_ASSEMBLEA = 'verbale_assemblea';
+
+    /** Una spedizione dell'assemblea registrata per sbaglio e annullata: la riga resta, con chi e quando, e non conta più. */
+    public const STATO_ANNULLATA = 'annullata';
+
     /** Una lettera stampata o scaricata che l'amministratore ha spedito, con il canale, la data e gli estremi che ha registrato. */
     public const STATO_SPEDITA = 'spedita';
 

@@ -69,7 +69,7 @@ const breadcrumbs = computed(() => [
             >
                 <template #actions>
                     <Link v-if="puo.gestire" :href="`${base}/modelli`">
-                        <Button variant="outline" class="h-8 px-3 gap-2 bg-white dark:bg-slate-900"><FileSignature class="w-4 h-4" /> Modelli di verbale</Button>
+                        <Button variant="outline" class="h-8 px-3 gap-2 bg-white dark:bg-slate-900"><FileSignature class="w-4 h-4" /> Modelli</Button>
                     </Link>
                     <Link v-if="puo.gestire" :href="`${base}/create`">
                         <Button class="h-8 px-3 gap-2" data-testid="nuova-assemblea"><Plus class="w-4 h-4" /> Nuova assemblea</Button>

@@ -2,7 +2,8 @@
 /**
  * La guida delle assemblee, nella finestra che si apre di lato (Web Pro Italia, 17/11/2026): chi ha diritto di
  * intervenire e come si contano le teste, costituzione e maggioranze (art. 1136 c.c.), voti ed esito, deleghe, il verbale
- * e le scelte fatte dal programma che lo studio può chiedere di cambiare.
+ * e le scelte fatte dal programma che lo studio può chiedere di cambiare. In testa, quello che si fa prima e dopo
+ * l'assemblea: la convocazione, il foglio delle firme, il verbale mandato agli assenti.
  */
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ChevronRight, Gavel } from 'lucide-vue-next';
@@ -35,6 +36,35 @@ const maggioranze = [
                 </SheetHeader>
 
                 <div class="space-y-8 text-sm text-slate-700 dark:text-slate-300">
+                    <section data-testid="guida-convocazione">
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">La convocazione</h3>
+                        <ul class="space-y-2">
+                            <li>L'avviso si genera da un <strong>modello dello studio</strong> («Modelli», scheda «Avviso di convocazione»), come il verbale: il programma scrive le due convocazioni, il luogo, l'ordine del giorno e la modalità; poi il testo è libero. Rigenerare lo sostituisce, e lo chiede prima.</li>
+                            <li>In fondo al modello di serie c'è il <strong>modulo di delega</strong>, staccato da una riga di tre trattini (<code>---</code>). L'avviso richiama la delega scritta dell'art. 67 disp. att. c.c. Nell'avviso generico il modulo è in bianco; in quello di ogni persona porta già il suo nome e le sue unità.</li>
+                            <li><strong>I cinque giorni.</strong> L'art. 66 disp. att. c.c. chiede che l'avviso sia comunicato almeno cinque giorni prima della data della prima convocazione. Il programma confronta le due date (i giorni di calendario fra la data dell'avviso, o oggi se non è scritta, e il giorno della prima convocazione) e, se sono meno di cinque, lo dice; se sono esattamente cinque dice che non resta margine. Non blocca l'invio, e non decide quando un avviso si considera comunicato (alla spedizione o al ricevimento) né come si contano i giorni ai fini di legge: lo valuta lo studio, che per la posta tiene un margine. <em>Scelta del programma.</em></li>
+                            <li><strong>A chi va.</strong> A ogni titolare di un diritto reale sulle unità (proprietari, comproprietari, nudi proprietari e usufruttuari), non solo a chi rappresenta la testa: nessuno che abbia titolo resta senza avviso. Chi non deve riceverlo si toglie dall'elenco prima di mandare. Un'unità senza titolari in archivio non ha nessuno a cui scrivere: la pagina lo segnala. <em>Scelta del programma.</em></li>
+                            <li><strong>Come parte.</strong> Per email a chi ha un indirizzo (primaria e secondaria; la PEC solo se la spunti, e parte come un'email semplice), con l'avviso in PDF allegato. «Inviata» vuol dire che il server di posta ha accettato il messaggio, non che è stato letto. Per gli altri: stampa «Uno per persona», spedisci o consegna, e segna com'è andata con <strong>«Registra la spedizione»</strong> (raccomandata, PEC mandata dal tuo programma, consegna a mano), con la data e il numero.</li>
+                            <li>Quali mezzi valgono per comunicare l'avviso lo dice l'art. 66 disp. att. c.c.: lo verifica lo studio. Il programma non sceglie al posto suo: registra, per ogni persona, quando e come l'avviso è partito. È quell'elenco che serve a dimostrare la regolare convocazione.</li>
+                            <li>Quando la convocazione parte, la <strong>data dell'avviso</strong> si riempie (se era vuota) e l'assemblea passa da «In preparazione» a «Convocata». Se dopo cambi il testo, la pagina dice a chi era già stato mandato quello di prima.</li>
+                            <li>Se l'assemblea è anche in videoconferenza, il collegamento si scrive nella pagina della convocazione ed entra nell'avviso. Se la riunione a distanza è ammessa (regolamento, consenso dei condòmini) il programma non lo controlla.</li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Il foglio delle firme</h3>
+                        <p>Si stampa dalla pagina dell'assemblea («Foglio firme») e si porta in sala: una riga per avente diritto, con le unità e i millesimi, e lo spazio per la firma di chi è presente, per il nome del delegato e per la sua firma; in fondo i totali e le firme di presidente e segretario. Se l'elenco delle presenze non è ancora stato preparato, il foglio lo calcola dai titolari senza salvarlo. Le presenze poi si segnano nel programma: il foglio firmato si conserva con il verbale.</p>
+                    </section>
+
+                    <section data-testid="guida-verbale-assenti">
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Il verbale agli assenti</h3>
+                        <ul class="space-y-2">
+                            <li>Dopo l'approvazione, nella pagina del verbale compare <strong>«Manda il verbale»</strong>. Prima no: un verbale non approvato non si manda.</li>
+                            <li>Di serie va <strong>agli assenti</strong>: per loro i trenta giorni per impugnare le deliberazioni decorrono dalla comunicazione (art. 1137 c.c.). Chi è intervenuto per delega non è fra gli assenti. Con «a tutti i condòmini» va a tutti.</li>
+                            <li>Per email a chi ha un indirizzo, con il PDF approvato allegato e un testo breve (il modello «Trasmissione del verbale», che lo studio cambia). Per chi non ha un indirizzo: «Lettere di trasmissione» stampa la lettera da accompagnare al verbale, e «Registra la spedizione» segna com'è partita.</li>
+                            <li>Per ogni persona resta scritto quando e come le è stato mandato. Se il verbale viene riaperto e approvato di nuovo, gli invii della versione di prima restano nel registro e la nuova versione si manda da capo.</li>
+                        </ul>
+                    </section>
+
                     <section>
                         <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Chi ha diritto di intervenire</h3>
                         <p class="mb-3">L'elenco si prepara dalle presenze con «Prepara l'elenco», dai titolari delle unità nel giorno dell'assemblea e dalla tabella scelta per i conteggi.</p>
@@ -98,7 +128,7 @@ const maggioranze = [
                     <section>
                         <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Il verbale</h3>
                         <ul class="space-y-2">
-                            <li>Si genera da un <strong>modello dello studio</strong> («Modelli di verbale»): un testo con i segnaposto, che il programma riempie con i dati. Poi il testo è libero: si corregge per intero, a mano o da un assistente.</li>
+                            <li>Si genera da un <strong>modello dello studio</strong> («Modelli»): un testo con i segnaposto, che il programma riempie con i dati. Poi il testo è libero: si corregge per intero, a mano o da un assistente.</li>
                             <li>Discussione e delibera di ogni punto si scrivono nei loro campi e entrano nel testo alla generazione. Rigenerare sovrascrive il testo, e chiede la conferma.</li>
                             <li>La votazione di ogni punto riporta favorevoli, contrari e astenuti con i nomi e i millesimi, come servono per l'art. 1137 c.c.</li>
                             <li>Stati: bozza → da approvare → approvato. <strong>Lo approva una persona</strong> (mai un assistente AI), con il permesso «Approva verbali». Il PDF va nell'archivio dei documenti del condominio, categoria «Verbali di assemblea», non ancora pubblicato ai condòmini. Da lì niente si modifica; per correggere si apre una nuova versione.</li>

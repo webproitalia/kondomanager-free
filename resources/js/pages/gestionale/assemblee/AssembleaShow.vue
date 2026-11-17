@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import AssembleeGuide from '@/components/gestionale/assemblee/AssembleeGuide.vue';
 import RegistratoreAssemblea from '@/components/registrazioni/RegistratoreAssemblea.vue';
 import { usePermission } from '@/composables/permissions';
-import { CheckCircle2, CircleAlert, Clock, Gavel, LogIn, LogOut, Pencil, PlayCircle, ScrollText, Search, Square, Users, Vote } from 'lucide-vue-next';
+import { CheckCircle2, CircleAlert, ClipboardList, Clock, Gavel, LogIn, LogOut, Mail, Pencil, PlayCircle, ScrollText, Search, Square, Users, Vote } from 'lucide-vue-next';
 import {
     NOMI_ESITO, NOMI_MODALITA, NOMI_STATO, corrispondeAllaRicerca, giornoEOra,
     type Esito, type Fotografia, type Maggioranza, type Presenza, type Punto, type TipoPresenza, type Voto,
@@ -164,6 +164,9 @@ const bottone = 'h-9 px-3 rounded-md border text-sm font-medium transition-color
             >
                 <template #actions>
                     <Link v-if="modificabile" :href="`${base}/edit`"><Button variant="outline" class="h-8 px-3 gap-2 bg-white dark:bg-slate-900"><Pencil class="w-4 h-4" /> Date e ordine del giorno</Button></Link>
+                    <!-- La convocazione (l'avviso da mandare) e il foglio delle firme da stampare e portare in sala (17/11/2026). -->
+                    <Link :href="`${base}/convocazione`"><Button variant="outline" class="h-8 px-3 gap-2 bg-white dark:bg-slate-900" data-testid="vai-alla-convocazione"><Mail class="w-4 h-4" /> Convocazione</Button></Link>
+                    <a :href="`${base}/foglio-firme/stampa`" target="_blank"><Button variant="outline" class="h-8 px-3 gap-2 bg-white dark:bg-slate-900" data-testid="foglio-firme"><ClipboardList class="w-4 h-4" /> Foglio firme</Button></a>
                     <Link :href="`${base}/verbale`"><Button class="h-8 px-3 gap-2" data-testid="vai-al-verbale"><ScrollText class="w-4 h-4" /> Verbale</Button></Link>
                 </template>
             </PageHeaderGuide>

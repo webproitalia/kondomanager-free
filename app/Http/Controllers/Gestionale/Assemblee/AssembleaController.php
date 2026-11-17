@@ -152,6 +152,10 @@ class AssembleaController extends Controller
         if ($voti > 0 || $assemblea->verbale()->whereNotNull('documento_id')->exists()) {
             return back()->with($this->flashError('Questa assemblea ha già dei voti o un verbale approvato: non si elimina. Se non si è tenuta, lasciala e scrivilo nelle note.'));
         }
+        // La convocazione mandata (o il verbale) è nel registro degli invii: è la prova di chi è stato convocato, e resta con l'assemblea.
+        if (app(\App\Services\Assemblee\InviiAssemblea::class)->haInviiUsciti($assemblea)) {
+            return back()->with($this->flashError('Per questa assemblea è già partita la convocazione (o il verbale): non si elimina, perché il registro degli invii è la prova di chi è stato convocato. Se non si tiene più, lasciala e scrivilo nelle note.'));
+        }
 
         $assemblea->delete();
 
@@ -213,7 +217,7 @@ class AssembleaController extends Controller
     /** I campi dell'assemblea dalla richiesta; in modifica solo quelli mandati. */
     private static function campiAssemblea(array $dati, ?array $soloQuesti = null): array
     {
-        $campi = ['tipo', 'titolo', 'esercizio_id', 'data_prima_convocazione', 'data_seconda_convocazione', 'data_avviso', 'luogo', 'modalita', 'tabella_id', 'note'];
+        $campi = ['tipo', 'titolo', 'esercizio_id', 'data_prima_convocazione', 'data_seconda_convocazione', 'data_avviso', 'luogo', 'modalita', 'collegamento_videoconferenza', 'tabella_id', 'note'];
         $fuori = [];
         foreach ($campi as $c) {
             if ($soloQuesti !== null && ! array_key_exists($c, $soloQuesti)) {
@@ -320,8 +324,19 @@ class AssembleaController extends Controller
             'genera_verbale' => 'admin.gestionale.assemblee.verbale.genera (POST: modello_id, sovrascrivi)',
             'scrivi_verbale' => 'admin.gestionale.assemblee.verbale.update (PUT: testo, intestazione, apertura, chiusura, punti[{id, discussione, delibera}])',
             'manda_in_approvazione' => 'admin.gestionale.assemblee.verbale.invia (POST)',
-            'modelli' => 'admin.gestionale.assemblee.modelli.store / .update (nome, descrizione, corpo, predefinito)',
+            'modelli' => 'admin.gestionale.assemblee.modelli.store / .update (tipo [verbale|convocazione|email_convocazione|trasmissione_verbale], nome, descrizione, corpo, predefinito)',
             'approvare' => 'solo una persona, dal gestionale: agli agenti è vietato',
+            // La convocazione, il foglio delle firme e gli invii (17/11/2026).
+            'convocazione_leggere' => 'admin.gestionale.assemblee.convocazione.show (GET): il testo, quello che il modello darebbe adesso, gli avvisi (i cinque giorni), l\'anteprima degli invii, i segnaposto',
+            'convocazione_genera' => 'admin.gestionale.assemblee.convocazione.genera (POST: modello_id, sovrascrivi)',
+            'convocazione_scrivi' => 'admin.gestionale.assemblee.convocazione.update (PUT: testo, collegamento_videoconferenza)',
+            'convocazione_pdf' => 'admin.gestionale.assemblee.convocazione.stampa (GET; ?persona=ID per l\'avviso di una persona), .per-persona.stampa (un PDF con tutti), .zip (un PDF per persona)',
+            'foglio_firme_pdf' => 'admin.gestionale.assemblee.foglio-firme.stampa (GET)',
+            'invii_anteprima' => 'admin.gestionale.assemblee.invii.anteprima (GET, cosa = convocazione|verbale; ?chi=assenti|tutti per il verbale; ?indirizzi[]=email|email_secondaria|pec): chi riceve che cosa e lo stato degli invii di ogni persona',
+            'invii_manda' => 'admin.gestionale.assemblee.invii.invia (POST, cosa = convocazione|verbale: conferma [true, obbligatorio], persone [gli id dell\'anteprima, obbligatorio], indirizzi, oggetto, testo, anche_gia_mandate): MANDA DAVVERO le email; senza conferma e senza elenco non parte niente. Provala prima con X-Kondo-Prova: 1',
+            'invii_registra_spedizione' => 'admin.gestionale.assemblee.invii.spedizione (POST, cosa = convocazione|verbale: persone, canale [raccomandata|pec|a_mano|posta|altro], data, numeri{id: numero}, nota): non manda niente, scrive il registro',
+            'invii_annulla_spedizione' => 'admin.gestionale.assemblee.invii.annulla (DELETE, invio = id della riga): solo una spedizione registrata a mano',
+            'verbale_lettera_di_trasmissione' => 'admin.gestionale.assemblee.verbale.trasmissione.stampa (GET; ?persone[]=ID o ?chi=assenti|tutti): la lettera per chi non ha un indirizzo email',
         ];
     }
 }

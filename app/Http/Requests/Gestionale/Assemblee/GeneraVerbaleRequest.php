@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Gestionale\Assemblee;
 
+use App\Models\Assemblee\VerbaleModello;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Genera il testo del verbale da un modello (Web Pro Italia, 17/11/2026). Senza `modello_id`, il modello predefinito.
@@ -18,7 +20,8 @@ class GeneraVerbaleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'modello_id' => ['nullable', 'integer', 'exists:verbale_modelli,id'],
+            // Solo un modello di verbale: quelli della convocazione e delle email stanno nella stessa tabella, con un altro tipo.
+            'modello_id' => ['nullable', 'integer', Rule::exists('verbale_modelli', 'id')->where('tipo', VerbaleModello::VERBALE)],
             'sovrascrivi' => ['sometimes', 'boolean'],
         ];
     }

@@ -775,6 +775,10 @@ Route::prefix('/gestionale/{condominio}')
      * leggere e stampare, «Gestisci assemblee» per lavorarle (e per i modelli di verbale), «Approva verbali» per
      * l'approvazione e la nuova versione, che restano vietate agli agenti AI (`AutenticaAgente::VIETATE`).
      *
+     * Dal 17/11/2026 anche la convocazione (l'avviso da un modello, le stampe, il foglio delle firme) e gli invii
+     * (l'avviso agli aventi diritto, il verbale approvato agli assenti): leggere e stampare con «Visualizza assemblee»,
+     * preparare e mandare con «Gestisci assemblee».
+     *
      * ⚠️ L'ordine conta: `assemblee/create` e `assemblee/modelli` stanno prima di `assemblee/{assemblea}`, che altrimenti
      * cercherebbe un'assemblea con quell'id. I modelli di verbale sono dello studio (non di un condominio): il loro
      * `{modello}` non è tipizzato e lo cerca `ModelliVerbaleController::assicuraModello()`.
@@ -796,6 +800,21 @@ Route::prefix('/gestionale/{condominio}')
         Route::get('assemblee/{assemblea}/dati', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'dati'])->name('assemblee.dati');
         Route::get('assemblee/{assemblea}/verbale', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'show'])->name('assemblee.verbale.show');
         Route::get('assemblee/{assemblea}/verbale/stampa', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'stampa'])->name('assemblee.verbale.stampa');
+        // La convocazione (17/11/2026): la pagina (che è anche la lettura per gli agenti AI), le stampe dell'avviso (generico o `?persona=ID`,
+        // uno per persona in un PDF solo, lo .zip con un PDF per persona) e il foglio delle firme. Nessuna stampa scrive niente.
+        Route::get('assemblee/{assemblea}/convocazione', [\App\Http\Controllers\Gestionale\Assemblee\ConvocazioneController::class, 'show'])->name('assemblee.convocazione.show');
+        Route::get('assemblee/{assemblea}/convocazione/stampa', [\App\Http\Controllers\Gestionale\Assemblee\ConvocazioneController::class, 'stampa'])->name('assemblee.convocazione.stampa');
+        Route::get('assemblee/{assemblea}/convocazione/per-persona/stampa', [\App\Http\Controllers\Gestionale\Assemblee\ConvocazioneController::class, 'stampaPerPersona'])->name('assemblee.convocazione.per-persona.stampa');
+        Route::get('assemblee/{assemblea}/convocazione/zip', [\App\Http\Controllers\Gestionale\Assemblee\ConvocazioneController::class, 'zip'])->name('assemblee.convocazione.zip');
+        Route::get('assemblee/{assemblea}/foglio-firme/stampa', [\App\Http\Controllers\Gestionale\Assemblee\ConvocazioneController::class, 'foglioFirme'])->name('assemblee.foglio-firme.stampa');
+        // Gli invii, in lettura: l'anteprima «chi riceve che cosa» con lo stato degli invii di ogni persona (`{cosa}`: convocazione o verbale),
+        // il PDF dell'avviso com'è partito per email (`{invio}` arriva grezzo: che sia di questa assemblea lo controlla il servizio, 404) e la
+        // lettera di trasmissione del verbale da stampare.
+        Route::get('assemblee/{assemblea}/invii/{cosa}', [\App\Http\Controllers\Gestionale\Assemblee\InviiAssembleaController::class, 'anteprima'])
+            ->whereIn('cosa', ['convocazione', 'verbale'])->name('assemblee.invii.anteprima');
+        Route::get('assemblee/{assemblea}/invii/{invio}/pdf', [\App\Http\Controllers\Gestionale\Assemblee\InviiAssembleaController::class, 'pdf'])
+            ->whereNumber('invio')->name('assemblee.invii.pdf');
+        Route::get('assemblee/{assemblea}/verbale/trasmissione/stampa', [\App\Http\Controllers\Gestionale\Assemblee\InviiAssembleaController::class, 'stampaTrasmissione'])->name('assemblee.verbale.trasmissione.stampa');
     });
 
     Route::middleware('role_or_permission:amministratore|Gestisci assemblee')->group(function () {
@@ -812,6 +831,18 @@ Route::prefix('/gestionale/{condominio}')
         Route::post('assemblee/{assemblea}/verbale/precompila', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'precompila'])->name('assemblee.verbale.precompila');
         Route::post('assemblee/{assemblea}/verbale/invia', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'invia'])->name('assemblee.verbale.invia');
         Route::post('assemblee/{assemblea}/verbale/ritira', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'ritira'])->name('assemblee.verbale.ritira');
+        // La convocazione (17/11/2026): il testo (generato dal modello, poi libero) e il collegamento della videoconferenza.
+        Route::put('assemblee/{assemblea}/convocazione', [\App\Http\Controllers\Gestionale\Assemblee\ConvocazioneController::class, 'update'])->name('assemblee.convocazione.update');
+        Route::post('assemblee/{assemblea}/convocazione/genera', [\App\Http\Controllers\Gestionale\Assemblee\ConvocazioneController::class, 'genera'])->name('assemblee.convocazione.genera');
+        // Gli invii, in scrittura. `invia` manda davvero le email dell'avviso di convocazione o del verbale approvato: la richiesta porta
+        // sempre `conferma: true` e l'elenco delle persone (`InviaComunicazioneAssembleaRequest`), per una persona come per un agente AI.
+        // `spedizione` registra quello che è stato spedito fuori dal programma; `annulla` una spedizione registrata per sbaglio.
+        Route::post('assemblee/{assemblea}/invii/{cosa}', [\App\Http\Controllers\Gestionale\Assemblee\InviiAssembleaController::class, 'invia'])
+            ->whereIn('cosa', ['convocazione', 'verbale'])->name('assemblee.invii.invia');
+        Route::post('assemblee/{assemblea}/invii/{cosa}/spedizione', [\App\Http\Controllers\Gestionale\Assemblee\InviiAssembleaController::class, 'spedizione'])
+            ->whereIn('cosa', ['convocazione', 'verbale'])->name('assemblee.invii.spedizione');
+        Route::delete('assemblee/{assemblea}/invii/{invio}', [\App\Http\Controllers\Gestionale\Assemblee\InviiAssembleaController::class, 'annulla'])
+            ->whereNumber('invio')->name('assemblee.invii.annulla');
     });
 
     // L'atto che chiude il verbale: solo una persona con il permesso, mai un agente AI (vedi `AutenticaAgente::VIETATE`).

@@ -44,15 +44,18 @@ class VerbaleController extends Controller
     {
         $this->assicuraAssemblea($condominio, $assemblea);
         $fotografia = $this->assemblee->fotografia($assemblea);
-        $modelli = VerbaleModello::orderByDesc('predefinito')->orderBy('nome')->get(['id', 'nome', 'descrizione', 'predefinito']);
+        $modelli = VerbaleModello::where('tipo', VerbaleModello::VERBALE)->orderByDesc('predefinito')->orderBy('nome')->get(['id', 'nome', 'descrizione', 'predefinito']);
 
         return Inertia::render('gestionale/assemblee/VerbaleEdit', $this->datiDellaTestata($condominio) + [
             'fotografia' => $fotografia,
             'modelli' => $modelli->map(fn (VerbaleModello $m) => ['id' => (int) $m->id, 'nome' => $m->nome, 'descrizione' => $m->descrizione, 'predefinito' => (bool) $m->predefinito])->values(),
             // Che cosa darebbe adesso il modello del verbale (o il predefinito): la pagina lo mostra accanto al testo, per confrontarli.
-            'proposta' => $this->verbali->compila($assemblea, $assemblea->verbale?->modello_id ? VerbaleModello::find($assemblea->verbale->modello_id) : null),
+            'proposta' => $this->verbali->compila($assemblea, VerbaleModello::delTipo(VerbaleModello::VERBALE, $assemblea->verbale?->modello_id)),
             'segnaposti' => ['semplici' => SegnapostiVerbale::ELENCO, 'punti' => SegnapostiVerbale::PUNTI],
             'puo' => AssembleaController::permessi($request),
+            // «Manda il verbale» (17/11/2026): chi lo riceve (di serie gli assenti), chi resta senza indirizzo, che cosa è già stato mandato.
+            // Si può mandare solo un verbale approvato: prima la pagina dice soltanto perché no.
+            'invio' => app(\App\Services\Assemblee\InviiAssemblea::class)->anteprima($assemblea, \App\Services\Assemblee\InviiAssemblea::VERBALE, $request->only(['indirizzi', 'chi'])),
         ]);
     }
 
@@ -100,7 +103,7 @@ class VerbaleController extends Controller
     {
         $this->assicuraAssemblea($condominio, $assemblea);
         $dati = $request->validated();
-        $modello = isset($dati['modello_id']) ? VerbaleModello::find($dati['modello_id']) : null;
+        $modello = VerbaleModello::delTipo(VerbaleModello::VERBALE, $dati['modello_id'] ?? null);
 
         $verbale = $this->verbali->genera($assemblea, $modello, (bool) ($dati['sovrascrivi'] ?? false));
 

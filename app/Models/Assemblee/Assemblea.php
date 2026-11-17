@@ -35,6 +35,8 @@ class Assemblea extends Model
         'condominio_id', 'esercizio_id', 'tipo', 'titolo', 'data_prima_convocazione', 'data_seconda_convocazione',
         'convocazione_tenuta', 'data_avviso', 'luogo', 'modalita', 'tabella_id', 'millesimi_totali', 'presidente',
         'segretario', 'ora_inizio', 'ora_fine', 'stato', 'registrata', 'note', 'created_by',
+        // L'avviso di convocazione (17/11/2026): il testo generato da un modello e poi libero, il modello usato, il collegamento della videoconferenza.
+        'convocazione_testo', 'convocazione_modello_id', 'collegamento_videoconferenza',
     ];
 
     protected $casts = [
@@ -79,6 +81,12 @@ class Assemblea extends Model
     public function verbale(): HasOne
     {
         return $this->hasOne(Verbale::class);
+    }
+
+    /** Il modello da cui è stato generato l'ultima volta il testo della convocazione (può non esserci più). */
+    public function modelloConvocazione(): BelongsTo
+    {
+        return $this->belongsTo(VerbaleModello::class, 'convocazione_modello_id');
     }
 
     /**

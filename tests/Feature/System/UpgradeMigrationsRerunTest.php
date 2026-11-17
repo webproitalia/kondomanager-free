@@ -279,6 +279,11 @@ it('resta rieseguibile dopo un\'interruzione a metà', function (string $file) {
     '2026_11_17_100000_create_registrazioni_table',
     // Web Pro Italia, 17/11/2026: il legame fra registrazione e assemblea diventa una chiave esterna (SET NULL), aggiunta solo se non c'è.
     '2026_11_17_110000_add_assemblea_fk_to_registrazioni_table',
+    // Web Pro Italia, 17/11/2026: l'avviso di convocazione — il tipo dei modelli (`verbale_modelli.tipo`) e tre colonne sull'assemblea (il testo
+    // della convocazione, il modello usato, il collegamento della videoconferenza), una guardia per colonna; i tre modelli di serie
+    // (convocazione, email della convocazione, trasmissione del verbale), ognuno scritto solo se non c'è ancora un modello del suo tipo.
+    '2026_11_17_120000_add_convocazione_to_assemblee_tables',
+    '2026_11_17_120100_seed_modelli_convocazione',
 ]);
 
 it('la migrazione delle registrazioni interrotta dopo la tabella e prima degli indici e delle chiavi si riprende e li mette', function () {

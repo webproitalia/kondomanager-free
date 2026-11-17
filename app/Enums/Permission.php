@@ -266,8 +266,8 @@ enum Permission: string
             self::DELETE_OWN_EVENTS => 'Permette di eliminare le proprie scadenze in agenda',
 
             // Assemblee
-            self::VIEW_ASSEMBLEE => 'Permette di vedere le assemblee dei condomini, le presenze, i voti e i verbali',
-            self::MANAGE_ASSEMBLEE => 'Permette di preparare le assemblee, segnare presenze e voti, scrivere il verbale e i suoi modelli e mandarlo in approvazione',
+            self::VIEW_ASSEMBLEE => 'Permette di vedere le assemblee dei condomini, le presenze, i voti e i verbali, e di stampare la convocazione e il foglio delle firme',
+            self::MANAGE_ASSEMBLEE => 'Permette di preparare le assemblee, scrivere e mandare la convocazione, segnare presenze e voti, scrivere il verbale e i suoi modelli, mandarlo in approvazione e, approvato, mandarlo ai condòmini',
             self::APPROVE_VERBALI => 'Permette di approvare il verbale di un\'assemblea (che entra nell\'archivio e non si modifica più) e di aprirne una nuova versione',
         };
     }

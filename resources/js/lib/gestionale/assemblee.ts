@@ -20,6 +20,7 @@ export interface DatiAssemblea {
     data_avviso: string | null;
     luogo: string | null;
     modalita: 'presenza' | 'videoconferenza' | 'mista';
+    collegamento_videoconferenza: string | null;
     tabella_id: number | null;
     tabella: string | null;
     millesimi_totali: string | null;
@@ -181,4 +182,98 @@ export function corrispondeAllaRicerca(p: Presenza, testo: string): boolean {
 
 export function normalizza(testo: string): string {
     return testo.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+// --- La convocazione e gli invii (Web Pro Italia, 17/11/2026) ----------------------------------------------------
+
+/** Una riga del registro degli invii di una persona: un'email a un indirizzo, o una spedizione registrata a mano. */
+export interface InvioRegistrato {
+    id: number;
+    canale: 'email' | 'stampa';
+    destinatario: string | null;
+    tipo_indirizzo: string | null;
+    stato: 'in_coda' | 'inviata' | 'non_partita' | 'spedita' | 'annullata';
+    quando: string;
+    da: string | null;
+    errore: string | null;
+    spedizione: { canale: string; come: string; data: string; numero?: string; nota?: string } | null;
+    versione: number | null;
+    attuale: boolean;
+    pdf: boolean;
+}
+
+/** Una persona dell'anteprima «chi riceve che cosa», con quello che le è già stato mandato. */
+export interface PersonaInvio {
+    id: number;
+    nome: string;
+    indirizzo_postale: string | null;
+    unita: string[];
+    millesimi: string;
+    rappresentante: boolean;
+    assente: boolean | null;
+    indirizzi: { tipo: string; indirizzo: string }[];
+    senza_email: boolean;
+    solo_pec: boolean;
+    proposta: boolean;
+    mandata: boolean;
+    in_coda: boolean;
+    non_partita: boolean;
+    quando: string | null;
+    come: string | null;
+    testo_cambiato: boolean;
+    invii: InvioRegistrato[];
+}
+
+export interface AnteprimaInvio {
+    cosa: 'convocazione' | 'verbale';
+    chi: 'tutti' | 'assenti';
+    indirizzi: string[];
+    tipi_indirizzo: Record<string, string>;
+    persone: PersonaInvio[];
+    riepilogo: {
+        aventi_diritto: number; persone: number; con_email: number; messaggi: number; senza_indirizzo: string[];
+        gia_mandate: number; in_coda: number; non_partite: number; testo_cambiato: number;
+    };
+    elenco_preparato: boolean;
+    oggetto: string;
+    testo: string;
+    modello: string | null;
+    esempio: { persona: string; oggetto: string; saluto: string; righe: string[]; chiusura: string } | null;
+    allegato: string;
+    senza_server_posta: boolean;
+    tetto_messaggi: number | null;
+    tetto_pdf: number | null;
+    canali_spedizione: Record<string, string>;
+    si_puo_mandare: boolean;
+    perche_no: string | null;
+}
+
+/** Quello che l'invio risponde: quanti messaggi, in che stato, chi è rimasto fuori e perché. */
+export interface EsitoInvio {
+    persone: number;
+    messaggi: number;
+    inviate: number;
+    in_coda: number;
+    non_partite: number;
+    errori: string[];
+    senza_indirizzo: string[];
+    saltate: string[];
+    restanti: { persone: number[]; messaggi: number } | null;
+}
+
+export interface AvvisoPagina { tipo: string; testo: string; codice?: string }
+
+export const NOMI_STATO_INVIO: Record<InvioRegistrato['stato'], string> = {
+    in_coda: 'in coda',
+    inviata: 'inviata',
+    non_partita: 'non partita',
+    spedita: 'spedita',
+    annullata: 'annullata',
+};
+
+/** «17/11/2026» da «2026-11-17». */
+export function giorno(valore: string | null | undefined): string {
+    if (!valore) return '';
+    const [a, m, g] = valore.slice(0, 10).split('-');
+    return `${g}/${m}/${a}`;
 }
