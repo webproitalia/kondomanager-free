@@ -25,6 +25,8 @@ const props = defineProps<{
     condominio: { id: number; nome: string }; condomini: any; esercizio: any;
     registrazioni: Riga[];
     servizio: { trascrizione: boolean; riassunto: boolean; giorni_audio: number; secondi_segmento: number };
+    // Senza «Gestisci assemblee» si legge e basta: niente registratore, niente «Chiudi e trascrivi».
+    puo?: { gestire: boolean };
 }>();
 
 const { generateRoute, generatePath } = usePermission();
@@ -85,6 +87,7 @@ const breadcrumbs = computed(() => [
             <div v-if="flashMessage"><Alert :message="flashMessage.message" :type="flashMessage.type" /></div>
 
             <RegistratoreAssemblea
+                v-if="puo?.gestire ?? true"
                 :condominio-id="condominio.id"
                 :disponibile="servizio.trascrizione"
                 @avviata="(id: number) => { inRegistrazione = id; rinfresca(); }"
@@ -110,8 +113,10 @@ const breadcrumbs = computed(() => [
                         <Loader2 v-if="r.stato === 'in_elaborazione'" class="w-3 h-3 animate-spin" />
                         {{ r.id === inRegistrazione ? 'Sto registrando' : ETICHETTA_STATO[r.stato] ?? r.stato }}
                     </span>
-                    <Button v-if="r.stato === 'in_corso' && r.id !== inRegistrazione" size="sm" variant="outline" class="h-7 text-xs" @click="chiudi(r)">Chiudi e trascrivi</Button>
-                    <Button v-else-if="r.stato === 'errore' && !r.audio_cancellato_at" size="sm" variant="outline" class="h-7 text-xs" @click="chiudi(r)">Riprova</Button>
+                    <template v-if="puo?.gestire ?? true">
+                        <Button v-if="r.stato === 'in_corso' && r.id !== inRegistrazione" size="sm" variant="outline" class="h-7 text-xs" @click="chiudi(r)">Chiudi e trascrivi</Button>
+                        <Button v-else-if="r.stato === 'errore' && !r.audio_cancellato_at" size="sm" variant="outline" class="h-7 text-xs" @click="chiudi(r)">Riprova</Button>
+                    </template>
                     <Link :href="apri(r)" class="inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs hover:bg-accent"><FileText class="w-3.5 h-3.5" /> Apri</Link>
                 </div>
                 <p v-if="!registrazioni.length" class="p-4 text-sm text-slate-500">Nessuna registrazione per questo condominio.</p>

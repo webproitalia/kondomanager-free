@@ -113,7 +113,8 @@ final class AssembleaService
 
             return [
                 'id' => (int) $p->id,
-                'anagrafica_id' => (int) $p->anagrafica_id,
+                // Vuoto se l'anagrafica è stata eliminata: la riga resta, con il nome fotografato.
+                'anagrafica_id' => $p->anagrafica_id ? (int) $p->anagrafica_id : null,
                 'nome' => ConteggiAssemblea::nomeDi($p),
                 'tipo' => $p->tipo,
                 'delegato_anagrafica_id' => $p->delegato_anagrafica_id ? (int) $p->delegato_anagrafica_id : null,

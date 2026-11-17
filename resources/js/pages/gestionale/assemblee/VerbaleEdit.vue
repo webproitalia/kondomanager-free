@@ -151,7 +151,7 @@ const coloreStato: Record<string, string> = {
                         </select>
                     </label>
                     <Button :disabled="!scrivibile" variant="outline" class="gap-2" data-testid="genera-verbale" @click="genera(false)"><Wand2 class="w-4 h-4" /> {{ v.testo ? 'Rigenera dal modello' : 'Genera dal modello' }}</Button>
-                    <Button :disabled="!scrivibile || !cambiato" class="gap-2" data-testid="salva-verbale" @click="salvaTesto"><Save class="w-4 h-4" /> Salva il testo</Button>
+                    <Button :disabled="!scrivibile" :variant="cambiato ? 'default' : 'outline'" class="gap-2" data-testid="salva-verbale" title="Salvare il testo, anche senza cambiarlo, dice che lo hai riletto con i dati di adesso" @click="salvaTesto"><Save class="w-4 h-4" /> Salva il testo</Button>
                 </div>
                 <p class="text-xs text-slate-500">Si scrive come la nota del fascicolo: una riga che comincia con «# » è un titolo, <code>**testo**</code> è in grassetto, le righe con «- » sono un elenco, una riga vuota separa i paragrafi. Nel PDF ogni riga resta una riga.</p>
                 <p v-if="!v.testo" class="text-sm rounded-md bg-amber-50 text-amber-900 px-3 py-2 dark:bg-amber-950/40 dark:text-amber-200">

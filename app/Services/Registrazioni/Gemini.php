@@ -92,8 +92,13 @@ TESTO;
 
     /**
      * La bozza per punto dell'ordine del giorno: `[{numero, discussione, delibera}]`, un elemento per ogni punto dato, nello stesso ordine.
-     * `discussione` è la sintesi di quello che si è detto sul punto (vuota se non se n'è parlato), `delibera` la decisione solo se è stata
-     * detta chiaramente, altrimenti `null`. Niente esiti di voto inventati: lo dice la richiesta, e qui si scarta ciò che non è dei punti dati.
+     * `discussione` è la sintesi di quello che si è detto sul punto (vuota se non se n'è parlato), `delibera` il TESTO della decisione (che
+     * cosa si decide) solo se è stata detta chiaramente, altrimenti `null`.
+     *
+     * ⚠️ La delibera non porta mai l'esito del voto: né «approvato» o «respinto», né maggioranze, né numeri di favorevoli, contrari e
+     * astenuti, né «all'unanimità». Entra nel verbale accanto ai voti registrati dalla persona, e quelli li scrive il programma: un esito
+     * sentito nell'audio lì accanto sarebbe un secondo esito, senza confronto con i voti (nel verbale di prova era finito «approvato
+     * all'unanimità dei presenti»). Lo dice la richiesta; qui si scarta ciò che non è dei punti dati.
      *
      * @param  list<array{numero: int, titolo: string}>  $punti
      * @return list<array{numero: int, discussione: string, delibera: ?string}>|null
@@ -112,8 +117,8 @@ TESTO;
 Sei l'assistente di uno studio che amministra condomini. Ti do l'ordine del giorno di un'assemblea del condominio «{$condominio}» e la trascrizione della riunione (le voci sono «Persona 1», «Persona 2»…; possono esserci errori di trascrizione, interpretali col buon senso).
 
 Per OGNI punto dell'ordine del giorno scrivi:
-- "discussione": la sintesi fedele di quello che si è detto su quel punto, in italiano, da 2 a 8 frasi, con nomi, cifre, importi e millesimi ESATTI come sono stati detti. Scrivila come un verbale, in forma impersonale e al presente: «Viene illustrato…», «Un condòmino chiede…», «L'amministratore risponde…», «Il presidente mette ai voti…». Non scrivere mai «Persona 1», «Persona 2» o simili: usa il nome solo se nella trascrizione qualcuno si presenta o viene chiamato per nome, il ruolo (presidente, amministratore) solo se si capisce, altrimenti «un condòmino», «un altro condòmino». Gli importi scrivili in cifre (12.480 euro). Se del punto non si è parlato, stringa vuota.
-- "delibera": la decisione presa su quel punto SOLO se nella trascrizione è detta chiaramente (per esempio «si approva all'unanimità», «l'assemblea decide di…»), con l'esito del voto solo se è stato detto. Se la decisione non è chiara o non c'è stata, null. Non inventare esiti di voto, maggioranze, millesimi, nomi o importi.
+- "discussione": la sintesi fedele di quello che si è detto su quel punto, in italiano, da 2 a 8 frasi, con nomi, cifre, importi e millesimi ESATTI come sono stati detti. Scrivila come un verbale, in forma impersonale e al presente: «Viene illustrato…», «Un condòmino chiede…», «L'amministratore risponde…», «Il presidente mette ai voti…». Non scrivere mai «Persona 1», «Persona 2» o simili: usa il nome solo se nella trascrizione qualcuno si presenta o viene chiamato per nome, il ruolo (presidente, amministratore) solo se si capisce, altrimenti «un condòmino», «un altro condòmino». Gli importi scrivili in cifre (12.480 euro). Fermati alla discussione: non scrivere com'è finita la votazione, né quanti hanno votato a favore o contro (lo scrive il programma dai voti registrati). Se del punto non si è parlato, stringa vuota.
+- "delibera": il TESTO della decisione presa su quel punto, cioè CHE COSA si decide, SOLO se nella trascrizione è detto chiaramente. Scrivila come la frase di un verbale, con «L'assemblea» come soggetto e il verbo della decisione al presente: «L'assemblea approva il rendiconto dell'esercizio 2025 e il relativo riparto», «L'assemblea conferma l'amministratore … per un altro anno, con il compenso di … euro», «L'assemblea dà mandato all'amministratore di chiedere due preventivi per il tetto». Nella delibera NON scrivere MAI l'esito del voto: niente «approvato» o «respinto» come risultato, niente «all'unanimità», «a maggioranza», «con il voto contrario di…», niente numeri di favorevoli, contrari e astenuti, niente millesimi dei voti. I voti e l'esito li registra la persona nel programma, che li scrive nel verbale accanto alla delibera: qui serve solo il testo della decisione. Se la decisione non è chiara, non c'è stata o è stata rinviata, null. Non inventare decisioni, nomi o importi.
 
 Rispondi SOLO con un array JSON, un oggetto per punto, con gli stessi numeri dell'ordine del giorno: [{"numero": 1, "discussione": "…", "delibera": "…" oppure null}].
 

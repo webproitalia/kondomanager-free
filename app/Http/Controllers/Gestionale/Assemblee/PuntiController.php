@@ -38,10 +38,15 @@ class PuntiController extends Controller
             throw ValidationException::withMessages(['voti' => 'Il punto '.$punto->numero.' è informativo: non si vota. Se va votato, cambia la sua maggioranza nell\'ordine del giorno.']);
         }
 
-        $presenze = AssembleaPresenza::where('assemblea_id', $assemblea->id)->get()->keyBy('id');
+        $presenze = AssembleaPresenza::with('anagrafica:id,nome')->where('assemblea_id', $assemblea->id)->get()->keyBy('id');
         foreach ($dati['voti'] ?? [] as $i => $v) {
-            if (! $presenze->has((int) $v['presenza_id'])) {
+            $presenza = $presenze->get((int) $v['presenza_id']);
+            if ($presenza === null) {
                 throw ValidationException::withMessages(["voti.{$i}.presenza_id" => 'Questa presenza non è di questa assemblea.']);
+            }
+            // Chi è segnato assente non vota (togliere un voto invece si può sempre). Chi è uscito a metà è intervenuto: i suoi voti valgono.
+            if (($v['voto'] ?? null) !== null && ! $presenza->intervenuto()) {
+                throw ValidationException::withMessages(["voti.{$i}.presenza_id" => $presenza->nomePersona().' è segnato assente: non si registra il suo voto. Se ha partecipato, segnalo prima presente o per delega dall\'elenco delle presenze, poi registra il voto.']);
             }
         }
 

@@ -133,11 +133,19 @@ it('maggioranza ordinaria in prima: esattamente 500 millesimi e più della metà
     asmVota($punto, [[$p['Carla Conti'], 'favorevole']]);
     expect(asmVotazione($punto)['esito_proposto'])->toBe('approvato');
 
-    // Solo A favorevole su due intervenuti (A e un contrario che esce dalla votazione): 1 su 2 non basta.
+    // Solo A vota, a favore; gli altri tre sono in sala senza un voto. Dal 17/11/2026 chi è in sala senza voto conta fra
+    // gli intervenuti come non votante (prima non contava, e qui bastava 1 su 1): 1 favorevole su 4 non è più della metà.
     $punto->voti()->delete();
     asmVota($punto, [[$p['Anna Alberti'], 'favorevole']]);
     $v = asmVotazione($punto);
-    expect($v['intervenuti']['teste'])->toBe(1)->and($v['esito_proposto'])->toBe('approvato'); // 1 su 1, 500 millesimi esatti
+    expect($v['intervenuti']['teste'])->toBe(4)->and($v['non_votanti']['teste'])->toBe(3)->and($v['esito_proposto'])->toBe('respinto');
+
+    // Gli altri tre erano usciti prima del voto: segnata l'uscita, resta A sola. 1 su 1, 500 millesimi esatti.
+    foreach (['Bruno Bassi', 'Carla Conti', 'Dario Dini'] as $uscito) {
+        asmPresenza($s['assemblea'], $p[$uscito])->forceFill(['ora_uscita' => '19:00'])->save();
+    }
+    $v = asmVotazione($punto);
+    expect($v['intervenuti']['teste'])->toBe(1)->and($v['esito_proposto'])->toBe('approvato');
 
     // 499,99 millesimi favorevoli: respinto anche con tutte le teste.
     asmPresenza($s['assemblea'], $p['Anna Alberti'])->forceFill(['millesimi' => '499.99'])->save();
@@ -168,6 +176,11 @@ it('art. 1136 c. 4 chiede metà del valore anche in seconda; c. 5 due terzi; l\'
     // 3 su 4 e 733,33: approvato. Senza Carla: 500 millesimi esatti, ma 2 su 4.
     expect(asmVotazione($nomina)['esito_proposto'])->toBe('approvato');
 
+    // Carla esce dopo la nomina (dal 17/11/2026 chi resta in sala senza un voto conta fra gli intervenuti: perché sul
+    // punto dopo gli intervenuti siano tre, la sua uscita va segnata). Il voto che ha dato sulla nomina resta.
+    asmPresenza($s['assemblea'], $p['Carla Conti'])->forceFill(['ora_uscita' => '19:30'])->save();
+    expect(asmVotazione($nomina)['esito_proposto'])->toBe('approvato');
+
     $innovazione = AssembleaPunto::create(['assemblea_id' => $s['assemblea']->id, 'numero' => 2, 'titolo' => 'Ascensore nuovo', 'maggioranza' => 'art1136c5']);
     // A + B = 666,67 e una terza testa astenuta: 2 su 3 intervenuti, due terzi del valore esatti.
     asmVota($innovazione, [[$p['Anna Alberti'], 'favorevole'], [$p['Bruno Bassi'], 'favorevole'], [$p['Dario Dini'], 'astenuto']]);
@@ -177,6 +190,7 @@ it('art. 1136 c. 4 chiede metà del valore anche in seconda; c. 5 due terzi; l\'
 
     $unanime = AssembleaPunto::create(['assemblea_id' => $s['assemblea']->id, 'numero' => 3, 'titolo' => 'Cessione del lastrico', 'maggioranza' => 'unanimita']);
     asmPresenza($s['assemblea'], $p['Bruno Bassi'])->forceFill(['millesimi' => '266.67'])->save();
+    asmPresenza($s['assemblea'], $p['Carla Conti'])->forceFill(['ora_uscita' => null])->save(); // Carla rientra
     asmVota($unanime, [[$p['Anna Alberti'], 'favorevole'], [$p['Bruno Bassi'], 'favorevole'], [$p['Carla Conti'], 'favorevole']]);
     expect(asmVotazione($unanime)['esito_proposto'])->toBe('respinto'); // manca Dario
     asmVota($unanime, [[$p['Dario Dini'], 'favorevole']]);

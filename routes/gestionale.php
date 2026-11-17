@@ -166,17 +166,23 @@ Route::prefix('/gestionale/{condominio}')
     // (`segmento`), ogni pezzo diventa subito il testo in diretta; `termina` mette in coda l'elaborazione finale (voci e riassunto). Avviare e
     // mandare l'audio sono vietati agli agenti AI (`AutenticaAgente::VIETATE`). `{registrazione}` arriva grezzo: che sia di questo condominio
     // lo controlla il controller (404).
+    // I permessi sono quelli delle assemblee: una trascrizione è materiale dell'assemblea, e collegandola si scrive nei punti del suo verbale.
+    // Leggere (elenco, dettaglio, stato del servizio) chiede «Visualizza assemblee»; registrare, chiudere, collegare, cancellare «Gestisci assemblee».
     Route::controller(\App\Http\Controllers\Gestionale\Registrazioni\RegistrazioneController::class)
         ->prefix('registrazioni')->name('registrazioni.')->group(function () {
-            Route::get('/', 'index')->name('index');
-            Route::get('servizio', 'servizio')->name('servizio');
-            Route::post('/', 'avvia')->name('avvia');
-            Route::get('{registrazione}', 'show')->whereNumber('registrazione')->name('show');
-            Route::post('{registrazione}/segmenti', 'segmento')->whereNumber('registrazione')->name('segmento');
-            Route::post('{registrazione}/termina', 'termina')->whereNumber('registrazione')->name('termina');
-            Route::put('{registrazione}/assemblea', 'collega')->whereNumber('registrazione')->name('assemblea');
-            Route::delete('{registrazione}/audio', 'cancellaAudio')->whereNumber('registrazione')->name('cancella-audio');
-            Route::delete('{registrazione}', 'destroy')->whereNumber('registrazione')->name('destroy');
+            Route::middleware('role_or_permission:amministratore|Visualizza assemblee')->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('servizio', 'servizio')->name('servizio');
+                Route::get('{registrazione}', 'show')->whereNumber('registrazione')->name('show');
+            });
+            Route::middleware('role_or_permission:amministratore|Gestisci assemblee')->group(function () {
+                Route::post('/', 'avvia')->name('avvia');
+                Route::post('{registrazione}/segmenti', 'segmento')->whereNumber('registrazione')->name('segmento');
+                Route::post('{registrazione}/termina', 'termina')->whereNumber('registrazione')->name('termina');
+                Route::put('{registrazione}/assemblea', 'collega')->whereNumber('registrazione')->name('assemblea');
+                Route::delete('{registrazione}/audio', 'cancellaAudio')->whereNumber('registrazione')->name('cancella-audio');
+                Route::delete('{registrazione}', 'destroy')->whereNumber('registrazione')->name('destroy');
+            });
         });
 
     // Già versato per voce di spesa: alimenta il netting del riparto (beta.26).

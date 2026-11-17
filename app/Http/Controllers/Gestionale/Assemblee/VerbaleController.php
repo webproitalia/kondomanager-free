@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Gestionale\Assemblee;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Gestionale\Assemblee\AggiornaVerbaleRequest;
 use App\Http\Requests\Gestionale\Assemblee\GeneraVerbaleRequest;
+use App\Http\Requests\Gestionale\Assemblee\InviaVerbaleRequest;
 use App\Http\Requests\Gestionale\Assemblee\PrecompilaVerbaleRequest;
 use App\Models\Assemblee\Assemblea;
 use App\Models\Assemblee\AssembleaPunto;
@@ -90,6 +91,12 @@ class VerbaleController extends Controller
                     $punto->save();
                 }
             }
+
+            // Chi salva il testo lo ha scritto o riletto con i dati di adesso: se ne fotografa l'impronta, e l'invio in
+            // approvazione dirà se poi i dati sono cambiati. Salvare solo i testi dei punti o di contorno non la tocca.
+            if (array_key_exists('testo', $dati)) {
+                $this->verbali->segnaTestoRiletto($assemblea);
+            }
         });
 
         return back(fallback: $this->indirizzo($condominio, $assemblea))->with($this->flashSuccess('Verbale salvato.'));
@@ -123,10 +130,15 @@ class VerbaleController extends Controller
         }));
     }
 
-    public function invia(Condominio $condominio, Assemblea $assemblea): RedirectResponse
+    /**
+     * Manda il verbale in approvazione, dopo i controlli sul testo e sui dati. `dati_riletti` e `esiti_confermati` sono
+     * le due conferme esplicite di `InviaVerbaleRequest`.
+     */
+    public function invia(InviaVerbaleRequest $request, Condominio $condominio, Assemblea $assemblea): RedirectResponse
     {
         $this->assicuraAssemblea($condominio, $assemblea);
-        $this->verbali->inviaInApprovazione($assemblea);
+        $dati = $request->validated();
+        $this->verbali->inviaInApprovazione($assemblea, (bool) ($dati['dati_riletti'] ?? false), $dati['esiti_confermati'] ?? []);
 
         return back(fallback: $this->indirizzo($condominio, $assemblea))->with($this->flashSuccess('Verbale mandato in approvazione. Lo approva una persona con il permesso «Approva verbali».'));
     }

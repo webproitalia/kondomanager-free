@@ -25,14 +25,19 @@ use Throwable;
  *   del valore dell'edificio;
  * - seconda convocazione: almeno un terzo dei partecipanti e almeno un terzo del valore.
  *
- * Voti: «la maggioranza degli intervenuti» è più della metà delle teste che hanno preso parte alla votazione di quel
- * punto, astenuti compresi (un astenuto non è un favorevole). Il valore si conta sull'intero edificio, non sui
- * presenti. Le frazioni del valore di ogni maggioranza stanno in `MaggioranzaAssemblea::quotaDelValore()`.
+ * Voti: «la maggioranza degli intervenuti» è più della metà delle teste intervenute su quel punto, astenuti e non
+ * votanti compresi (un astenuto non è un favorevole). Il valore si conta sull'intero edificio, non sui presenti. Le
+ * frazioni del valore di ogni maggioranza stanno in `MaggioranzaAssemblea::quotaDelValore()`.
  *
  * ## Le scelte (scritte anche nella guida, e modificabili)
  *
- * - Gli intervenuti di un punto sono chi ha un voto registrato su quel punto. Chi è in sala e non ha un voto è
- *   segnalato, non contato: il pulsante «tutti i presenti favorevoli» li registra tutti in un colpo.
+ * - Gli intervenuti di un punto sono tutti quelli che sono in sala (presenti o per delega, e non usciti) più chi ha un
+ *   voto registrato su quel punto (chi è uscito dopo aver votato tiene il suo voto). Chi è in sala senza un voto è un
+ *   **non votante**: conta fra gli intervenuti, quindi per la maggioranza pesa come un astenuto; il conteggio lo mostra
+ *   a parte («presenti senza voto») e la pagina avvisa. Finché un punto non ha nessun voto il programma non propone
+ *   un esito.
+ * - Il voto di chi è segnato assente non conta (e non si può registrare: `PuntiController`); segnando assente chi ha
+ *   già votato i suoi voti si tolgono (`PresenzeController`).
  * - La costituzione si conta su chi è in sala adesso (presente o per delega, e non uscito); il verbale la conta su chi
  *   c'era all'ora d'inizio.
  */
@@ -152,8 +157,8 @@ final class ConteggiAssemblea
     }
 
     /**
-     * I voti di un punto: favorevoli, contrari e astenuti in teste e millesimi, con i nomi; se la maggioranza è
-     * raggiunta e l'esito che il programma propone.
+     * I voti di un punto: favorevoli, contrari, astenuti e presenti senza voto in teste e millesimi, con i nomi; se la
+     * maggioranza è raggiunta e l'esito che il programma propone.
      */
     public function votazione(Assemblea $assemblea, AssembleaPunto $punto): array
     {
@@ -165,12 +170,26 @@ final class ConteggiAssemblea
         $voti = $punto->relationLoaded('voti') ? $punto->voti : $punto->voti()->get();
 
         $gruppi = ['favorevole' => [], 'contrario' => [], 'astenuto' => []];
+        $conVoto = [];
+        $diAssenti = [];
         foreach ($voti as $v) {
             $p = $presenze->get($v->assemblea_presenza_id);
-            if ($p && isset($gruppi[$v->voto])) {
-                $gruppi[$v->voto][] = $p;
+            if (! $p || ! isset($gruppi[$v->voto])) {
+                continue;
             }
+            // Il voto di chi è segnato assente non conta: la pagina lo segnala, e si toglie o si corregge la presenza.
+            if (! $p->intervenuto()) {
+                $diAssenti[] = self::nomeDi($p);
+                continue;
+            }
+            $gruppi[$v->voto][] = $p;
+            $conVoto[(int) $p->id] = true;
         }
+
+        $quota = $maggioranza->quotaDelValore($convocazione);
+        // Chi è in sala e non ha un voto su questo punto: un non votante. Su un punto informativo non si vota, e non ce ne sono.
+        $senzaVoto = $quota === null ? [] : $assemblea->presenze
+            ->filter(fn (AssembleaPresenza $p) => $p->inSala() && ! isset($conVoto[(int) $p->id]))->values()->all();
 
         $riassunto = function (array $lista) use ($totale) {
             $millesimi = array_sum(array_map(fn (AssembleaPresenza $p) => Millesimi::daValore($p->millesimi), $lista));
@@ -191,16 +210,15 @@ final class ConteggiAssemblea
         $favorevoli = $riassunto($gruppi['favorevole']);
         $contrari = $riassunto($gruppi['contrario']);
         $astenuti = $riassunto($gruppi['astenuto']);
-        $intervenutiTeste = $favorevoli['teste'] + $contrari['teste'] + $astenuti['teste'];
-        $intervenutiMillesimi = $favorevoli['millesimi'] + $contrari['millesimi'] + $astenuti['millesimi'];
+        $nonVotanti = $riassunto($senzaVoto);
+        $votantiTeste = $favorevoli['teste'] + $contrari['teste'] + $astenuti['teste'];
+        $votantiMillesimi = $favorevoli['millesimi'] + $contrari['millesimi'] + $astenuti['millesimi'];
+        // Gli intervenuti: chi ha votato più chi è in sala senza un voto.
+        $intervenutiTeste = $votantiTeste + $nonVotanti['teste'];
+        $intervenutiMillesimi = $votantiMillesimi + $nonVotanti['millesimi'];
 
-        $conVoto = $voti->pluck('assemblea_presenza_id')->map(fn ($id) => (int) $id)->all();
-        $senzaVoto = $assemblea->presenze->filter(fn (AssembleaPresenza $p) => $p->inSala() && ! in_array((int) $p->id, $conVoto, true))
-            ->map(fn (AssembleaPresenza $p) => (int) $p->id)->values()->all();
-
-        $quota = $maggioranza->quotaDelValore($convocazione);
         $testeOk = $valoreOk = false;
-        if ($quota !== null && $intervenutiTeste > 0) {
+        if ($quota !== null && $votantiTeste > 0) {
             $testeOk = $maggioranza === MaggioranzaAssemblea::UNANIMITA
                 ? $favorevoli['teste'] >= $testeTotali && $testeTotali > 0
                 : Millesimi::oltre($favorevoli['teste'], $intervenutiTeste, 1, 2);
@@ -208,9 +226,10 @@ final class ConteggiAssemblea
         }
         $raggiunta = $testeOk && $valoreOk;
 
+        // Senza nessun voto registrato non c'è un esito da proporre: il punto è ancora da votare.
         $proposto = match (true) {
             $quota === null => 'informativa',
-            $intervenutiTeste === 0 => null,
+            $votantiTeste === 0 => null,
             $raggiunta => 'approvato',
             default => 'respinto',
         };
@@ -223,25 +242,33 @@ final class ConteggiAssemblea
             'favorevoli'    => $favorevoli,
             'contrari'      => $contrari,
             'astenuti'      => $astenuti,
+            // Chi è in sala senza un voto su questo punto: conta fra gli intervenuti, a parte dai tre gruppi dei voti.
+            'non_votanti'   => $nonVotanti,
+            'votanti'       => ['teste' => $votantiTeste, 'millesimi' => $votantiMillesimi, 'millesimi_testo' => Millesimi::testoSuMille($votantiMillesimi, $totale)],
             'intervenuti'   => ['teste' => $intervenutiTeste, 'millesimi' => $intervenutiMillesimi, 'millesimi_testo' => Millesimi::testoSuMille($intervenutiMillesimi, $totale)],
-            'senza_voto'    => $senzaVoto,
+            'senza_voto'    => array_map(fn (AssembleaPresenza $p) => (int) $p->id, $senzaVoto),
+            // I nomi di chi ha un voto registrato ma è segnato assente: quei voti non contano.
+            'voti_di_assenti' => $diAssenti,
             'teste_ok'      => $testeOk,
             'valore_ok'     => $valoreOk,
             'raggiunta'     => $raggiunta,
             'esito_proposto'=> $proposto,
             'esito_diverso' => $punto->esito !== null && $proposto !== null && $punto->esito !== $proposto && $punto->esito !== 'rinviato',
-            'spiegazione'   => self::spiegazione($maggioranza, $convocazione, $favorevoli, $intervenutiTeste, $testeTotali, $totale, $testeOk, $valoreOk),
+            // «Approvato» o «respinto» senza nessun voto registrato: il verbale direbbe un esito senza la sua votazione.
+            'esito_senza_voti' => $quota !== null && $votantiTeste === 0 && in_array($punto->esito, ['approvato', 'respinto'], true),
+            'spiegazione'   => self::spiegazione($maggioranza, $convocazione, $favorevoli, $votantiTeste, $nonVotanti['teste'], $testeTotali, $totale, $testeOk, $valoreOk),
         ];
     }
 
-    private static function spiegazione(MaggioranzaAssemblea $m, string $convocazione, array $favorevoli, int $intervenuti, int $testeTotali, int $totale, bool $testeOk, bool $valoreOk): string
+    private static function spiegazione(MaggioranzaAssemblea $m, string $convocazione, array $favorevoli, int $votanti, int $nonVotanti, int $testeTotali, int $totale, bool $testeOk, bool $valoreOk): string
     {
         if ($m === MaggioranzaAssemblea::INFORMATIVA) {
             return 'Punto informativo: non si vota.';
         }
-        if ($intervenuti === 0) {
+        if ($votanti === 0) {
             return 'Nessun voto registrato.';
         }
+        $intervenuti = $votanti + $nonVotanti;
 
         $quota = $m->quotaDelValore($convocazione);
         $soglia = Millesimi::testoCentesimi(intdiv(2 * 100000 * $quota[0] + $quota[1], 2 * $quota[1]));
@@ -250,7 +277,13 @@ final class ConteggiAssemblea
             : "favorevoli {$favorevoli['teste']} su {$intervenuti} intervenuti (ne servono più della metà)";
         $valore = "{$favorevoli['millesimi_testo']} millesimi su 1.000 (ne servono almeno {$soglia})";
 
-        return ucfirst($teste).' '.($testeOk ? '✓' : '✗').'; '.$valore.' '.($valoreOk ? '✓' : '✗').'.';
+        $senzaVoto = match (true) {
+            $nonVotanti === 0 || $m === MaggioranzaAssemblea::UNANIMITA => '',
+            $nonVotanti === 1 => ' Fra gli intervenuti c\'è 1 presente senza voto: pesa come un astenuto.',
+            default => " Fra gli intervenuti ci sono {$nonVotanti} presenti senza voto: pesano come astenuti.",
+        };
+
+        return ucfirst($teste).' '.($testeOk ? '✓' : '✗').'; '.$valore.' '.($valoreOk ? '✓' : '✗').'.'.$senzaVoto;
     }
 
     /**
@@ -284,6 +317,18 @@ final class ConteggiAssemblea
             $avvisi[] = ['tipo' => 'info', 'testo' => 'La tabella somma '.Millesimi::testoValore($totale).' e non 1.000: i conteggi la riportano a mille.'];
         }
 
+        // Le stesse unità in due righe: i loro millesimi si conterebbero due volte. Non succede preparando l'elenco adesso;
+        // può restare da un elenco preparato prima (`AventiDiritto::prepara`).
+        $volte = [];
+        foreach ($presenze as $p) {
+            foreach (array_unique($p->idUnita()) as $unita) {
+                $volte[$unita] = ($volte[$unita] ?? 0) + 1;
+            }
+        }
+        if (($doppie = count(array_filter($volte, fn (int $n) => $n > 1))) > 0) {
+            $avvisi[] = ['tipo' => 'error', 'testo' => ($doppie === 1 ? 'Un\'unità compare' : "{$doppie} unità compaiono").' in più di una riga dell\'elenco: i suoi millesimi si contano due volte. Togli i voti dalla riga che non vale e prepara di nuovo l\'elenco.'];
+        }
+
         foreach ($presenze as $p) {
             if ($p->tipo === 'delega' && $p->nomeDelegato() === null) {
                 $avvisi[] = ['tipo' => 'warning', 'testo' => self::nomeDi($p).' è segnato per delega, ma manca il nome del delegato.'];
@@ -314,6 +359,17 @@ final class ConteggiAssemblea
             $v = $this->votazione($assemblea, $punto);
             if ($v['esito_diverso']) {
                 $avvisi[] = ['tipo' => 'warning', 'testo' => "Punto {$punto->numero}: l'esito confermato («{$punto->esito}») non è quello che i voti danno adesso («{$v['esito_proposto']}»)."];
+            }
+            if ($v['esito_senza_voti']) {
+                $avvisi[] = ['tipo' => 'warning', 'testo' => "Punto {$punto->numero}: l'esito confermato è «{$punto->esito}» ma non c'è nessun voto registrato. Registra i voti, oppure segna il punto come rinviato."];
+            }
+            if ($v['votanti']['teste'] > 0 && $v['non_votanti']['teste'] > 0) {
+                $n = $v['non_votanti']['teste'];
+                $nomi = implode(', ', array_column($v['non_votanti']['nomi'], 'nome'));
+                $avvisi[] = ['tipo' => 'warning', 'testo' => "Punto {$punto->numero}: ".($n === 1 ? '1 presente senza voto' : "{$n} presenti senza voto")." ({$nomi}). ".($n === 1 ? 'Conta' : 'Contano').' fra gli intervenuti come non votanti e per la maggioranza '.($n === 1 ? 'pesa come un astenuto' : 'pesano come astenuti').': registra il voto, oppure segna l\'uscita di chi non era più in sala.'];
+            }
+            if ($v['voti_di_assenti'] !== []) {
+                $avvisi[] = ['tipo' => 'warning', 'testo' => "Punto {$punto->numero}: c'è un voto registrato per chi è segnato assente (".implode(', ', $v['voti_di_assenti']).'): non conta. Segna la presenza giusta, oppure togli il voto.'];
             }
         }
 
@@ -374,10 +430,10 @@ final class ConteggiAssemblea
         return mb_strtolower(Str::squish(Str::ascii((string) $nome)));
     }
 
-    /** Il nome di chi rappresenta la presenza. */
+    /** Il nome di chi rappresenta la presenza: quello in rubrica, o quello fotografato nella riga se l'anagrafica non c'è più. */
     public static function nomeDi(AssembleaPresenza $p): string
     {
-        return trim((string) ($p->anagrafica?->nome ?? 'Persona #'.$p->anagrafica_id));
+        return $p->nomePersona();
     }
 
     /** «18:30» da un orario del database («18:30:00»), o null. */

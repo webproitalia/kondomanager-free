@@ -13,6 +13,11 @@ namespace App\Services\Fascicolo;
  * Con `$aCapo` (il verbale dell'assemblea, Web Pro Italia 17/11/2026) le righe di un paragrafo restano su righe
  * diverse invece di unirsi: nel verbale «Favorevoli…», «Contrari…» e «Astenuti…» stanno una sotto l'altra. Senza, la
  * nota del fascicolo esce come sempre.
+ *
+ * **Negli elenchi numerati il numero stampato è quello scritto** (17/11/2026): una riga «2. …» esce «2.» anche se
+ * prima c'è una riga vuota o un paragrafo, e un elenco che comincia da «3.» comincia da 3. In una delibera a più capi
+ * un «2.» stampato «1.» è un errore. La stampa (mPDF) numera da sola le voci di un elenco e conosce solo il numero di
+ * partenza (`start`): per questo un numero che non è il successivo del precedente apre un elenco nuovo che parte da lì.
  */
 class TestoNota
 {
@@ -22,6 +27,7 @@ class TestoNota
         $html = '';
         $paragrafo = [];
         $elenco = null; // 'ul' | 'ol'
+        $numero = null; // l'ultimo numero stampato dell'elenco numerato aperto
 
         $chiudiParagrafo = function () use (&$paragrafo, &$html, $aCapo) {
             if ($paragrafo) {
@@ -54,14 +60,18 @@ class TestoNota
                 continue;
             }
 
-            if (preg_match('/^(?:[-•*]\s+|(\d+)[.)]\s+)(.+)$/u', $riga, $m)) {
+            // Una riga numerata vale come voce d'elenco da «1.» in su e fino a sei cifre: «0.» e un numero lunghissimo restano testo, com'è scritto.
+            if (preg_match('/^(?:[-•*]\s+|(\d{1,6})[.)]\s+)(.+)$/u', $riga, $m) && (($m[1] ?? '') === '' || (int) $m[1] > 0)) {
                 $chiudiParagrafo();
                 $tipo = ($m[1] ?? '') !== '' ? 'ol' : 'ul';
-                if ($elenco !== $tipo) {
+                $scritto = $tipo === 'ol' ? (int) $m[1] : null;
+                // Il numero scritto non è il successivo di quello appena stampato: l'elenco si chiude e ne parte uno nuovo da lì.
+                if ($elenco !== $tipo || ($tipo === 'ol' && $scritto !== $numero + 1)) {
                     $chiudiElenco();
-                    $html .= "<{$tipo}>";
+                    $html .= $tipo === 'ol' && $scritto !== 1 ? "<ol start=\"{$scritto}\">" : "<{$tipo}>";
                     $elenco = $tipo;
                 }
+                $numero = $scritto;
                 $html .= '<li>'.self::riga($m[2]).'</li>';
 
                 continue;

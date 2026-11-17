@@ -67,6 +67,9 @@ beforeEach(function () {
     app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
     $ruolo = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
     $ruolo->givePermissionTo(Permission::firstOrCreate(['name' => 'Accesso pannello amministratore', 'guard_name' => 'web']));
+    // Le registrazioni hanno i permessi delle assemblee (17/11/2026): leggere chiede «Visualizza assemblee», il resto «Gestisci assemblee».
+    $ruolo->givePermissionTo(Permission::firstOrCreate(['name' => 'Visualizza assemblee', 'guard_name' => 'web']));
+    $ruolo->givePermissionTo(Permission::firstOrCreate(['name' => 'Gestisci assemblee', 'guard_name' => 'web']));
     $this->utente = User::factory()->create(['email_verified_at' => now()]);
     $this->utente->assignRole($ruolo);
     $this->actingAs($this->utente);
@@ -302,7 +305,10 @@ it('con un\'assemblea e il suo ordine del giorno arriva la bozza per punto, senz
     // La richiesta della bozza porta l'ordine del giorno e chiede un JSON; anche il riassunto sa l'ordine del giorno.
     Http::assertSent(fn (RichiestaHttp $req) => ($req->data()['generationConfig']['responseMimeType'] ?? null) === 'application/json'
         && str_contains($req->data()['contents'][0]['parts'][0]['text'], "1. Approvazione del rendiconto 2026\n2. Lavori al tetto")
-        && str_contains($req->data()['contents'][0]['parts'][0]['text'], 'Non inventare esiti di voto'));
+        // La delibera è il testo della decisione: l'esito del voto non si prende dall'audio (lo scrive il programma dai voti registrati).
+        && str_contains($req->data()['contents'][0]['parts'][0]['text'], 'NON scrivere MAI l\'esito del voto')
+        && str_contains($req->data()['contents'][0]['parts'][0]['text'], 'niente «all\'unanimità»')
+        && ! str_contains($req->data()['contents'][0]['parts'][0]['text'], 'con l\'esito del voto solo se è stato detto'));
     Event::assertDispatched(RegistrazioneConclusa::class, fn ($e) => $e->registrazione->assemblea_id === $assemblea && count($e->registrazione->bozza_punti) === 2);
 });
 
@@ -583,4 +589,126 @@ it('un agente AI legge elenco e dettaglio e collega l\'assemblea, ma non avvia n
     $nomi = collect($this->getJson(route('agenti.catalogo'), $chiave)->json('dati.rotte'))->pluck('nome');
     expect($nomi)->toContain('admin.gestionale.registrazioni.index', 'admin.gestionale.registrazioni.show', 'admin.gestionale.registrazioni.assemblea')
         ->not->toContain('admin.gestionale.registrazioni.avvia', 'admin.gestionale.registrazioni.segmento');
+});
+
+// --- Le correzioni dopo la revisione (Web Pro Italia, 17/11/2026) ----------------------------------------------------------------------
+
+it('⚠️ le registrazioni hanno i permessi delle assemblee: senza «Visualizza assemblee» non si leggono, senza «Gestisci assemblee» non si toccano', function () {
+    $assemblea = regAssemblea($this->condominio);
+    $r = regConDuePezzi($this);
+    regTermina($this, $r->id)->assertOk();
+    $aperta = regConDuePezzi($this);
+    $rotta = fn (string $nome, ?Registrazione $x = null) => route('admin.gestionale.registrazioni.'.$nome, $x ? [$this->condominio, $x->id] : [$this->condominio]);
+
+    // Chi entra nel pannello ma non ha i permessi delle assemblee: non legge le trascrizioni e non scrive niente.
+    $soloPannello = Role::firstOrCreate(['name' => 'contabile-di-prova', 'guard_name' => 'web']);
+    $soloPannello->givePermissionTo(Permission::firstOrCreate(['name' => 'Accesso pannello amministratore', 'guard_name' => 'web']));
+    $utente = User::factory()->create(['email_verified_at' => now()]);
+    $utente->assignRole($soloPannello);
+    $this->actingAs($utente);
+
+    $this->get($rotta('index'))->assertForbidden();
+    $this->get($rotta('show', $r))->assertForbidden();
+    $this->getJson($rotta('servizio'))->assertForbidden();
+    $this->postJson($rotta('termina', $aperta))->assertForbidden();
+    $this->putJson($rotta('assemblea', $r), ['assemblea_id' => $assemblea])->assertForbidden();
+    $this->deleteJson($rotta('cancella-audio', $r))->assertForbidden();
+    $this->deleteJson($rotta('destroy', $r))->assertForbidden();
+    regAvvia($this)->assertForbidden();
+    regPezzo($this, $aperta->id, 3)->assertForbidden();
+
+    // Con «Visualizza assemblee» si legge (elenco, dettaglio con la trascrizione, stato del servizio) e basta.
+    $soloPannello->givePermissionTo(Permission::firstOrCreate(['name' => 'Visualizza assemblee', 'guard_name' => 'web']));
+    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+    $this->get($rotta('index'))->assertOk()->assertInertia(fn (Pagina $p) => $p->where('puo.gestire', false));
+    $this->get($rotta('show', $r))->assertOk()->assertInertia(fn (Pagina $p) => $p->where('registrazione.trascrizione', fn ($t) => str_contains($t, 'Persona 1'))->where('puo.gestire', false));
+    $this->getJson($rotta('servizio'))->assertOk();
+    $this->postJson($rotta('termina', $aperta))->assertForbidden();
+    $this->putJson($rotta('assemblea', $r), ['assemblea_id' => $assemblea])->assertForbidden();
+    $this->deleteJson($rotta('cancella-audio', $r))->assertForbidden();
+    $this->deleteJson($rotta('destroy', $r))->assertForbidden();
+    regAvvia($this)->assertForbidden();
+    regPezzo($this, $aperta->id, 3)->assertForbidden();
+
+    // Niente è stato toccato.
+    expect(Registrazione::count())->toBe(2)
+        ->and($r->fresh()->assemblea_id)->toBeNull()
+        ->and($aperta->fresh()->stato)->toBe(Registrazione::IN_CORSO);
+    Storage::disk('local')->assertExists("registrazioni/{$r->id}/seg-0001.webm");
+
+    // Con «Gestisci assemblee» si lavora.
+    $soloPannello->givePermissionTo(Permission::firstOrCreate(['name' => 'Gestisci assemblee', 'guard_name' => 'web']));
+    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+    $this->get($rotta('index'))->assertOk()->assertInertia(fn (Pagina $p) => $p->where('puo.gestire', true));
+    $this->putJson($rotta('assemblea', $r), ['assemblea_id' => $assemblea])->assertOk();
+    expect($r->fresh()->assemblea_id)->toBe($assemblea);
+});
+
+it('⚠️ un agente AI non tronca una riunione che si sta registrando: chiude solo una registrazione rimasta aperta da più di cinque minuti', function () {
+    $r = regConDuePezzi($this);
+    [, $testo] = ChiaveAgente::genera('Assistente di prova', $this->utente, false);
+    $chiave = ['Authorization' => 'Bearer '.$testo];
+    $termina = route('admin.gestionale.registrazioni.termina', [$this->condominio, $r->id]);
+
+    // L'ultimo pezzo è appena arrivato: l'agente è rifiutato, con la spiegazione, e la registrazione resta aperta.
+    \Illuminate\Support\Facades\Auth::logout();
+    $rifiuto = $this->postJson($termina, [], $chiave);
+    $rifiuto->assertStatus(422)->assertJsonPath('ok', false);
+    expect($rifiuto->json('avvisi.0.testo'))->toContain('ancora in corso')->toContain('troncherebbe la riunione')->toContain('più di 5 minuti')
+        ->and($r->fresh()->stato)->toBe(Registrazione::IN_CORSO);
+
+    // Chi registra continua: il pezzo successivo entra.
+    $this->flushHeaders();
+    $this->actingAs($this->utente);
+    regPezzo($this, $r->id, 3)->assertOk();
+    expect($r->fresh()->stato)->toBe(Registrazione::IN_CORSO)->and(array_keys($r->fresh()->segmenti))->toBe([1, 2, 3]);
+
+    // Quattro minuti dopo l'ultimo pezzo è ancora presto.
+    \Illuminate\Support\Facades\Auth::logout();
+    $this->travel(4)->minutes();
+    $this->postJson($termina, [], $chiave)->assertStatus(422);
+    expect($r->fresh()->stato)->toBe(Registrazione::IN_CORSO);
+
+    // Dopo più di cinque minuti senza audio la registrazione è rimasta aperta (il browser si è chiuso): l'agente la può chiudere.
+    $this->travel(2)->minutes();
+    $this->postJson($termina, [], $chiave)->assertOk()->assertJsonPath('ok', true);
+    expect($r->fresh()->stato)->toBe(Registrazione::PRONTA);
+});
+
+it('la persona nel browser chiude la registrazione quando vuole, anche appena arrivato l\'ultimo pezzo', function () {
+    $r = regConDuePezzi($this);
+
+    regTermina($this, $r->id)->assertOk();
+
+    expect($r->fresh()->stato)->toBe(Registrazione::PRONTA);
+});
+
+it('⚠️ con il verbale in attesa di approvazione o approvato, collegare o avviare una registrazione non accende il segno «registrata»', function () {
+    $fermo = function (string $stato) {
+        $id = regAssemblea($this->condominio);
+        DB::table('verbali')->insert(['assemblea_id' => $id, 'stato' => $stato, 'versione' => 1, 'created_at' => now(), 'updated_at' => now()]);
+
+        return $id;
+    };
+    $registrata = fn (int $id) => (bool) DB::table('assemblee')->where('id', $id)->value('registrata');
+    $r = regConDuePezzi($this);
+    regTermina($this, $r->id)->assertOk();
+    $collega = fn (?int $id) => $this->putJson(route('admin.gestionale.registrazioni.assemblea', [$this->condominio, $r->id]), ['assemblea_id' => $id]);
+
+    // In attesa di approvazione: la registrazione si collega, l'assemblea non cambia, e la risposta lo dice.
+    $inAttesa = $fermo('da_approvare');
+    $collega($inAttesa)->assertOk()->assertJsonPath('message', fn ($m) => str_contains($m, 'in attesa di approvazione') && str_contains($m, 'l\'assemblea non cambia'));
+    expect($r->fresh()->assemblea_id)->toBe($inAttesa)->and($registrata($inAttesa))->toBeFalse();
+
+    // Approvato: lo stesso, anche avviando una registrazione nuova da quell'assemblea.
+    $approvato = $fermo('approvato');
+    $collega($approvato)->assertOk();
+    regAvvia($this, ['assemblea_id' => $approvato])->assertCreated();
+    expect($registrata($approvato))->toBeFalse();
+
+    // Con il verbale in bozza (o senza verbale) il segno si accende, come prima.
+    $inBozza = $fermo('bozza');
+    $collega($inBozza)->assertOk()->assertJsonPath('message', fn ($m) => ! str_contains($m, 'non cambia'));
+    expect($registrata($inBozza))->toBeTrue();
 });

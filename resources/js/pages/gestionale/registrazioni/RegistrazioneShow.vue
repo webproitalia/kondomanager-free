@@ -30,7 +30,10 @@ const props = defineProps<{
     punti: Array<{ numero: number; titolo: string }>;
     assemblee: Array<{ id: number; nome: string }>;
     servizio: { trascrizione: boolean; riassunto: boolean; giorni_audio: number; secondi_segmento: number };
+    // Senza «Gestisci assemblee» si legge e basta: niente tasti che chiudono, collegano o cancellano.
+    puo?: { gestire: boolean };
 }>();
+const gestisce = computed(() => props.puo?.gestire ?? true);
 
 const { generateRoute, generatePath } = usePermission();
 const page = usePage<{ flash?: { message?: Flash } }>();
@@ -131,14 +134,14 @@ const breadcrumbs = computed(() => [
             <!-- Lo stato, quando c'è qualcosa da fare o da aspettare -->
             <div v-if="registrazione.stato === 'in_corso'" class="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-3 text-sm flex flex-wrap items-center gap-3" data-testid="stato-in-corso">
                 <span class="flex-1">La registrazione è ancora aperta ({{ registrazione.pezzi }} {{ registrazione.pezzi === 1 ? 'pezzo salito' : 'pezzi saliti' }}). Se si sta ancora registrando lasciala andare; se il browser si è chiuso, chiudila qui.</span>
-                <Button size="sm" class="h-8" @click="termina">Chiudi e trascrivi</Button>
+                <Button v-if="gestisce" size="sm" class="h-8" @click="termina">Chiudi e trascrivi</Button>
             </div>
             <div v-else-if="registrazione.stato === 'in_elaborazione'" class="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-3 text-sm flex items-center gap-2" data-testid="stato-in-elaborazione">
                 <Loader2 class="w-4 h-4 animate-spin" /> Preparo la trascrizione con le voci{{ servizio.riassunto ? ' e il riassunto' : '' }}: ci vogliono alcuni minuti. La pagina si aggiorna da sola.
             </div>
             <div v-else-if="registrazione.stato === 'errore'" class="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/30 dark:border-rose-900 p-3 text-sm flex flex-wrap items-center gap-3" data-testid="stato-errore">
                 <span class="flex-1">{{ registrazione.errore ?? 'L\'elaborazione non è riuscita.' }}</span>
-                <Button v-if="registrazione.audio" size="sm" class="h-8" @click="termina">Riprova</Button>
+                <Button v-if="registrazione.audio && gestisce" size="sm" class="h-8" @click="termina">Riprova</Button>
             </div>
             <p v-if="registrazione.stato === 'pronta' && registrazione.errore" class="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-3 text-sm" data-testid="nota-pronta">{{ registrazione.errore }}</p>
             <p v-if="registrazione.stato === 'pronta' && servizio.riassunto && !registrazione.riassunto" class="text-xs text-slate-500">Il riassunto non è arrivato (Gemini non ha risposto, o la riunione era troppo breve): la trascrizione è completa.</p>
@@ -190,7 +193,7 @@ const breadcrumbs = computed(() => [
                 <h3 class="font-semibold flex items-center gap-1.5"><FileText class="w-4 h-4" /> Assemblea</h3>
                 <p v-if="nomeAssemblea">Collegata a: <strong>{{ nomeAssemblea }}</strong>.</p>
                 <p v-else class="text-slate-500">Non è collegata a un'assemblea.</p>
-                <div v-if="assemblee.length" class="flex flex-wrap items-center gap-2">
+                <div v-if="assemblee.length && gestisce" class="flex flex-wrap items-center gap-2">
                     <select v-model="assembleaScelta" class="h-8 rounded-md border bg-background px-2 text-xs max-w-xs" data-testid="scelta-assemblea">
                         <option value="">Scegli un'assemblea…</option>
                         <option v-for="a in assemblee" :key="a.id" :value="a.id">{{ a.nome }}</option>
@@ -213,8 +216,8 @@ const breadcrumbs = computed(() => [
                 <p v-else-if="registrazione.audio_cancellato_at">Audio cancellato il {{ registrazione.audio_cancellato_il }}. I testi restano.</p>
                 <p v-else class="text-slate-500">Nessun audio conservato.</p>
                 <div class="flex flex-wrap gap-2 pt-1">
-                    <Button v-if="registrazione.audio && registrazione.stato !== 'in_corso' && registrazione.stato !== 'in_elaborazione'" size="sm" variant="outline" class="h-8 text-xs" @click="confermaAudio = true">Cancella l'audio</Button>
-                    <Button size="sm" variant="outline" class="h-8 text-xs text-rose-700 border-rose-200 hover:bg-rose-50" @click="confermaElimina = true">Elimina la registrazione</Button>
+                    <Button v-if="gestisce && registrazione.audio && registrazione.stato !== 'in_corso' && registrazione.stato !== 'in_elaborazione'" size="sm" variant="outline" class="h-8 text-xs" @click="confermaAudio = true">Cancella l'audio</Button>
+                    <Button v-if="gestisce" size="sm" variant="outline" class="h-8 text-xs text-rose-700 border-rose-200 hover:bg-rose-50" @click="confermaElimina = true">Elimina la registrazione</Button>
                     <Link :href="elenco" class="inline-flex items-center h-8 px-3 rounded-md text-xs hover:bg-accent">Torna alle registrazioni</Link>
                 </div>
             </div>

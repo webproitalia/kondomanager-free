@@ -311,7 +311,7 @@ const bottone = 'h-9 px-3 rounded-md border text-sm font-medium transition-color
                         :class="pt.id === puntoScelto ? 'bg-slate-100 dark:bg-slate-800' : ''" @click="puntoScelto = pt.id">
                         <span class="font-semibold">{{ pt.numero }}. {{ pt.titolo }}</span>
                         <span class="block text-xs text-slate-500">
-                            {{ pt.maggioranza === 'informativa' ? 'Informativo' : pt.esito ? NOMI_ESITO[pt.esito] : pt.votazione.intervenuti.teste ? `Da confermare (${pt.votazione.esito_proposto})` : 'Da votare' }}
+                            {{ pt.maggioranza === 'informativa' ? 'Informativo' : pt.esito ? NOMI_ESITO[pt.esito] : pt.votazione.esito_proposto ? `Da confermare (${pt.votazione.esito_proposto})` : 'Da votare' }}
                         </span>
                     </button>
                     <p v-if="!fotografia.punti.length" class="p-3 text-sm text-slate-500">L'ordine del giorno è vuoto.</p>
@@ -340,7 +340,7 @@ const bottone = 'h-9 px-3 rounded-md border text-sm font-medium transition-color
                             </div>
                             <p class="md:col-span-4 text-sm text-slate-600">{{ punto.votazione.spiegazione }}</p>
                             <p v-if="punto.votazione.senza_voto.length" class="md:col-span-4 text-sm text-amber-800">
-                                {{ punto.votazione.senza_voto.length }} in sala senza un voto su questo punto: non contano fra gli intervenuti finché non li segni.
+                                {{ punto.votazione.senza_voto.length === 1 ? '1 presente senza voto' : `${punto.votazione.senza_voto.length} presenti senza voto` }} su questo punto: {{ punto.votazione.senza_voto.length === 1 ? 'conta' : 'contano' }} fra gli intervenuti come non votanti (per la maggioranza {{ punto.votazione.senza_voto.length === 1 ? 'pesa come un astenuto' : 'pesano come astenuti' }}). Registra il voto, o segna l'uscita di chi non è più in sala.
                             </p>
                             <div class="md:col-span-4 flex flex-wrap items-center gap-2 border-t pt-3">
                                 <span class="text-sm">Esito confermato: <strong>{{ punto.esito ? NOMI_ESITO[punto.esito] : 'nessuno' }}</strong></span>

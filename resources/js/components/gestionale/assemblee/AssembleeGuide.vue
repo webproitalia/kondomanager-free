@@ -11,8 +11,8 @@ defineProps<{ open: boolean }>();
 defineEmits(['update:open']);
 
 const maggioranze = [
-    { nome: 'Ordinaria (art. 1136 c. 2-3)', serve: 'Le decisioni di tutti i giorni: rendiconto, preventivo, spese ordinarie, regolamento che non tocca i diritti dei singoli.', regola: 'Più della metà degli intervenuti e almeno 500 millesimi in prima convocazione; più della metà degli intervenuti e almeno 333,33 millesimi in seconda.' },
-    { nome: 'Qualificata, metà del valore (art. 1136 c. 4)', serve: 'Nomina e revoca dell\'amministratore, liti fuori dalle sue attribuzioni, ricostruzione dell\'edificio, riparazioni straordinarie di notevole entità.', regola: 'Più della metà degli intervenuti e almeno 500 millesimi, in prima e in seconda.' },
+    { nome: 'Ordinaria (art. 1136 c. 2-3)', serve: 'Le decisioni di tutti i giorni: rendiconto, preventivo, spese ordinarie.', regola: 'Più della metà degli intervenuti e almeno 500 millesimi in prima convocazione; più della metà degli intervenuti e almeno 333,33 millesimi in seconda.' },
+    { nome: 'Qualificata, metà del valore (art. 1136 c. 4)', serve: 'Nomina e revoca dell\'amministratore, liti fuori dalle sue attribuzioni, ricostruzione dell\'edificio, riparazioni straordinarie di notevole entità, approvazione e modifica del regolamento (art. 1138 c.c.).', regola: 'Più della metà degli intervenuti e almeno 500 millesimi, in prima e in seconda.' },
     { nome: 'Qualificata, due terzi del valore (art. 1136 c. 5)', serve: 'Le innovazioni dell\'art. 1120 c. 1: opere nuove che migliorano o rendono più comodo l\'uso delle parti comuni.', regola: 'Più della metà degli intervenuti e almeno 666,67 millesimi.' },
     { nome: 'Unanimità', serve: 'Le decisioni che toccano i diritti di ognuno.', regola: 'Tutti i condòmini e tutti i 1.000 millesimi.' },
     { nome: 'Informativa', serve: 'Comunicazioni dell\'amministratore, varie ed eventuali.', regola: 'Non si vota: si discute e si mette a verbale.' },
@@ -75,8 +75,10 @@ const maggioranze = [
                         <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">I voti e l'esito</h3>
                         <ul class="space-y-2">
                             <li>«Tutti i presenti favorevoli» registra il voto di tutti quelli in sala; poi si toccano i pochi contrari o astenuti.</li>
-                            <li><strong>Gli intervenuti di un punto sono quelli che hanno un voto registrato</strong>, astenuti compresi. Chi è in sala senza un voto è segnalato, non contato. <em>Scelta del programma.</em></li>
-                            <li>«Più della metà degli intervenuti»: l'astenuto conta fra gli intervenuti e non fra i favorevoli. <em>Scelta del programma.</em></li>
+                            <li><strong>Gli intervenuti di un punto sono tutti quelli che sono in sala</strong> (presenti o per delega, non usciti) <strong>più chi ha un voto registrato su quel punto</strong>: chi è uscito dopo aver votato tiene il suo voto. <em>Scelta del programma.</em></li>
+                            <li><strong>Chi è in sala senza un voto registrato è un «presente senza voto»</strong>: conta fra gli intervenuti come non votante, e per la maggioranza pesa come un astenuto. Il conteggio lo mostra a parte, la pagina avvisa e il verbale lo scrive con il nome. Se non era più in sala, segna la sua uscita. Il programma guarda chi è in sala adesso: chi arriva dopo la votazione di un punto risulta «presente senza voto» anche su quel punto, e il verbale va corretto a mano in quel passaggio. <em>Scelta del programma.</em></li>
+                            <li>«Più della metà degli intervenuti»: l'astenuto e il presente senza voto contano fra gli intervenuti e non fra i favorevoli. <em>Scelta del programma.</em></li>
+                            <li><strong>Il voto di chi è segnato assente non conta</strong>: non si può registrare, e segnando assente chi ha già votato i suoi voti si tolgono (la pagina lo dice).</li>
                             <li>Il programma <strong>calcola e propone</strong> l'esito; lo conferma la persona («Conferma: approvato»). Può anche segnare «rinviato».</li>
                         </ul>
                     </section>
@@ -101,6 +103,7 @@ const maggioranze = [
                             <li>Si genera da un <strong>modello dello studio</strong> («Modelli di verbale»): un testo con i segnaposto, che il programma riempie con i dati. Poi il testo è libero: si corregge per intero, a mano o da un assistente.</li>
                             <li>Discussione e delibera di ogni punto si scrivono nei loro campi e entrano nel testo alla generazione. Rigenerare sovrascrive il testo, e chiede la conferma.</li>
                             <li>La votazione di ogni punto riporta favorevoli, contrari e astenuti con i nomi e i millesimi, come servono per l'art. 1137 c.c.</li>
+                            <li><strong>Prima di mandarlo in approvazione</strong> il programma controlla che il testo corrisponda ai dati: le ore d'inizio e di fine, nessuna parte rimasta da compilare («______», «Esito da confermare»), esiti coerenti con i voti registrati, e nessun dato cambiato dopo l'ultimo testo (in quel caso si rigenera, o si rilegge il testo e lo si salva). <strong>In attesa di approvazione niente dell'assemblea si modifica</strong>: per correggere, «Torna in bozza».</li>
                             <li>Stati: bozza → da approvare → approvato. <strong>Lo approva una persona</strong> (mai un assistente AI), con il permesso «Approva verbali». Il PDF va nell'archivio dei documenti del condominio, categoria «Verbali di assemblea», non ancora pubblicato ai condòmini. Da lì niente si modifica; per correggere si apre una nuova versione.</li>
                         </ul>
                     </section>
