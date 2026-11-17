@@ -105,5 +105,9 @@ export enum Permission {
   PUBLISH_EVENTS = 'Pubblica scadenze in agenda',
   APPROVE_EVENTS = 'Approva scadenze in agenda',
   DELETE_OWN_EVENTS = 'Elimina proprie scadenza in agenda',
+  // Assemblee (Web Pro Italia, 17/11/2026)
+  VIEW_ASSEMBLEE = 'Visualizza assemblee',
+  MANAGE_ASSEMBLEE = 'Gestisci assemblee',
+  APPROVE_VERBALI = 'Approva verbali',
 
 }

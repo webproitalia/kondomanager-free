@@ -30,8 +30,11 @@ import {
     Wallet, 
     ChevronRight, 
     ArrowUpDown,
-    Mic
+    Mic,
+    Gavel
 } from 'lucide-vue-next';
+import { Permission } from '@/enums/Permission';
+import { Role } from '@/enums/Role';
 import type { Building } from '@/types/buildings';
 import type { Esercizio } from '@/types/gestionale/esercizi';
 import type { BreadcrumbItem, NavItem, LinkItem, Auth} from '@/types';
@@ -129,6 +132,15 @@ const mainNavItems: NavItem[] = [
         title: 'Movimenti',
         href: generatePath('gestionale/:condominio/movimenti', { condominio: condominio.value.id }),
         icon: ArrowUpDown,
+    },
+    // Le assemblee (Web Pro Italia, 17/11/2026): il ruolo amministratore o il permesso, come la rotta.
+    {
+        type: 'link',
+        title: 'Assemblee',
+        href: generatePath('gestionale/:condominio/assemblee', { condominio: condominio.value.id }),
+        icon: Gavel,
+        roles: [Role.AMMINISTRATORE],
+        permissions: [Permission.VIEW_ASSEMBLEE],
     }
 ]; 
 

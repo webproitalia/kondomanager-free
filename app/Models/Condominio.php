@@ -253,6 +253,12 @@ class Condominio extends Model
         return $this->hasMany(ImportBatch::class);
     }
 
+    /** Le assemblee del condominio (Web Pro Italia, 17/11/2026). */
+    public function assemblee(): HasMany
+    {
+        return $this->hasMany(\App\Models\Assemblee\Assemblea::class);
+    }
+
     /**
      * Le rotte annidate sotto questo modello, e la relazione che porta a ciascun figlio.
      *
@@ -279,6 +285,7 @@ class Condominio extends Model
             'batch' => 'lottiImportazione',
             'pianoRate' => 'pianiRate',
             'conto' => 'conti',
+            'assemblea' => 'assemblee',
         ];
     }
 

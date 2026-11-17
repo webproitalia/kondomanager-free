@@ -139,6 +139,17 @@ enum Permission: string
     case APPROVE_EVENTS = 'Approva scadenze in agenda';
     case DELETE_OWN_EVENTS = 'Elimina proprie scadenza in agenda';
 
+    /*
+     * Assemblee (Web Pro Italia, 17/11/2026). Tre permessi e non uno, perché sono tre mestieri diversi: guardare
+     * (l'elenco, i conteggi, il verbale e la sua stampa), lavorare l'assemblea (ordine del giorno, presenze, voti, testo
+     * del verbale, modelli di verbale, invio in approvazione) e **approvare il verbale**, che è l'atto che lo chiude e
+     * lo mette in archivio. L'amministratore li ha tutti per costruzione; il collaboratore i primi due. L'approvazione
+     * resta comunque vietata agli agenti AI, qualunque permesso abbia il loro utente (`AutenticaAgente::VIETATE`).
+     */
+    case VIEW_ASSEMBLEE = 'Visualizza assemblee';
+    case MANAGE_ASSEMBLEE = 'Gestisci assemblee';
+    case APPROVE_VERBALI = 'Approva verbali';
+
     /**
      * Get a human-readable description for the permission.
      *
@@ -253,6 +264,11 @@ enum Permission: string
             self::PUBLISH_EVENTS => 'Permette di pubblicare scadenze in agenda',
             self::APPROVE_EVENTS => 'Permette di approvare scadenze in agenda',
             self::DELETE_OWN_EVENTS => 'Permette di eliminare le proprie scadenze in agenda',
+
+            // Assemblee
+            self::VIEW_ASSEMBLEE => 'Permette di vedere le assemblee dei condomini, le presenze, i voti e i verbali',
+            self::MANAGE_ASSEMBLEE => 'Permette di preparare le assemblee, segnare presenze e voti, scrivere il verbale e i suoi modelli e mandarlo in approvazione',
+            self::APPROVE_VERBALI => 'Permette di approvare il verbale di un\'assemblea (che entra nell\'archivio e non si modifica più) e di aprirne una nuova versione',
         };
     }
 }

@@ -766,4 +766,57 @@ Route::prefix('/gestionale/{condominio}')
     // --- DETTAGLIO SCRITTURA CONTABILE (v1.9.1-beta.7) ---
     Route::get('/scritture/{scrittura}', [ScritturaContabileController::class, 'show'])
         ->name('scritture.show');
+
+    /*
+     * --- ASSEMBLEE (Web Pro Italia, 17/11/2026) ---
+     *
+     * L'assemblea del condominio prima (date, ordine del giorno), durante (presenze e voti, in sala) e dopo (il verbale,
+     * generato da un modello dello studio e poi libero). Tre permessi, come i tre mestieri: «Visualizza assemblee» per
+     * leggere e stampare, «Gestisci assemblee» per lavorarle (e per i modelli di verbale), «Approva verbali» per
+     * l'approvazione e la nuova versione, che restano vietate agli agenti AI (`AutenticaAgente::VIETATE`).
+     *
+     * ⚠️ L'ordine conta: `assemblee/create` e `assemblee/modelli` stanno prima di `assemblee/{assemblea}`, che altrimenti
+     * cercherebbe un'assemblea con quell'id. I modelli di verbale sono dello studio (non di un condominio): il loro
+     * `{modello}` non è tipizzato e lo cerca `ModelliVerbaleController::assicuraModello()`.
+     */
+    Route::middleware('role_or_permission:amministratore|Gestisci assemblee')->group(function () {
+        Route::get('assemblee/create', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'create'])->name('assemblee.create');
+        Route::post('assemblee', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'store'])->name('assemblee.store');
+        Route::get('assemblee/modelli', [\App\Http\Controllers\Gestionale\Assemblee\ModelliVerbaleController::class, 'index'])->name('assemblee.modelli.index');
+        Route::post('assemblee/modelli', [\App\Http\Controllers\Gestionale\Assemblee\ModelliVerbaleController::class, 'store'])->name('assemblee.modelli.store');
+        Route::post('assemblee/modelli/prova', [\App\Http\Controllers\Gestionale\Assemblee\ModelliVerbaleController::class, 'prova'])->name('assemblee.modelli.prova');
+        Route::put('assemblee/modelli/{modello}', [\App\Http\Controllers\Gestionale\Assemblee\ModelliVerbaleController::class, 'update'])->name('assemblee.modelli.update');
+        Route::delete('assemblee/modelli/{modello}', [\App\Http\Controllers\Gestionale\Assemblee\ModelliVerbaleController::class, 'destroy'])->name('assemblee.modelli.destroy');
+    });
+
+    Route::middleware('role_or_permission:amministratore|Visualizza assemblee')->group(function () {
+        Route::get('assemblee', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'index'])->name('assemblee.index');
+        Route::get('assemblee/{assemblea}', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'show'])->name('assemblee.show');
+        // Tutto dell'assemblea in una risposta sola: è la lettura per gli agenti AI.
+        Route::get('assemblee/{assemblea}/dati', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'dati'])->name('assemblee.dati');
+        Route::get('assemblee/{assemblea}/verbale', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'show'])->name('assemblee.verbale.show');
+        Route::get('assemblee/{assemblea}/verbale/stampa', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'stampa'])->name('assemblee.verbale.stampa');
+    });
+
+    Route::middleware('role_or_permission:amministratore|Gestisci assemblee')->group(function () {
+        Route::get('assemblee/{assemblea}/edit', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'edit'])->name('assemblee.edit');
+        Route::put('assemblee/{assemblea}', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'update'])->name('assemblee.update');
+        Route::delete('assemblee/{assemblea}', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'destroy'])->name('assemblee.destroy');
+        Route::put('assemblee/{assemblea}/svolgimento', [\App\Http\Controllers\Gestionale\Assemblee\AssembleaController::class, 'svolgimento'])->name('assemblee.svolgimento');
+        Route::post('assemblee/{assemblea}/presenze/prepara', [\App\Http\Controllers\Gestionale\Assemblee\PresenzeController::class, 'prepara'])->name('assemblee.presenze.prepara');
+        Route::put('assemblee/{assemblea}/presenze/{presenza}', [\App\Http\Controllers\Gestionale\Assemblee\PresenzeController::class, 'update'])->name('assemblee.presenze.update');
+        Route::put('assemblee/{assemblea}/punti/{punto}/voti', [\App\Http\Controllers\Gestionale\Assemblee\PuntiController::class, 'voti'])->name('assemblee.punti.voti');
+        Route::put('assemblee/{assemblea}/punti/{punto}', [\App\Http\Controllers\Gestionale\Assemblee\PuntiController::class, 'update'])->name('assemblee.punti.update');
+        Route::put('assemblee/{assemblea}/verbale', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'update'])->name('assemblee.verbale.update');
+        Route::post('assemblee/{assemblea}/verbale/genera', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'genera'])->name('assemblee.verbale.genera');
+        Route::post('assemblee/{assemblea}/verbale/precompila', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'precompila'])->name('assemblee.verbale.precompila');
+        Route::post('assemblee/{assemblea}/verbale/invia', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'invia'])->name('assemblee.verbale.invia');
+        Route::post('assemblee/{assemblea}/verbale/ritira', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'ritira'])->name('assemblee.verbale.ritira');
+    });
+
+    // L'atto che chiude il verbale: solo una persona con il permesso, mai un agente AI (vedi `AutenticaAgente::VIETATE`).
+    Route::middleware('role_or_permission:amministratore|Approva verbali')->group(function () {
+        Route::post('assemblee/{assemblea}/verbale/approva', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'approva'])->name('assemblee.verbale.approva');
+        Route::post('assemblee/{assemblea}/verbale/riapri', [\App\Http\Controllers\Gestionale\Assemblee\VerbaleController::class, 'riapri'])->name('assemblee.verbale.riapri');
+    });
 });

@@ -45,7 +45,8 @@ use Throwable;
  *
  * Cosa un agente NON può fare, qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e
  * permessi, impostazioni (chiavi degli agenti comprese), backup e ripristino, aggiornamenti, installazione, log,
- * cancellazione di un condominio o di un esercizio, e ogni rotta che chiede di ridigitare la password.
+ * cancellazione di un condominio o di un esercizio, l'approvazione del verbale di un'assemblea e la sua nuova versione
+ * (17/11/2026), e ogni rotta che chiede di ridigitare la password.
  * Un'eccezione, dal 15/11/2026: eliminare un condominio con tutto il suo contenuto (`condomini.elimina-tutto`), ma
  * solo con una chiave a cui l'amministratore ha acceso il permesso. Vedi `CON_PERMESSO`.
  */
@@ -64,6 +65,8 @@ class AutenticaAgente
         // Registrare una riunione si fa dal browser, con il microfono e la conferma di aver avvisato i presenti (17/11/2026). Un agente
         // legge le registrazioni, le collega a un'assemblea, le chiude o le riprova.
         'admin.gestionale.registrazioni.avvia', 'admin.gestionale.registrazioni.segmento',
+        // Il verbale di un'assemblea lo approva una persona, e una persona sola ne apre una nuova versione (17/11/2026).
+        'admin.gestionale.assemblee.verbale.approva', 'admin.gestionale.assemblee.verbale.riapri',
     ];
 
     /** Dati che il layout condivide su ogni pagina: per un agente sono rumore, si tolgono dalla busta. */

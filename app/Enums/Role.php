@@ -108,6 +108,9 @@ enum Role: string
                 PermissionEnum::EDIT_EVENTS,
                 PermissionEnum::PUBLISH_EVENTS,
                 PermissionEnum::APPROVE_EVENTS,
+                // Assemblee: prepararle e scrivere il verbale sì, approvarlo no (Web Pro Italia, 17/11/2026).
+                PermissionEnum::VIEW_ASSEMBLEE,
+                PermissionEnum::MANAGE_ASSEMBLEE,
             ],
 
             self::FORNITORE => [
