@@ -82,9 +82,13 @@ Un'app o un programma fuori dal gestionale, per esempio l'app dei condòmini, pu
 
 Codice: `App\Services\Agenti\SegnalazioniEsterne`, `App\Observers\Agenti\SegnalazioneCollegataObserver`, `App\Jobs\Agenti\AvvisaSistemaEsterno`, `App\Models\CollegamentoEsterno`.
 
+## Registrazioni delle riunioni
+
+Le riunioni registrate dal browser (Gestionale → Registrazioni, dal 17/11/2026). Un agente legge l'elenco (`admin.gestionale.registrazioni.index`) e il dettaglio (`admin.gestionale.registrazioni.show`: `trascrizione` con le voci «[mm:ss] Persona N: …», `riassunto`, `bozza_punti` = `[{numero, discussione, delibera}]` con `delibera` nulla quando una decisione chiara non è stata detta, `trascrizione_live`, `stato`, `errore`). Collega o scollega un'assemblea con `PUT …/registrazioni/{id}/assemblea` (`assemblea_id`, vuoto per scollegare): se la registrazione è pronta e l'assemblea ha l'ordine del giorno, la bozza per punti si prepara da sola. Può chiudere una registrazione rimasta aperta, o riprovarne una in errore, con `POST …/registrazioni/{id}/termina`. Avviare una registrazione e mandare l'audio restano cose da browser (microfono e conferma dell'avviso ai presenti): sono vietate agli agenti.
+
 ## Cosa un agente non può fare
 
-Qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e permessi, impostazioni (chiavi comprese), backup e ripristino, aggiornamenti, installazione, log, cancellazione di un condominio (con il tasto normale) o di un esercizio, e ogni rotta che chiede di ridigitare la password. L'elenco è in `AutenticaAgente::VIETATE`; le funzioni che chiedono un permesso in più sulla chiave sono in `AutenticaAgente::CON_PERMESSO`.
+Qualunque sia il suo utente: accesso e password, 2FA, profilo, utenti, ruoli e permessi, impostazioni (chiavi comprese), backup e ripristino, aggiornamenti, installazione, log, cancellazione di un condominio (con il tasto normale) o di un esercizio, avvio di una registrazione e invio dell'audio, e ogni rotta che chiede di ridigitare la password. L'elenco è in `AutenticaAgente::VIETATE`; le funzioni che chiedono un permesso in più sulla chiave sono in `AutenticaAgente::CON_PERMESSO`.
 
 ## Configurazione
 

@@ -162,6 +162,23 @@ Route::prefix('/gestionale/{condominio}')
     Route::post('dispense-sei-mesi/{dispensa}/revoca', [\App\Http\Controllers\Gestionale\Esercizi\DispensaSeiMesiController::class, 'revoca'])->name('dispense.revoca');
     Route::get('dispense-sei-mesi/{dispensa}/verbale', [\App\Http\Controllers\Gestionale\Esercizi\DispensaSeiMesiController::class, 'verbale'])->name('dispense.verbale');
 
+    // Web Pro Italia, 17/11/2026: le registrazioni delle riunioni (spesso un'assemblea, non sempre). Il browser registra a pezzi da 25 secondi
+    // (`segmento`), ogni pezzo diventa subito il testo in diretta; `termina` mette in coda l'elaborazione finale (voci e riassunto). Avviare e
+    // mandare l'audio sono vietati agli agenti AI (`AutenticaAgente::VIETATE`). `{registrazione}` arriva grezzo: che sia di questo condominio
+    // lo controlla il controller (404).
+    Route::controller(\App\Http\Controllers\Gestionale\Registrazioni\RegistrazioneController::class)
+        ->prefix('registrazioni')->name('registrazioni.')->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('servizio', 'servizio')->name('servizio');
+            Route::post('/', 'avvia')->name('avvia');
+            Route::get('{registrazione}', 'show')->whereNumber('registrazione')->name('show');
+            Route::post('{registrazione}/segmenti', 'segmento')->whereNumber('registrazione')->name('segmento');
+            Route::post('{registrazione}/termina', 'termina')->whereNumber('registrazione')->name('termina');
+            Route::put('{registrazione}/assemblea', 'collega')->whereNumber('registrazione')->name('assemblea');
+            Route::delete('{registrazione}/audio', 'cancellaAudio')->whereNumber('registrazione')->name('cancella-audio');
+            Route::delete('{registrazione}', 'destroy')->whereNumber('registrazione')->name('destroy');
+        });
+
     // Già versato per voce di spesa: alimenta il netting del riparto (beta.26).
     Route::get('contributi', [\App\Http\Controllers\Gestionale\Contributi\ContributoVersatoController::class, 'index'])
         ->name('contributi.index');

@@ -39,7 +39,12 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Dopo quanti secondi un lavoro preso da un worker e mai chiuso si dà per abbandonato e riparte. Era 90, come il `--timeout=90`
+            // del worker; dal 17/11/2026 l'elaborazione finale di una registrazione (unione dell'audio, voci, riassunto) può durare fino a
+            // `registrazioni.timeout_elaborazione` (1.800 secondi, un'ora e mezza di riunione) e con 90 la coda l'avrebbe fatta partire una
+            // seconda volta mentre la prima lavorava ancora. Gli altri lavori restano fermati a 90 secondi dal `--timeout` del worker: questo
+            // numero conta solo per un lavoro lasciato a metà da un worker morto, che riparte dopo mezz'ora invece che dopo un minuto e mezzo.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1900),
             'after_commit' => false,
         ],
 

@@ -132,6 +132,11 @@ LABEL org.opencontainers.image.source="https://github.com/vince844/kondomanager-
       org.opencontainers.image.description="KondoManager, gestionale open source per il condominio" \
       org.opencontainers.image.licenses="AGPL-3.0"
 
+# ffmpeg (Web Pro Italia, 17/11/2026): unisce i pezzi di audio delle riunioni registrate prima della trascrizione con le voci
+# (App\Services\Registrazioni\UnioneAudioConFfmpeg). Solo nell'immagine finale: agli stadi di costruzione non serve.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 RUN rm -f /etc/nginx/sites-enabled/default
 COPY docker/production/nginx.conf /etc/nginx/conf.d/default.conf
 # Al posto del file di Debian, così anche `supervisorctl status` (senza opzioni) lo trova.

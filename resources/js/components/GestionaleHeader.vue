@@ -29,7 +29,8 @@ import {
     HandCoins, 
     Wallet, 
     ChevronRight, 
-    ArrowUpDown
+    ArrowUpDown,
+    Mic
 } from 'lucide-vue-next';
 import type { Building } from '@/types/buildings';
 import type { Esercizio } from '@/types/gestionale/esercizi';
@@ -132,6 +133,15 @@ const mainNavItems: NavItem[] = [
 ]; 
 
 const rightNavItems: LinkItem[] = [
+    // Web Pro Italia, 17/11/2026: le riunioni registrate e trascritte, per scrivere il verbale. Qui come icona e non nel menu: con nove voci
+    // il menu a 1.280 pixel ha 36 pixel liberi, e una decima voce col nome spingeva l'avatar fuori dallo schermo (misurato).
+    {
+        type: 'link',
+        title: 'Registrazioni',
+        href: generatePath('gestionale/:condominio/registrazioni', { condominio: condominio.value.id }),
+        icon: Mic,
+        external: false,
+    },
     {
         type: 'link',
         title: 'Repository',

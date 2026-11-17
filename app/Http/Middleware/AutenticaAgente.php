@@ -61,6 +61,9 @@ class AutenticaAgente
         'logs.*', 'storage.*', 'livewire.*', 'default-livewire.*', 'generated::*',
         'admin.settings.mail.*', 'condomini.destroy', 'condomini.dimostrativo.elimina',
         'admin.gestionale.esercizi.destroy',
+        // Registrare una riunione si fa dal browser, con il microfono e la conferma di aver avvisato i presenti (17/11/2026). Un agente
+        // legge le registrazioni, le collega a un'assemblea, le chiude o le riprova.
+        'admin.gestionale.registrazioni.avvia', 'admin.gestionale.registrazioni.segmento',
     ];
 
     /** Dati che il layout condivide su ogni pagina: per un agente sono rumore, si tolgono dalla busta. */
