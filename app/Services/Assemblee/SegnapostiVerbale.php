@@ -103,14 +103,16 @@ final class SegnapostiVerbale
         $fraseCostituzione = sprintf(
             'Il presidente, verificate le presenze, constata che sono intervenuti, di persona o per delega, %d condòmini su %d, che rappresentano %s millesimi su 1.000%s, come risulta dall\'elenco dei presenti in calce al presente verbale. L\'assemblea, in %s convocazione, %s: servono %s.',
             $costituzione['teste_presenti'], $costituzione['teste_totali'], $costituzione['millesimi_presenti_testo'], $tabella,
-            $convocazione ?? self::VUOTO, $esito, ConteggiAssemblea::requisitiCostituzione($convocazione ?? $assemblea->convocazione()),
+            $convocazione ?? self::VUOTO, $esito, rtrim(ConteggiAssemblea::requisitiCostituzione($convocazione ?? $assemblea->convocazione()), '.'),
         );
 
         $luogo = trim((string) $assemblea->luogo);
+        // Chi scrive il luogo spesso mette già «presso…», «nella…», «in…»: non si ripete («presso presso la sala»).
+        $conPresso = preg_match('/^(presso|nell[aeo\']?|nei|negli|in|al|all[aeo\']?|ai|agli|sul|sull[aeo\']?)\b/iu', $luogo) === 1 ? $luogo : 'presso '.($luogo !== '' ? $luogo : self::VUOTO);
         $dove = match ($assemblea->modalita) {
             'videoconferenza' => 'in videoconferenza'.($luogo !== '' ? ' ('.$luogo.')' : ''),
-            'mista' => 'presso '.($luogo !== '' ? $luogo : self::VUOTO).' e in videoconferenza',
-            default => 'presso '.($luogo !== '' ? $luogo : self::VUOTO),
+            'mista' => $conPresso.' e in videoconferenza',
+            default => $conPresso,
         };
 
         $indirizzo = trim(implode(', ', array_filter([
@@ -209,7 +211,7 @@ final class SegnapostiVerbale
             'favorevoli' => $fav,
             'contrari' => $con,
             'astenuti' => $ast,
-            'maggioranza' => $v['informativa'] ? '' : 'Maggioranza richiesta: '.$v['regola'].'.',
+            'maggioranza' => $v['informativa'] ? '' : 'Maggioranza richiesta: '.rtrim($v['regola'], '.').'.',
             'esito' => $esito,
             'esito.parola' => (string) ($p->esito ?? ''),
         ];

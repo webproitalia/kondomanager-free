@@ -112,7 +112,7 @@ TESTO;
 Sei l'assistente di uno studio che amministra condomini. Ti do l'ordine del giorno di un'assemblea del condominio «{$condominio}» e la trascrizione della riunione (le voci sono «Persona 1», «Persona 2»…; possono esserci errori di trascrizione, interpretali col buon senso).
 
 Per OGNI punto dell'ordine del giorno scrivi:
-- "discussione": la sintesi fedele di quello che si è detto su quel punto, in italiano, da 2 a 8 frasi, con nomi, cifre, importi e millesimi ESATTI come sono stati detti. Se del punto non si è parlato, stringa vuota.
+- "discussione": la sintesi fedele di quello che si è detto su quel punto, in italiano, da 2 a 8 frasi, con nomi, cifre, importi e millesimi ESATTI come sono stati detti. Scrivila come un verbale, in forma impersonale e al presente: «Viene illustrato…», «Un condòmino chiede…», «L'amministratore risponde…», «Il presidente mette ai voti…». Non scrivere mai «Persona 1», «Persona 2» o simili: usa il nome solo se nella trascrizione qualcuno si presenta o viene chiamato per nome, il ruolo (presidente, amministratore) solo se si capisce, altrimenti «un condòmino», «un altro condòmino». Gli importi scrivili in cifre (12.480 euro). Se del punto non si è parlato, stringa vuota.
 - "delibera": la decisione presa su quel punto SOLO se nella trascrizione è detta chiaramente (per esempio «si approva all'unanimità», «l'assemblea decide di…»), con l'esito del voto solo se è stato detto. Se la decisione non è chiara o non c'è stata, null. Non inventare esiti di voto, maggioranze, millesimi, nomi o importi.
 
 Rispondi SOLO con un array JSON, un oggetto per punto, con gli stessi numeri dell'ordine del giorno: [{"numero": 1, "discussione": "…", "delibera": "…" oppure null}].
