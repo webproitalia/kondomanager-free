@@ -72,10 +72,13 @@ class Condominio extends Model
     {
         static::deleting(function (self $condominio) {
             app(\App\Services\Allegati\AllegatoService::class)->preparaPuliziaPerCondominio($condominio);
+            // L'audio delle registrazioni (17/11/2026): le righe se ne vanno a cascata, le cartelle no.
+            app(\App\Services\Registrazioni\ArchivioAudio::class)->preparaPuliziaPerCondominio($condominio);
         });
 
         static::deleted(function (self $condominio) {
             app(\App\Services\Allegati\AllegatoService::class)->completaPuliziaPerCondominio($condominio);
+            app(\App\Services\Registrazioni\ArchivioAudio::class)->completaPuliziaPerCondominio($condominio);
         });
     }
 

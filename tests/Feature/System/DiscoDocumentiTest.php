@@ -113,7 +113,10 @@ it('il driver S3 è installato: senza, DOCUMENTI_DISK=s3 morirebbe alla prima sc
  * container, in silenzio, come prima della beta.33.
  */
 it('nessun punto di app/ nomina più il disco dei documenti a mano', function () {
-    $esclusi = ['app/Services/Backup/', 'app/Services/Restore/', 'app/Services/Import/', 'app/Support/PersistenzaStorage.php', 'app/Services/System/SystemFinalizer.php', 'app/Services/Documenti/ArchivioDocumenti.php'];
+    // L'audio delle riunioni registrate (17/11/2026) resta sul disco locale di proposito: ffmpeg e Deepgram leggono file veri, e l'audio
+    // è di passaggio (si cancella da solo dopo `registrazioni.giorni_audio` giorni, e non entra nei backup). Non è un documento.
+    $esclusi = ['app/Services/Backup/', 'app/Services/Restore/', 'app/Services/Import/', 'app/Support/PersistenzaStorage.php', 'app/Services/System/SystemFinalizer.php', 'app/Services/Documenti/ArchivioDocumenti.php',
+        'app/Services/Registrazioni/ArchivioAudio.php'];
     $colpevoli = [];
 
     foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(app_path())) as $file) {

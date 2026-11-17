@@ -267,7 +267,40 @@ it('resta rieseguibile dopo un\'interruzione a metà', function (string $file) {
     '2026_11_08_200000_add_allegati_to_segnalazioni_e_comunicazioni',
     '2026_11_08_200100_add_moderazione_to_documenti',
     '2026_11_08_200300_seed_preferenze_notifica_allegati',
+    // Web Pro Italia, 17/11/2026: le registrazioni delle riunioni — la tabella, due indici e due chiavi esterne, cinque statement su MySQL,
+    // ognuno con la sua guardia. `assemblea_id` non ha la chiave esterna (la tabella `assemblee` è di un altro lavoro). Lo stato a metà lo
+    // prova il test sotto.
+    '2026_11_17_100000_create_registrazioni_table',
 ]);
+
+it('la migrazione delle registrazioni interrotta dopo la tabella e prima degli indici e delle chiavi si riprende e li mette', function () {
+    $path = database_path('migrations/2026_11_17_100000_create_registrazioni_table.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_17_100000_create_registrazioni_table');
+    $migration = require $path;
+
+    $indici = fn () => collect(Schema::getIndexes('registrazioni'))->pluck('name')->sort()->values()->all();
+    $chiavi = fn () => collect(Schema::getForeignKeys('registrazioni'))->map(fn ($k) => implode(',', $k['columns']).'>'.$k['foreign_table'])->sort()->values()->all();
+    $indiciPieni = $indici();
+    $chiaviPiene = $chiavi();
+
+    expect($indiciPieni)->toContain('registrazioni_condominio_stato_index', 'registrazioni_assemblea_id_index')
+        ->and($chiaviPiene)->toBe(['condominio_id>condomini', 'created_by>users']);
+
+    // Lo stato a metà: la tabella c'è, gli indici e le chiavi no.
+    Schema::table('registrazioni', function (\Illuminate\Database\Schema\Blueprint $table) {
+        $table->dropForeign(['condominio_id']);
+        $table->dropForeign(['created_by']);
+    });
+    Schema::table('registrazioni', function (\Illuminate\Database\Schema\Blueprint $table) {
+        $table->dropIndex('registrazioni_condominio_stato_index');
+        $table->dropIndex('registrazioni_assemblea_id_index');
+    });
+    expect($chiavi())->toBe([]);
+
+    $migration->up();
+
+    expect($indici())->toEqual($indiciPieni)->and($chiavi())->toEqual($chiaviPiene);
+});
 
 it('la migrazione dei modelli delle lettere interrotta dopo la tabella e prima dell\'indice e delle chiavi si riprende e li mette, uno per nome', function () {
     $path = database_path('migrations/2026_11_07_160000_create_modelli_testo_table.php');

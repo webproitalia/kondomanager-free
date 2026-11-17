@@ -69,6 +69,16 @@ if (config('app.scheduler_queue_worker')) {
 }
 
 // ============================================================================
+// 4-bis. AUDIO DELLE REGISTRAZIONI (Web Pro Italia, 17/11/2026)
+// ============================================================================
+// La privacy delle riunioni registrate: l'audio si cancella da solo dopo `registrazioni.giorni_audio` giorni (30 di serie), la trascrizione
+// resta. Vedi App\Console\Commands\PulisciAudioRegistrazioniCommand.
+Schedule::command('registrazioni:pulisci-audio')
+    ->name('pulizia-audio-registrazioni')
+    ->dailyAt('03:15')
+    ->withoutOverlapping();
+
+// ============================================================================
 // 5. NIENTE DURANTE UN RIPRISTINO
 // ============================================================================
 // Mentre un ripristino è in corso il database è a metà import. La modalità ripristino ferma le

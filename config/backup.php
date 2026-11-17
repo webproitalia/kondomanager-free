@@ -72,6 +72,9 @@ return [
     'exclude' => [
         // La cartella dei backup non deve mai finire dentro sé stessa.
         'storage/app/backups',
+        // L'audio delle riunioni registrate (Web Pro Italia, 17/11/2026) si cancella da solo dopo `registrazioni.giorni_audio` giorni: in
+        // un backup resterebbe per sempre. Le trascrizioni sono nel database, e lì il backup le ha.
+        'storage/app/private/registrazioni',
     ],
 
     // Tabelle di cui il dump include la STRUTTURA ma non i DATI.
