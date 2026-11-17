@@ -37,6 +37,8 @@ class ErroreDiPosta
             \App\Services\Gestionale\Lettere\EmissioneLettere::SENZA_SERVER_POSTA,
             // L'avviso di compensazione il cui incasso è stato annullato fra l'accodamento e la partenza.
             \App\Notifications\Gestionale\AvvisoCompensazioneNotification::ANNULLATO_PRIMA_DELL_INVIO,
+            // Il verbale di un'assemblea riaperto fra l'accodamento e la partenza (Web Pro Italia, 17/11/2026).
+            \App\Services\Assemblee\InviiAssemblea::VERBALE_CAMBIATO,
         ];
     }
 

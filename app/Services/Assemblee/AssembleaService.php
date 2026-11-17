@@ -59,6 +59,7 @@ final class AssembleaService
             'data_avviso' => $a->data_avviso?->format('Y-m-d'),
             'luogo' => $a->luogo,
             'modalita' => $a->modalita,
+            'collegamento_videoconferenza' => $a->collegamento_videoconferenza,
             'tabella_id' => $a->tabella_id ? (int) $a->tabella_id : null,
             'tabella' => $a->tabella?->nome,
             'millesimi_totali' => $a->millesimi_totali,

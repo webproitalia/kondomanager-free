@@ -39,6 +39,7 @@ class SalvaAssembleaRequest extends FormRequest
             'data_avviso' => ['nullable', 'date'],
             'luogo' => ['nullable', 'string', 'max:255'],
             'modalita' => [$obbligatorio, Rule::in(Assemblea::MODALITA)],
+            'collegamento_videoconferenza' => ['nullable', 'string', 'max:500'],
             'tabella_id' => ['nullable', 'integer', Rule::exists('tabelle', 'id')->where('condominio_id', $condominioId)],
             'note' => ['nullable', 'string', 'max:5000'],
             'punti' => ['sometimes', 'array', 'max:100'],

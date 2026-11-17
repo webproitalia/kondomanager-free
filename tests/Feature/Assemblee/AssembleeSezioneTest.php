@@ -135,7 +135,10 @@ it('i modelli di verbale: si creano, si provano su un\'assemblea, si fa predefin
 
     $this->get(route('admin.gestionale.assemblee.modelli.index', ['condominio' => $c->id]))
         ->assertOk()
-        ->assertInertia(fn ($p) => $p->component('gestionale/assemblee/ModelliVerbale')->has('modelli', 1)->has('segnaposti.punti.delibera'));
+        // Quattro modelli di serie, uno per tipo (dal 17/11/2026: il verbale, la convocazione, le due email); quello del verbale è uno.
+        ->assertInertia(fn ($p) => $p->component('gestionale/assemblee/ModelliVerbale')->has('modelli', 4)
+            ->where('modelli', fn ($modelli) => collect($modelli)->where('tipo', 'verbale')->count() === 1)
+            ->has('segnaposti.punti.delibera'));
 
     $this->post(route('admin.gestionale.assemblee.modelli.store', ['condominio' => $c->id]), [
         'nome' => 'Verbale dello studio', 'corpo' => "Presiede {{presidente}}.\n{{campo_inventato}}", 'predefinito' => true,

@@ -40,6 +40,7 @@ const form = useForm({
     data_avviso: props.assemblea?.data_avviso ?? '',
     luogo: props.assemblea?.luogo ?? '',
     modalita: props.assemblea?.modalita ?? 'presenza',
+    collegamento_videoconferenza: props.assemblea?.collegamento_videoconferenza ?? '',
     tabella_id: (props.assemblea ? props.assemblea.tabella_id : props.proposta.tabella_id) as number | null,
     esercizio_id: (props.assemblea ? props.assemblea.esercizio_id : props.proposta.esercizio_id) as number | null,
     note: props.assemblea?.note ?? '',
@@ -72,6 +73,7 @@ function salva() {
         data_prima_convocazione: d.data_prima_convocazione ? d.data_prima_convocazione.replace('T', ' ') : null,
         data_seconda_convocazione: d.data_seconda_convocazione ? d.data_seconda_convocazione.replace('T', ' ') : null,
         data_avviso: d.data_avviso || null,
+        collegamento_videoconferenza: d.modalita === 'presenza' ? null : (d.collegamento_videoconferenza || null),
         punti: d.punti.map((p) => ({ id: p.id, titolo: p.titolo, descrizione: p.conDescrizione ? p.descrizione : null, maggioranza: p.maggioranza })),
     }));
     if (nuova) form.post(base);
@@ -131,6 +133,7 @@ const campo = 'h-9 rounded-md border px-2 bg-transparent text-sm dark:bg-slate-9
                 <label class="text-sm space-y-1"><span class="block font-medium">Seconda convocazione</span><Input v-model="form.data_seconda_convocazione" type="datetime-local" class="h-9" /></label>
                 <label class="text-sm space-y-1"><span class="block font-medium">Luogo (o il collegamento, in videoconferenza)</span><Input v-model="form.luogo" placeholder="per esempio la sala condominiale, Via Roma 1" class="h-9" /></label>
                 <label class="text-sm space-y-1"><span class="block font-medium">Giorno dell'avviso di convocazione (facoltativo)</span><Input v-model="form.data_avviso" type="date" class="h-9" /></label>
+                <label v-if="form.modalita !== 'presenza'" class="text-sm space-y-1 md:col-span-2"><span class="block font-medium">Collegamento della videoconferenza (entra nell'avviso di convocazione)</span><Input v-model="form.collegamento_videoconferenza" placeholder="https://…" class="h-9" data-testid="collegamento" /></label>
                 <label class="text-sm space-y-1">
                     <span class="block font-medium">Tabella dei millesimi per i conteggi</span>
                     <select v-model="form.tabella_id" :class="campo" class="w-full" data-testid="tabella">

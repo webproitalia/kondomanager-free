@@ -6,6 +6,9 @@
  *
  * Stati: bozza → da approvare → approvato. Approva una persona con il permesso «Approva verbali»; il PDF va
  * nell'archivio del condominio e il verbale non si modifica più, finché non si apre una nuova versione.
+ *
+ * Dopo l'approvazione compare «Manda il verbale» (17/11/2026): di serie agli assenti, o a tutti i condòmini; per email
+ * a chi ha un indirizzo, con il PDF approvato allegato, e con la spedizione registrata a mano per gli altri.
  */
 import { computed, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
@@ -16,9 +19,10 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import AssembleeGuide from '@/components/gestionale/assemblee/AssembleeGuide.vue';
+import InvioAssemblea from '@/components/gestionale/assemblee/InvioAssemblea.vue';
 import { usePermission } from '@/composables/permissions';
 import { BadgeCheck, FileDown, FileSignature, RefreshCw, Save, ScrollText, Send, Undo2, Wand2 } from 'lucide-vue-next';
-import { NOMI_ESITO, NOMI_STATO_VERBALE, type Fotografia } from '@/lib/gestionale/assemblee';
+import { NOMI_ESITO, NOMI_STATO_VERBALE, type AnteprimaInvio, type Fotografia } from '@/lib/gestionale/assemblee';
 import type { Flash } from '@/types/flash';
 
 const props = defineProps<{
@@ -28,6 +32,8 @@ const props = defineProps<{
     proposta: string;
     segnaposti: { semplici: Record<string, string>; punti: Record<string, string> };
     puo: { gestire: boolean; approvare: boolean };
+    /** «Manda il verbale»: chi lo riceve (di serie gli assenti) e che cosa è già stato mandato. Si manda solo se è approvato. */
+    invio?: AnteprimaInvio;
 }>();
 
 const { generatePath } = usePermission();
@@ -140,6 +146,9 @@ const coloreStato: Record<string, string> = {
                     <Button v-if="v.stato === 'approvato' && puo.approvare" variant="outline" class="gap-2" @click="confermaRiapri = true"><RefreshCw class="w-4 h-4" /> Apri una nuova versione</Button>
                 </div>
             </div>
+
+            <!-- «Manda il verbale»: solo dopo l'approvazione. Agli assenti di serie: per loro il termine per impugnare decorre dalla comunicazione. -->
+            <InvioAssemblea v-if="v.stato === 'approvato' && invio" cosa="verbale" :base="base" :invio="invio" :puo-gestire="puo.gestire" @aggiornato="router.reload({ only: ['invio'] })" />
 
             <!-- Il testo -->
             <div class="rounded-xl border bg-white dark:bg-slate-900 p-4 space-y-3">
