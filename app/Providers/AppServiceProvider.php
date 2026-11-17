@@ -218,8 +218,8 @@ class AppServiceProvider extends ServiceProvider
         // `SessionGuard`, che emette questo evento.
         Event::listen(\Illuminate\Auth\Events\Login::class, \App\Listeners\AggiornaUltimoAccesso::class);
 
-        // La registrazione di un'assemblea, quando è pronta, porta la sua bozza nei punti ancora vuoti del verbale (Web Pro Italia, 17/11/2026).
-        Event::listen(\App\Events\Registrazioni\RegistrazioneConclusa::class, \App\Listeners\Assemblee\PrecompilaVerbaleDallaRegistrazione::class);
+        // L'ascoltatore che porta la bozza di una registrazione nel verbale (`App\Listeners\Assemblee\PrecompilaVerbaleDallaRegistrazione`) NON si
+        // registra qui: Laravel trova da solo gli ascoltatori in `app/Listeners`, e registrandolo anche a mano girava due volte per evento.
 
         // Sincronizza la versione dopo ogni migrazione
         Event::listen(MigrationsEnded::class, function () {
