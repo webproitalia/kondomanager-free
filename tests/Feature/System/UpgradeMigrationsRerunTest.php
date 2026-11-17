@@ -277,6 +277,8 @@ it('resta rieseguibile dopo un\'interruzione a metà', function (string $file) {
     // ognuno con la sua guardia. `assemblea_id` non ha la chiave esterna (la tabella `assemblee` è di un altro lavoro). Lo stato a metà lo
     // prova il test sotto.
     '2026_11_17_100000_create_registrazioni_table',
+    // Web Pro Italia, 17/11/2026: il legame fra registrazione e assemblea diventa una chiave esterna (SET NULL), aggiunta solo se non c'è.
+    '2026_11_17_110000_add_assemblea_fk_to_registrazioni_table',
 ]);
 
 it('la migrazione delle registrazioni interrotta dopo la tabella e prima degli indici e delle chiavi si riprende e li mette', function () {

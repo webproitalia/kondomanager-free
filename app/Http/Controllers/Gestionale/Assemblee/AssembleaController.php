@@ -105,6 +105,8 @@ class AssembleaController extends Controller
                 ->map(fn ($p) => ['id' => (int) $p->id, 'nome' => (string) $p->nome])->values(),
             'maggioranze' => AssembleaService::maggioranze(),
             'puo' => self::permessi($request),
+            // Le registrazioni di questa assemblea (Web Pro Italia, 17/11/2026): la pagina ha il registratore e dice a che punto sono.
+            'registrazioni' => app(\App\Services\Registrazioni\Assemblee::class)->registrazioniDi((int) $assemblea->id),
         ]);
     }
 

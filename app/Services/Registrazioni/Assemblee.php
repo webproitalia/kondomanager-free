@@ -85,4 +85,36 @@ class Assemblee
             ->values()
             ->all();
     }
+
+    /**
+     * L'assemblea è stata registrata: lo si segna sull'assemblea, così il verbale scrive la frase dell'avviso ai presenti (che chi registra
+     * ha confermato prima di partire). Senza la tabella o senza la colonna non fa niente.
+     */
+    public function segnaRegistrata(?int $assembleaId): void
+    {
+        if (! $assembleaId || ! $this->ciSono() || ! Schema::hasColumn('assemblee', 'registrata')) {
+            return;
+        }
+
+        DB::table('assemblee')->where('id', $assembleaId)->where('registrata', false)->update(['registrata' => true, 'updated_at' => now()]);
+    }
+
+    /**
+     * Le registrazioni di un'assemblea, per la sua pagina: `[{id, titolo, stato, iniziata, durata_secondi, bozza}]`, le più recenti prima.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function registrazioniDi(int $assembleaId): array
+    {
+        return \App\Models\Registrazione::where('assemblea_id', $assembleaId)->orderByDesc('id')->get()
+            ->map(fn (\App\Models\Registrazione $r) => [
+                'id' => (int) $r->id,
+                'titolo' => (string) $r->titolo,
+                'stato' => (string) $r->stato,
+                'iniziata' => $r->iniziata_at?->toIso8601String(),
+                'durata_secondi' => $r->durata_secondi !== null ? (int) $r->durata_secondi : null,
+                'bozza' => is_array($r->bozza_punti) && $r->bozza_punti !== [],
+                'errore' => $r->errore,
+            ])->values()->all();
+    }
 }

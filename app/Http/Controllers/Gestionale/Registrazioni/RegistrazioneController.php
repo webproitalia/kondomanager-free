@@ -141,6 +141,7 @@ class RegistrazioneController extends Controller
             'segmenti' => [],
             'created_by' => $request->user()?->id,
         ]);
+        $this->assemblee->segnaRegistrata($assembleaId);
 
         if ($request->header('X-Inertia')) {
             return redirect()->route('admin.gestionale.registrazioni.show', [$condominio, $registrazione->id]);
@@ -257,6 +258,7 @@ class RegistrazioneController extends Controller
         }
 
         $r->forceFill(['assemblea_id' => $assembleaId, 'bozza_punti' => null])->save();
+        $this->assemblee->segnaRegistrata($assembleaId);
 
         $bozza = $assembleaId && $r->stato === Registrazione::PRONTA && $this->gemini->disponibile() && $this->assemblee->punti($assembleaId) !== [];
         if ($bozza) {

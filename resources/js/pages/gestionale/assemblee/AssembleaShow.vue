@@ -8,7 +8,7 @@
  * i pochi da cambiare; il programma conta e propone l'esito, la persona lo conferma). I conti li fa il server: ogni
  * tocco salva e la pagina si aggiorna.
  */
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import GestionaleLayout from '@/layouts/GestionaleLayout.vue';
 import PageHeaderGuide from '@/components/PageHeaderGuide.vue';
@@ -16,6 +16,7 @@ import Alert from '@/components/Alert.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AssembleeGuide from '@/components/gestionale/assemblee/AssembleeGuide.vue';
+import RegistratoreAssemblea from '@/components/registrazioni/RegistratoreAssemblea.vue';
 import { usePermission } from '@/composables/permissions';
 import { CheckCircle2, CircleAlert, Clock, Gavel, LogIn, LogOut, Pencil, PlayCircle, ScrollText, Search, Square, Users, Vote } from 'lucide-vue-next';
 import {
@@ -30,6 +31,8 @@ const props = defineProps<{
     persone: { id: number; nome: string }[];
     maggioranze: Maggioranza[];
     puo: { gestire: boolean; approvare: boolean };
+    /** Le registrazioni di questa assemblea, le più recenti prima (Web Pro Italia, 17/11/2026). */
+    registrazioni?: { id: number; titolo: string; stato: string; iniziata: string | null; durata_secondi: number | null; bozza: boolean; errore: string | null }[];
 }>();
 
 const { generatePath } = usePermission();
@@ -41,6 +44,25 @@ const a = computed(() => props.fotografia.assemblea);
 const costituzione = computed(() => props.fotografia.conteggi.costituzione);
 const base = computed(() => generatePath('gestionale/:condominio/assemblee/:assemblea', { condominio: props.condominio.id, assemblea: a.value.id }));
 const modificabile = computed(() => props.puo.gestire && !a.value.bloccata);
+
+// La registrazione dell'assemblea. Quando si ferma, il server prepara in qualche minuto la trascrizione con le voci, il riassunto e la
+// bozza per i punti dell'ordine del giorno, che entra da sola nei campi ancora vuoti del verbale: la pagina si rilegge per dirlo.
+const registrazioni = computed(() => props.registrazioni ?? []);
+const inElaborazione = computed(() => registrazioni.value.some((r) => r.stato === 'in_elaborazione'));
+const statoRegistrazione = (r: { stato: string; bozza: boolean }) => ({
+    in_corso: 'in corso',
+    in_elaborazione: 'la sto trascrivendo: qualche minuto',
+    pronta: r.bozza ? 'pronta: la bozza è entrata nei punti vuoti del verbale' : 'pronta',
+    errore: 'non riuscita',
+}[r.stato] ?? r.stato);
+const minuti = (secondi: number | null) => secondi === null ? '' : `${Math.max(1, Math.round(secondi / 60))} min`;
+const rileggiRegistrazioni = () => router.reload({ only: ['registrazioni', 'fotografia'] });
+let attesa: ReturnType<typeof setInterval> | null = null;
+watch(inElaborazione, (attiva) => {
+    if (attiva && attesa === null) attesa = setInterval(rileggiRegistrazioni, 20000);
+    if (!attiva && attesa !== null) { clearInterval(attesa); attesa = null; }
+}, { immediate: true });
+onBeforeUnmount(() => { if (attesa !== null) clearInterval(attesa); });
 const mostraGuida = ref(false);
 const scheda = ref<'presenze' | 'votazioni'>('presenze');
 
@@ -206,12 +228,20 @@ const bottone = 'h-9 px-3 rounded-md border text-sm font-medium transition-color
                         La riunione è registrata (i presenti ne sono informati: il verbale lo scrive)
                     </label>
                 </div>
-                <!--
-                    Il posto del registratore dell'assemblea: <RegistratoreAssemblea :assemblea-id="a.id" :condominio-id="condominio.id" />.
-                    Lo costruisce un altro lavoro (Web Pro Italia, novembre 2026): registra la riunione, ne ricava la bozza di discussione e
-                    delibera dei punti e la manda a `admin.gestionale.assemblee.verbale.precompila` (che riempie solo i campi vuoti).
-                -->
-                <div class="lg:col-span-6" data-testid="posto-registratore"></div>
+                <!-- La registrazione dell'assemblea (Web Pro Italia, 17/11/2026): il registratore, e le registrazioni già fatte. Quando una
+                     registrazione è pronta, la sua bozza entra da sola nei campi ancora vuoti di discussione e delibera dei punti. -->
+                <div class="lg:col-span-6 space-y-3" data-testid="posto-registratore">
+                    <RegistratoreAssemblea v-if="modificabile" :condominio-id="condominio.id" :assemblea-id="a.id" :titolo="a.titolo"
+                        :mostra-collegamento="false" @avviata="rileggiRegistrazioni" @terminata="rileggiRegistrazioni" />
+                    <ul v-if="registrazioni.length" class="text-sm divide-y rounded-lg border" data-testid="registrazioni-assemblea">
+                        <li v-for="r in registrazioni" :key="r.id" class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                            <Link :href="generatePath('gestionale/:condominio/registrazioni/:registrazione', { condominio: condominio.id, registrazione: r.id })"
+                                class="font-medium underline decoration-dotted">{{ r.titolo }}</Link>
+                            <span class="text-slate-500">{{ minuti(r.durata_secondi) }}</span>
+                            <span :class="r.stato === 'errore' ? 'text-red-600' : 'text-slate-600 dark:text-slate-300'">{{ statoRegistrazione(r) }}</span>
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <!-- Le due schede -->
