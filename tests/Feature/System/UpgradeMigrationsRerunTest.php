@@ -292,7 +292,9 @@ it('la migrazione delle registrazioni interrotta dopo la tabella e prima degli i
     $chiaviPiene = $chiavi();
 
     expect($indiciPieni)->toContain('registrazioni_condominio_stato_index', 'registrazioni_assemblea_id_index')
-        ->and($chiaviPiene)->toBe(['condominio_id>condomini', 'created_by>users']);
+        // La terza chiave, verso l'assemblea, la mette la migrazione successiva (`add_assemblea_fk_to_registrazioni_table`): qui c'è già
+        // perché la catena è passata tutta, e questa migrazione non la tocca.
+        ->and($chiaviPiene)->toBe(['assemblea_id>assemblee', 'condominio_id>condomini', 'created_by>users']);
 
     // Lo stato a metà: la tabella c'è, gli indici e le chiavi no.
     Schema::table('registrazioni', function (\Illuminate\Database\Schema\Blueprint $table) {
@@ -303,7 +305,7 @@ it('la migrazione delle registrazioni interrotta dopo la tabella e prima degli i
         $table->dropIndex('registrazioni_condominio_stato_index');
         $table->dropIndex('registrazioni_assemblea_id_index');
     });
-    expect($chiavi())->toBe([]);
+    expect($chiavi())->toBe(['assemblea_id>assemblee']);
 
     $migration->up();
 
