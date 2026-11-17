@@ -426,6 +426,37 @@ it('un\'assemblea con la convocazione partita non si elimina; un\'altra assemble
     expect(cnvMessaggi())->toHaveCount(2);
 });
 
+it('i permessi: con «Visualizza assemblee» si leggono l\'anteprima e le stampe, ma per preparare e mandare serve «Gestisci assemblee»', function () {
+    $s = cnvPronta();
+    $a = $s['assemblea'];
+    $ruolo = \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'collaboratore', 'guard_name' => 'web']);
+    $ruolo->syncPermissions(array_map(fn ($p) => $p->value, \App\Enums\Role::COLLABORATORE->permissions()));
+    $ruolo->revokePermissionTo(\App\Enums\Permission::MANAGE_ASSEMBLEE->value);
+    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+    $collaboratore = \App\Models\User::factory()->create();
+    $collaboratore->assignRole($ruolo);
+    $this->actingAs($collaboratore);
+
+    // Legge e stampa.
+    $this->get(cnvIndirizzo('convocazione.show', $a))->assertOk();
+    $this->getJson(cnvIndirizzo('invii.anteprima', $a, ['cosa' => 'convocazione']))->assertOk();
+    $this->get(cnvIndirizzo('convocazione.stampa', $a))->assertOk();
+    $this->get(cnvIndirizzo('foglio-firme.stampa', $a))->assertOk();
+    // Non scrive e non manda.
+    $this->put(cnvIndirizzo('convocazione.update', $a), ['testo' => 'no'])->assertForbidden();
+    $this->post(cnvIndirizzo('convocazione.genera', $a), ['sovrascrivi' => true])->assertForbidden();
+    $this->postJson(cnvIndirizzo('invii.invia', $a, ['cosa' => 'convocazione']), ['conferma' => true, 'persone' => array_values($s['ids'])])->assertForbidden();
+    $this->postJson(cnvIndirizzo('invii.spedizione', $a, ['cosa' => 'convocazione']), ['persone' => [$s['ids']['Dino Dei']], 'canale' => 'a_mano', 'data' => '2026-11-12'])->assertForbidden();
+    expect(cnvMessaggi())->toHaveCount(0)->and(RegistroInvio::count())->toBe(0)->and($a->fresh()->convocazione_testo)->toContain('AVVISO DI CONVOCAZIONE');
+
+    // Senza «Visualizza assemblee» non si entra nemmeno a leggere.
+    $ruolo->revokePermissionTo(\App\Enums\Permission::VIEW_ASSEMBLEE->value);
+    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+    $this->get(cnvIndirizzo('convocazione.show', $a))->assertForbidden();
+    $this->getJson(cnvIndirizzo('invii.anteprima', $a, ['cosa' => 'convocazione']))->assertForbidden();
+    $this->get(cnvIndirizzo('convocazione.per-persona.stampa', $a))->assertForbidden();
+});
+
 // ── Il verbale agli assenti ──────────────────────────────────────────────
 
 it('un verbale non approvato non si manda: né per email, né registrando una spedizione, né con la lettera di trasmissione', function () {
@@ -499,6 +530,7 @@ it('il verbale approvato va di serie agli assenti, con il PDF dell\'archivio all
         ->and(array_map(fn ($f) => $f['destinatario'], $foglio))->toBe([['nome' => 'Dino Dei', 'indirizzo' => 'Via Verdi 3, 03100 Frosinone']])
         ->and($foglio[0]['oggetto'])->toContain('Verbale dell\'assemblea ordinaria del 23 novembre 2026')
         ->and($foglio[0]['saluto'])->toBe('Gentile Dino Dei,')
+        ->and($foglio[0]['luogo_data'])->toEndWith('24 novembre 2026')
         ->and($foglio[0]['parti'][0])->toContain('Le trasmetto in allegato il verbale')->toContain('L\'amministratore');
     // Per una persona scelta, anche se ha l'email.
     $this->get(cnvIndirizzo('verbale.trasmissione.stampa', $a, ['persone' => [$s['ids']['Anna Alberti']]]))->assertOk();

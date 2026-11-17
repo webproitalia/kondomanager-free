@@ -43,7 +43,7 @@ const errori = computed(() => page.props.errors ?? {});
 const base = computed(() => generatePath('gestionale/:condominio/assemblee/modelli', { condominio: props.condominio.id }));
 
 // Il tipo che si sta guardando: la pagina si apre sul verbale, o sul tipo chiesto con `?tipo=…` (dalla pagina della convocazione).
-const tipoIniziale = new URLSearchParams(window.location.search).get('tipo');
+const tipoIniziale = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('tipo');
 const tipo = ref<string>(props.tipi.some((t) => t.tipo === tipoIniziale) ? (tipoIniziale as string) : 'verbale');
 const datiDelTipo = computed<Tipo>(() => props.tipi.find((t) => t.tipo === tipo.value) ?? props.tipi[0]);
 const modelliDelTipo = computed(() => props.modelli.filter((m) => m.tipo === tipo.value));

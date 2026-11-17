@@ -16,7 +16,8 @@
   ritagliare). La firma dell'amministratore (l'immagine delle impostazioni di stampa) sta alla fine della prima parte, non in fondo al foglio:
   dopo c'è il modulo che firma il condòmino.
 
-  `oggetto`, `saluto` e `chiusura` (la lettera di trasmissione): l'oggetto in grassetto sopra il testo, il saluto prima e la chiusura dopo.
+  `luogo_data`, `oggetto`, `saluto` e `chiusura` (la lettera di trasmissione): il luogo e la data sotto la testata, l'oggetto in grassetto sopra
+  il testo, il saluto prima e la chiusura dopo. L'avviso di convocazione il luogo e la data li porta nel suo testo.
 --}}
 @php
     $firmaLettera = $firma_stampe_absolute_path ?? null;
@@ -79,6 +80,9 @@
         </tr>
     </table>
 
+    @if(filled($f['luogo_data'] ?? null))
+        <div style="font-size: 9pt; color: #444; margin-bottom: 8px;">{{ $f['luogo_data'] }}</div>
+    @endif
     @if(filled($f['oggetto'] ?? null))
         <div style="font-size: 10pt; font-weight: bold; margin-bottom: 10px;">Oggetto: {{ $f['oggetto'] }}</div>
     @endif

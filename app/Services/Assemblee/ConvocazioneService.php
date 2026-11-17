@@ -42,8 +42,9 @@ use Illuminate\Validation\ValidationException;
  *
  * L'art. 66 disp. att. c.c. chiede che l'avviso sia comunicato almeno cinque giorni prima della data fissata per la
  * prima convocazione. Il programma confronta le due date (i giorni di calendario fra la data dell'avviso, o oggi se
- * non è scritta, e il giorno della prima convocazione) e, se sono meno di cinque, lo dice ({@see avvisi()}). Non
- * blocca niente, e non decide quando un avviso si considera comunicato: quello lo valuta lo studio.
+ * non è scritta, e il giorno della prima convocazione) e, se sono meno di cinque, lo dice ({@see avvisi()}); se sono
+ * esattamente cinque dice che non resta margine. Non blocca niente, e non decide quando un avviso si considera
+ * comunicato né come si contano i giorni ai fini di legge: quello lo valuta lo studio.
  */
 final class ConvocazioneService
 {
@@ -140,6 +141,12 @@ final class ConvocazioneService
                 $quanti = $giorni < 0 ? 'la prima convocazione è già passata' : ($giorni === 1 ? 'c\'è 1 giorno' : 'ci sono '.$giorni.' giorni');
                 $avvisi[] = ['tipo' => 'warning', 'codice' => 'cinque_giorni', 'testo' => $quando.' '.$quanti.': meno dei cinque giorni che l\'art. 66 disp. att. c.c. chiede '
                     .'fra la comunicazione dell\'avviso e la data della prima convocazione. Il programma non blocca l\'invio: sposta la data o valuta con lo studio.'];
+            } elseif ($giorni === self::GIORNI_DI_PREAVVISO) {
+                // Il minimo esatto: non è un errore, ma chi spedisce per posta non ha margine. Lo si dice, senza decidere per lo studio.
+                $avvisi[] = ['tipo' => 'info', 'codice' => 'cinque_giorni_giusti', 'testo' => ($assemblea->data_avviso
+                    ? 'Fra la data dell\'avviso ('.$giornoAvviso->format('d/m/Y').') e la prima convocazione ('.$giornoPrima->format('d/m/Y').')'
+                    : 'Se l\'avviso parte oggi ('.$oggi->format('d/m/Y').'), fino alla prima convocazione ('.$giornoPrima->format('d/m/Y').')')
+                    .' ci sono esattamente cinque giorni, il minimo che l\'art. 66 disp. att. c.c. chiede: non resta margine per i tempi di consegna.'];
             }
         }
 

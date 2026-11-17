@@ -287,9 +287,11 @@ it('la pagina avvisa se fra l\'avviso e la prima convocazione ci sono meno di ci
     // Oggi è il 12: alla prima convocazione del 22 mancano dieci giorni.
     expect($codici())->not->toContain('cinque_giorni');
 
-    // Il 17 ne mancano cinque: basta. Il 18 ne mancano quattro: la pagina lo dice.
+    // Il 17 ne mancano cinque: è il minimo, e la pagina dice solo che non c'è margine. Il 18 ne mancano quattro: avvisa.
     $this->travelTo('2026-11-17 09:00:00');
-    expect($codici())->not->toContain('cinque_giorni');
+    expect($codici())->not->toContain('cinque_giorni')->toContain('cinque_giorni_giusti');
+    expect(collect(app(ConvocazioneService::class)->avvisi($a->fresh()))->firstWhere('codice', 'cinque_giorni_giusti'))
+        ->toMatchArray(['tipo' => 'info'])->testo->toContain('esattamente cinque giorni');
     $this->travelTo('2026-11-18 09:00:00');
     $avviso = collect(app(ConvocazioneService::class)->avvisi($a->fresh()))->firstWhere('codice', 'cinque_giorni');
     expect($avviso['tipo'])->toBe('warning')

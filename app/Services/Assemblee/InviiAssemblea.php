@@ -414,11 +414,16 @@ final class InviiAssemblea
 
         $testi = $this->testiDiPartenza($assemblea, self::VERBALE);
         $studio = EmissioneLettere::studio();
+        // Il luogo (il comune dello studio, o del condominio) e il giorno di oggi, come le lettere ai condòmini.
+        $assemblea->loadMissing('condominio');
+        $luogo = EmissioneLettere::luogo($assemblea->condominio);
+        $luogoData = ($luogo !== null ? $luogo.', ' : '').SegnapostiVerbale::giorno(DateHelper::adessoUtente());
         $fogli = [];
         foreach ($scelte as $p) {
             $suoi = $this->testiDellaPersona($assemblea, $testi, $p);
             $fogli[] = [
                 'destinatario' => ['nome' => $p['nome'], 'indirizzo' => $p['indirizzo']],
+                'luogo_data' => $luogoData,
                 'oggetto' => $suoi['oggetto'],
                 'saluto' => 'Gentile '.$p['nome'].',',
                 'parti' => [$suoi['testo']."\n\nCordiali saluti.\n\nL'amministratore".($studio['nome'] !== null ? "\n".$studio['nome'] : '')],
