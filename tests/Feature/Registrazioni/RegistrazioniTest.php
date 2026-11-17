@@ -308,6 +308,8 @@ it('con un\'assemblea e il suo ordine del giorno arriva la bozza per punto, senz
         // La delibera è il testo della decisione: l'esito del voto non si prende dall'audio (lo scrive il programma dai voti registrati).
         && str_contains($req->data()['contents'][0]['parts'][0]['text'], 'NON scrivere MAI l\'esito del voto')
         && str_contains($req->data()['contents'][0]['parts'][0]['text'], 'niente «all\'unanimità»')
+        // E in forma neutra, la proposta messa ai voti: «L'assemblea approva…» accanto a voti che dicono «respinto» sarebbe una contraddizione.
+        && str_contains($req->data()['contents'][0]['parts'][0]['text'], 'forma NEUTRA')
         && ! str_contains($req->data()['contents'][0]['parts'][0]['text'], 'con l\'esito del voto solo se è stato detto'));
     Event::assertDispatched(RegistrazioneConclusa::class, fn ($e) => $e->registrazione->assemblea_id === $assemblea && count($e->registrazione->bozza_punti) === 2);
 });

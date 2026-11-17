@@ -70,8 +70,12 @@ class VerbaleController extends Controller
             throw ValidationException::withMessages(['verbale' => 'Il verbale è in attesa di approvazione: ritiralo prima di cambiarlo.']);
         }
         $dati = $request->validated();
+        // Un agente AI che risalva il testo identico non lo ha riletto: non deve bastare a far passare il controllo dei dati cambiati
+        // (`dati_riletti` all'invio resta la sua dichiarazione esplicita). Per la persona «Salva il testo» vale come «ho riletto».
+        $rilettoDavvero = ! ($request->attributes->has(\App\Http\Middleware\AutenticaAgente::ATTRIBUTO)
+            && array_key_exists('testo', $dati) && trim((string) $dati['testo']) === trim((string) $verbale->testo));
 
-        DB::transaction(function () use ($verbale, $dati, $assemblea) {
+        DB::transaction(function () use ($verbale, $dati, $assemblea, $rilettoDavvero) {
             foreach (['testo', 'intestazione', 'apertura', 'chiusura'] as $campo) {
                 if (array_key_exists($campo, $dati)) {
                     $verbale->{$campo} = filled($dati[$campo]) ? (string) $dati[$campo] : null;
@@ -97,7 +101,7 @@ class VerbaleController extends Controller
 
             // Chi salva il testo lo ha scritto o riletto con i dati di adesso: se ne fotografa l'impronta, e l'invio in
             // approvazione dirà se poi i dati sono cambiati. Salvare solo i testi dei punti o di contorno non la tocca.
-            if (array_key_exists('testo', $dati)) {
+            if (array_key_exists('testo', $dati) && $rilettoDavvero) {
                 $this->verbali->segnaTestoRiletto($assemblea);
             }
         });

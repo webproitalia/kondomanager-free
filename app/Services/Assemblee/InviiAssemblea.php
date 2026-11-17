@@ -618,6 +618,11 @@ final class InviiAssemblea
         if (in_array($assemblea->stato, ['in_corso', 'chiusa'], true)) {
             return [false, self::ASSEMBLEA_GIA_TENUTA];
         }
+        // Lo stato dell'assemblea è un'etichetta che la persona può non aver toccato: un'assemblea con il verbale in attesa di
+        // approvazione o approvato si è tenuta, anche se risulta ancora «convocata» (visto in prova il 17/11/2026).
+        if (in_array($this->verbali->verbaleDi($assemblea)->stato, ['da_approvare', 'approvato'], true)) {
+            return [false, self::ASSEMBLEA_GIA_TENUTA];
+        }
         if (blank($assemblea->convocazione_testo)) {
             return [false, self::CONVOCAZIONE_SENZA_TESTO];
         }

@@ -122,3 +122,50 @@ it('eliminando l\'assemblea la registrazione resta, senza il legame', function (
     expect($s['registrazione']->fresh())->not->toBeNull()
         ->and($s['registrazione']->fresh()->assemblea_id)->toBeNull();
 });
+
+it('⚠️ con il verbale in attesa o approvato la convocazione non si manda più, anche se l\'assemblea risulta ancora «convocata»', function () {
+    $s = rnvScena();
+    $a = $s['assemblea'];
+    $a->forceFill(['stato' => 'convocata', 'convocazione_testo' => 'Avviso di convocazione.'])->save();
+    $invii = app(\App\Services\Assemblee\InviiAssemblea::class);
+    expect($invii->siPuoMandare($a->fresh(), \App\Services\Assemblee\InviiAssemblea::CONVOCAZIONE)[0])->toBeTrue();
+
+    app(VerbaleService::class)->verbaleDi($a)->forceFill(['stato' => 'approvato', 'approvato_at' => now()])->save();
+
+    [$si, $perche] = $invii->siPuoMandare($a->fresh(), \App\Services\Assemblee\InviiAssemblea::CONVOCAZIONE);
+    expect($si)->toBeFalse()->and($perche)->toContain('non si manda più');
+});
+
+it('⚠️ i numeri delle spedizioni vanno per id della persona: un elenco semplice è rifiutato', function () {
+    $s = rnvScena();
+    $a = $s['assemblea'];
+    $a->forceFill(['convocazione_testo' => 'Avviso di convocazione.'])->save();
+    $ids = collect($s['persone'])->map(fn ($p) => $p->id)->values()->all();
+    $indirizzo = route('admin.gestionale.assemblee.invii.spedizione', [$s['condominio'], $a, 'convocazione']);
+
+    $this->postJson($indirizzo, ['persone' => $ids, 'canale' => 'raccomandata', 'data' => now()->toDateString(), 'numeri' => ['RA111', 'RA222']])
+        ->assertUnprocessable()->assertJsonValidationErrors('numeri');
+
+    $this->postJson($indirizzo, ['persone' => $ids, 'canale' => 'raccomandata', 'data' => now()->toDateString(), 'numeri' => [(string) $ids[0] => 'RA111']])
+        ->assertOk();
+});
+
+it('⚠️ un agente AI che risalva lo stesso testo non fa passare il controllo dei dati cambiati', function () {
+    $s = rnvScena();
+    $a = $s['assemblea'];
+    $verbali = app(VerbaleService::class);
+    $verbali->genera($a->fresh(), null, false);
+    $testo = (string) $verbali->verbaleDi($a)->testo;
+    $impronta = $verbali->verbaleDi($a)->impronta_dati;
+    // I dati cambiano dopo il testo.
+    $a->forceFill(['presidente' => 'Un altro presidente'])->save();
+    [, $chiave] = \App\Models\ChiaveAgente::genera('Assistente', $this->utente, false);
+
+    $this->withToken($chiave)->putJson(route('admin.gestionale.assemblee.verbale.update', [$s['condominio'], $a]), ['testo' => $testo])->assertOk();
+    expect($verbali->verbaleDi($a)->fresh()->impronta_dati)->toBe($impronta, 'il testo identico risalvato da un agente non vale come rilettura');
+
+    // La persona, dalla pagina, con «Salva il testo» dice di averlo riletto (senza la chiave dell'agente nelle intestazioni).
+    $this->flushHeaders();
+    $this->put(route('admin.gestionale.assemblee.verbale.update', [$s['condominio'], $a]), ['testo' => $testo])->assertSessionHasNoErrors();
+    expect($verbali->verbaleDi($a)->fresh()->impronta_dati)->not->toBe($impronta);
+});

@@ -33,6 +33,28 @@ class RegistraSpedizioneAssembleaRequest extends FormRequest
         ];
     }
 
+    /**
+     * `numeri` va per id della persona (`{"12": "RA123456789IT"}`): un elenco semplice (`["RA…", "RB…"]`) assegnerebbe i numeri alle
+     * persone con id 0, 1, 2… senza errore, cioè alle persone sbagliate. Ogni chiave deve essere una delle persone indicate.
+     */
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function (\Illuminate\Validation\Validator $validator) {
+            $numeri = $this->input('numeri');
+            if (! is_array($numeri) || $numeri === []) {
+                return;
+            }
+            $persone = array_map('intval', (array) $this->input('persone', []));
+            foreach (array_keys($numeri) as $chiave) {
+                if (! ctype_digit((string) $chiave) || ! in_array((int) $chiave, $persone, true)) {
+                    $validator->errors()->add('numeri', 'I numeri delle spedizioni vanno indicati per id della persona, e solo per le persone scelte: {"12": "RA123456789IT"}. «'.$chiave.'» non è fra le persone indicate.');
+
+                    return;
+                }
+            }
+        });
+    }
+
     public function messages(): array
     {
         return [
