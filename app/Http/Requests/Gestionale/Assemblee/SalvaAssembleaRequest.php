@@ -13,8 +13,9 @@ use Illuminate\Validation\Rule;
  * esercizio e ordine del giorno (Web Pro Italia, 17/11/2026).
  *
  * L'ordine del giorno arriva intero, nell'ordine in cui va: un punto con `id` è uno che c'è già (si corregge e si
- * rinumera), uno senza `id` è nuovo, uno che manca si toglie (se non ha voti). In modifica ogni campo è facoltativo:
- * si cambia solo quello che si manda, e senza `punti` l'ordine del giorno resta com'è.
+ * rinumera), uno senza `id` è nuovo, uno che manca si toglie. Un punto che manca e che ha già voti, un esito o un
+ * testo non si toglie in silenzio: la modifica è rifiutata, a meno che il suo id sia in `elimina_punti`. In modifica
+ * ogni campo è facoltativo: si cambia solo quello che si manda, e senza `punti` l'ordine del giorno resta com'è.
  */
 class SalvaAssembleaRequest extends FormRequest
 {
@@ -47,7 +48,11 @@ class SalvaAssembleaRequest extends FormRequest
             'punti.*.titolo' => ['required', 'string', 'max:500'],
             'punti.*.descrizione' => ['nullable', 'string', 'max:5000'],
             'punti.*.maggioranza' => ['required', Rule::in(MaggioranzaAssemblea::values())],
-        ];
+        ] + ($nuova ? [] : [
+            // Solo in modifica, insieme a `punti`: gli id dei punti da togliere anche se hanno voti, un esito o un testo.
+            'elimina_punti' => ['sometimes', 'array', 'max:100'],
+            'elimina_punti.*' => ['integer'],
+        ]);
     }
 
     public function messages(): array

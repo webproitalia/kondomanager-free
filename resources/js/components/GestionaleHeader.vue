@@ -153,6 +153,9 @@ const rightNavItems: LinkItem[] = [
         href: generatePath('gestionale/:condominio/registrazioni', { condominio: condominio.value.id }),
         icon: Mic,
         external: false,
+        // Come le assemblee, e come la rotta: una trascrizione è materiale dell'assemblea.
+        roles: [Role.AMMINISTRATORE],
+        permissions: [Permission.VIEW_ASSEMBLEE],
     },
     {
         type: 'link',
@@ -273,7 +276,7 @@ const isMobileItemExpanded = (title: string) => expandedMobileItems.value.has(ti
                                 <!-- MOBILE RIGHT NAV -->
                                 <div class="my-4 h-px bg-border" />
 
-                                <template v-for="item in rightNavItems" :key="item.title">
+                                <template v-for="item in accessibleRightItems" :key="item.title">
                                     <a
                                         v-if="item.external"
                                         :href="item.href"
@@ -355,7 +358,7 @@ const isMobileItemExpanded = (title: string) => expandedMobileItems.value.has(ti
                 <div class="ml-auto flex items-center gap-2">
                     <div class="hidden xl:flex gap-1">
                         <TooltipProvider>
-                            <template v-for="item in rightNavItems" :key="item.title">
+                            <template v-for="item in accessibleRightItems" :key="item.title">
                                 <Tooltip>
                                     <TooltipTrigger>
                                         <Button variant="ghost" size="icon" class="h-9 w-9">

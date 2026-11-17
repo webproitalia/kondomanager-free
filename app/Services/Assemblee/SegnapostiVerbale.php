@@ -68,10 +68,11 @@ final class SegnapostiVerbale
         'descrizione' => 'La descrizione del punto nell\'ordine del giorno (vuota se non c\'è).',
         'discussione' => 'La discussione scritta per il punto (vuota se non c\'è).',
         'delibera' => 'La delibera scritta per il punto (vuota se non c\'è).',
-        'votazione' => 'Favorevoli, contrari e astenuti, con i nomi e i millesimi (tre righe); per un punto informativo, la frase che lo dice.',
+        'votazione' => 'Favorevoli, contrari e astenuti, con i nomi e i millesimi (tre righe, e una quarta per i presenti che non hanno espresso il voto, se ce ne sono); per un punto informativo, la frase che lo dice.',
         'favorevoli' => 'Solo la riga dei favorevoli.',
         'contrari' => 'Solo la riga dei contrari.',
         'astenuti' => 'Solo la riga degli astenuti.',
+        'non_votanti' => 'Solo la riga dei presenti che non hanno espresso il voto (vuota se tutti i presenti hanno votato).',
         'maggioranza' => '«Maggioranza richiesta: …» (vuoto per un punto informativo).',
         'esito' => 'La frase dell\'esito confermato («L\'assemblea approva.»); se non è confermato lo dice.',
         'esito.parola' => '«approvato», «respinto», «rinviato», «informativa» (vuoto se non è confermato).',
@@ -90,7 +91,8 @@ final class SegnapostiVerbale
         $assemblea->loadMissing(['condominio', 'tabella', 'presenze.anagrafica', 'presenze.delegato', 'punti.voti']);
         $c = $assemblea->condominio;
         $giorno = $assemblea->giorno();
-        $oraInizio = ConteggiAssemblea::ora($assemblea->ora_inizio) ?? ($giorno && $giorno->format('H:i') !== '00:00' ? $giorno->format('H:i') : null);
+        // L'ora d'inizio è quella vera, segnata in sala: se manca resta la riga da riempire, mai l'ora della convocazione al suo posto.
+        $oraInizio = ConteggiAssemblea::ora($assemblea->ora_inizio);
         $oraFine = ConteggiAssemblea::ora($assemblea->ora_fine);
 
         $presentiAllApertura = $this->conteggi->presentiAllApertura($assemblea);
@@ -172,15 +174,18 @@ final class SegnapostiVerbale
             return "{$titolo}: {$chi} per {$g['millesimi_testo']} millesimi ({$nomi}).";
         };
 
+        $non = '';
         if ($v['informativa']) {
             $votazione = 'Punto informativo: nessuna votazione.';
             [$fav, $con, $ast] = ['', '', ''];
-        } elseif ($v['intervenuti']['teste'] === 0) {
+        } elseif ($v['votanti']['teste'] === 0) {
             $votazione = 'Nessuna votazione registrata.';
             [$fav, $con, $ast] = ['', '', ''];
         } else {
             [$fav, $con, $ast] = [$riga('Favorevoli', $v['favorevoli']), $riga('Contrari', $v['contrari']), $riga('Astenuti', $v['astenuti'])];
-            $votazione = "{$fav}\n{$con}\n{$ast}";
+            // Chi è in sala senza un voto conta fra gli intervenuti: il verbale lo dice, con i nomi.
+            $non = $v['non_votanti']['teste'] > 0 ? $riga('Presenti che non hanno espresso il voto', $v['non_votanti']) : '';
+            $votazione = "{$fav}\n{$con}\n{$ast}".($non !== '' ? "\n{$non}" : '');
         }
 
         $esito = match ($p->esito) {
@@ -201,6 +206,7 @@ final class SegnapostiVerbale
             'favorevoli' => $fav,
             'contrari' => $con,
             'astenuti' => $ast,
+            'non_votanti' => $non,
             'maggioranza' => $v['informativa'] ? '' : 'Maggioranza richiesta: '.rtrim($v['regola'], '.').'.',
             'esito' => $esito,
             'esito.parola' => (string) ($p->esito ?? ''),

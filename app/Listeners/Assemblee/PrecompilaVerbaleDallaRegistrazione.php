@@ -17,8 +17,9 @@ use Throwable;
  * È una bozza da rileggere, non il verbale: presenze, voti ed esiti li segna la persona nella pagina dell'assemblea, e il verbale lo
  * approva lei.
  *
- * Non deve mai far fallire l'elaborazione della registrazione: se il verbale è già approvato, o qualcosa va storto, la trascrizione resta
- * e lo si scrive nel registro dell'applicazione.
+ * Non deve mai far fallire l'elaborazione della registrazione: se il verbale è approvato o in attesa di approvazione la bozza NON entra
+ * (i dati di un verbale mandato a chi lo approva non cambiano più: prima lo si ritira), e se qualcosa va storto nemmeno; la trascrizione
+ * resta, con la sua bozza nella pagina della registrazione, e lo si scrive nel registro dell'applicazione.
  */
 class PrecompilaVerbaleDallaRegistrazione
 {
@@ -43,8 +44,8 @@ class PrecompilaVerbaleDallaRegistrazione
 
             $this->verbali->precompilaDaBozza($assemblea, $bozza, 'registrazione n. '.$registrazione->id);
         } catch (ValidationException $e) {
-            Log::info('Assemblee: la bozza della registrazione non entra nel verbale, che è già approvato', [
-                'assemblea_id' => $registrazione->assemblea_id, 'registrazione_id' => $registrazione->id,
+            Log::info('Assemblee: la bozza della registrazione non entra nel verbale, che è approvato o in attesa di approvazione', [
+                'assemblea_id' => $registrazione->assemblea_id, 'registrazione_id' => $registrazione->id, 'motivo' => $e->getMessage(),
             ]);
         } catch (Throwable $e) {
             Log::warning('Assemblee: la bozza della registrazione non è entrata nel verbale', [

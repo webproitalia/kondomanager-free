@@ -14,7 +14,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * stanno in `assemblea_punti`.
  *
  * Stati: `bozza` → `da_approvare` (chi l'ha preparato lo manda) → `approvato` (lo approva una persona, mai un agente
- * AI). Un verbale approvato non si modifica: si riapre una nuova versione, con il numero che sale.
+ * AI). Un verbale approvato non si modifica: si riapre una nuova versione, con il numero che sale. Anche in attesa di
+ * approvazione niente dell'assemblea si modifica: prima si ritira il verbale.
+ *
+ * `impronta_dati` è l'impronta dei dati dell'assemblea com'erano quando il testo è stato generato o salvato l'ultima
+ * volta (`ControlliVerbale::impronta`): all'invio in approvazione dice se i dati sono cambiati dopo il testo.
  */
 class Verbale extends Model
 {
@@ -27,7 +31,7 @@ class Verbale extends Model
 
     protected $fillable = [
         'assemblea_id', 'stato', 'intestazione', 'apertura', 'chiusura', 'testo', 'modello_id', 'versione', 'documento_id',
-        'inviato_in_approvazione_at', 'approvato_at', 'approvato_by',
+        'inviato_in_approvazione_at', 'approvato_at', 'approvato_by', 'impronta_dati',
     ];
 
     protected $casts = [

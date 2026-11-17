@@ -273,6 +273,10 @@ it('resta rieseguibile dopo un\'interruzione a metà', function (string $file) {
     '2026_11_17_100000_create_assemblee_tables',
     '2026_11_17_100100_seed_categoria_verbali_assemblea',
     '2026_11_17_100200_seed_modello_verbale_canonico',
+    // Le correzioni al verbale (Web Pro Italia, 17/11/2026): l'impronta dei dati sul verbale, il nome fotografato nelle presenze (scritto solo
+    // dove manca) e la chiave di `assemblea_presenze.anagrafica_id` da CASCADE a SET NULL, in tre passi con tre guardie (via la chiave vecchia,
+    // colonna facoltativa, chiave nuova). Lo stato a metà lo prova `tests/Feature/Assemblee/CorrezioniVerbaleTest.php`.
+    '2026_11_17_130000_correzioni_verbale_assemblee',
     // Web Pro Italia, 17/11/2026: le registrazioni delle riunioni — la tabella, due indici e due chiavi esterne, cinque statement su MySQL,
     // ognuno con la sua guardia. `assemblea_id` non ha la chiave esterna (la tabella `assemblee` è di un altro lavoro). Lo stato a metà lo
     // prova il test sotto.

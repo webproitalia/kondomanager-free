@@ -3,6 +3,7 @@
 namespace App\Services\Assemblee;
 
 use App\Models\Assemblee\Assemblea;
+use App\Models\Assemblee\AssembleaPresenza;
 use App\Models\Assemblee\AssembleaPunto;
 use App\Models\Assemblee\Verbale;
 use App\Models\Assemblee\VerbaleModello;
@@ -36,11 +37,17 @@ use Throwable;
  * `bozza` → `da_approvare` (chi l'ha preparato lo manda) → `approvato` (da una persona, mai da un agente AI: la rotta
  * è in `AutenticaAgente::VIETATE`). All'approvazione il PDF entra nell'archivio dei documenti del condominio e niente
  * dell'assemblea si modifica più, finché non si apre una nuova versione.
+ *
+ * **Anche in attesa di approvazione niente dell'assemblea si modifica** (voti, esiti, presenze, svolgimento, ordine del
+ * giorno, testi dei punti, la bozza di una registrazione): chi approva deve firmare un testo che corrisponde ai dati.
+ * Per correggere si ritira il verbale ({@see ritira()}). E prima di mandarlo in approvazione si controlla che il testo
+ * corrisponda ai dati di adesso: vedi {@see ControlliVerbale}.
  */
 final class VerbaleService
 {
     public function __construct(
         private readonly SegnapostiVerbale $segnaposti,
+        private readonly ControlliVerbale $controlli,
     ) {}
 
     /** Il verbale dell'assemblea; lo crea in bozza la prima volta che serve. */
@@ -64,7 +71,8 @@ final class VerbaleService
      * @param  string  $fonte  da dove viene la bozza («registrazione», «assistente»…): va nel registro dell'applicazione
      * @return int  quanti campi ha riempito
      *
-     * @throws ValidationException se il verbale è già approvato: per scriverci si apre una nuova versione
+     * @throws ValidationException se il verbale è approvato (per scriverci si apre una nuova versione) o in attesa di
+     *                             approvazione (prima si ritira)
      */
     public function precompilaDaBozza(Assemblea $assemblea, array $bozzaPunti, string $fonte): int
     {
@@ -103,13 +111,22 @@ final class VerbaleService
         return $riempiti;
     }
 
-    /** Un verbale approvato ferma ogni scrittura sull'assemblea: lo dice con un errore che la pagina e l'agente leggono. */
+    /**
+     * Un verbale approvato o in attesa di approvazione ferma ogni scrittura sull'assemblea: lo dice con un errore che la
+     * pagina e l'agente leggono. In attesa di approvazione i dati non devono più cambiare, altrimenti chi approva
+     * firmerebbe un testo che non corrisponde più ai dati: prima si ritira il verbale.
+     */
     public function assicuraModificabile(Assemblea $assemblea): void
     {
         $assemblea->loadMissing('verbale');
         if ($assemblea->bloccata()) {
             throw ValidationException::withMessages([
                 'verbale' => 'Il verbale di questa assemblea è approvato: non si modifica più. Per correggerlo apri una nuova versione dalla pagina del verbale.',
+            ]);
+        }
+        if ($assemblea->verbale?->stato === Verbale::DA_APPROVARE) {
+            throw ValidationException::withMessages([
+                'verbale' => 'Il verbale è in attesa di approvazione: ritiralo per modificare (dalla pagina del verbale, «Torna in bozza»). Finché è in attesa niente dell\'assemblea cambia: presenze, voti, esiti, ordine del giorno e testi dei punti.',
             ]);
         }
     }
@@ -149,7 +166,25 @@ final class VerbaleService
         }
 
         $modello ??= VerbaleModello::predefinito();
-        $verbale->forceFill(['testo' => $this->compila($assemblea, $modello), 'modello_id' => $modello?->id])->save();
+        // Il testo e l'impronta nascono dagli stessi dati, riletti adesso dal database.
+        $dati = Assemblea::findOrFail($assemblea->getKey());
+        $verbale->forceFill([
+            'testo' => $this->compila($dati, $modello),
+            'modello_id' => $modello?->id,
+            'impronta_dati' => $this->controlli->impronta($dati),
+        ])->save();
+
+        return $verbale;
+    }
+
+    /**
+     * Il testo del verbale è stato salvato a mano (o da un assistente): si fotografa l'impronta dei dati di adesso. Chi
+     * salva il testo lo ha scritto o riletto con questi dati; se poi i dati cambiano, l'invio in approvazione lo dice.
+     */
+    public function segnaTestoRiletto(Assemblea $assemblea): Verbale
+    {
+        $verbale = $this->verbaleDi($assemblea);
+        $verbale->forceFill(['impronta_dati' => $this->controlli->impronta($assemblea)])->save();
 
         return $verbale;
     }
@@ -166,9 +201,14 @@ final class VerbaleService
 
     /**
      * Chi l'ha preparato manda il verbale in approvazione. Prima si controlla che ci sia quello che un verbale deve
-     * avere: il testo, presidente, segretario, la convocazione tenuta e l'esito di ogni punto.
+     * avere: il testo, presidente, segretario, la convocazione tenuta e l'esito di ogni punto. Poi che il testo
+     * corrisponda ai dati ({@see ControlliVerbale::primaDiInviare()}): le ore, niente parti da compilare, esiti
+     * coerenti con i voti, e nessun dato cambiato dopo l'ultimo testo.
+     *
+     * @param  bool  $datiRiletti  chi manda ha riletto il testo con i dati di adesso: procede anche se i dati sono cambiati dopo l'ultimo testo
+     * @param  list<int>  $esitiConfermati  gli id dei punti di cui si conferma l'esito anche se i voti registrati ne danno un altro
      */
-    public function inviaInApprovazione(Assemblea $assemblea): Verbale
+    public function inviaInApprovazione(Assemblea $assemblea, bool $datiRiletti = false, array $esitiConfermati = []): Verbale
     {
         $verbale = $this->verbaleDi($assemblea);
         if ($verbale->stato !== Verbale::BOZZA) {
@@ -202,11 +242,17 @@ final class VerbaleService
         if ($senzaEsito !== []) {
             $errori['punti'] = (count($senzaEsito) === 1 ? 'Conferma l\'esito del punto ' : 'Conferma l\'esito dei punti ').implode(', ', $senzaEsito).' prima di mandare il verbale in approvazione.';
         }
+        $errori += $this->controlli->primaDiInviare($assemblea, $verbale, $datiRiletti, array_map('intval', $esitiConfermati));
         if ($errori !== []) {
             throw ValidationException::withMessages($errori);
         }
 
-        $verbale->forceFill(['stato' => Verbale::DA_APPROVARE, 'inviato_in_approvazione_at' => now()])->save();
+        // Da qui il testo vale per i dati di adesso: anche chi ha proceduto con «dati_riletti» lascia l'impronta aggiornata.
+        $verbale->forceFill([
+            'stato' => Verbale::DA_APPROVARE,
+            'inviato_in_approvazione_at' => now(),
+            'impronta_dati' => $this->controlli->impronta($assemblea),
+        ])->save();
 
         return $verbale;
     }
@@ -246,6 +292,7 @@ final class VerbaleService
                     'approvato_at' => now(),
                     'approvato_by' => $persona->id,
                 ])->save();
+                $this->fotografaINomi($assemblea);
 
                 $pdf = $this->pdf($assemblea, false);
                 $percorso = $archivio->salvaContenuto($pdf, 'pdf');
@@ -274,6 +321,24 @@ final class VerbaleService
         }
 
         return $verbale->fresh();
+    }
+
+    /**
+     * All'approvazione i nomi di chi c'era e dei delegati restano scritti nelle righe delle presenze: se dopo
+     * un'anagrafica viene eliminata, presenze e voti dell'assemblea approvata restano, con il loro nome.
+     */
+    private function fotografaINomi(Assemblea $assemblea): void
+    {
+        $presenze = AssembleaPresenza::with(['anagrafica:id,nome', 'delegato:id,nome'])->where('assemblea_id', $assemblea->id)->get();
+        foreach ($presenze as $p) {
+            $nomi = array_filter([
+                'nome' => filled($p->anagrafica?->nome) ? trim((string) $p->anagrafica->nome) : null,
+                'delegato_nome' => filled($p->delegato?->nome) ? mb_substr(trim((string) $p->delegato->nome), 0, 150) : null,
+            ]);
+            if ($nomi !== []) {
+                $p->forceFill($nomi)->save();
+            }
+        }
     }
 
     /**

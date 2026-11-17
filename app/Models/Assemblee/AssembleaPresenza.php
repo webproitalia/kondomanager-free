@@ -14,6 +14,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * `millesimi` è il valore com'è nella tabella (decimale a cinque cifre), non riportato a mille: il riporto lo fanno i
  * conteggi, sul totale della tabella.
+ *
+ * `nome` è il nome della persona fotografato nella riga, e `delegato_nome` quello del delegato (scritto a mano, o
+ * copiato dalla rubrica): se l'anagrafica viene eliminata la riga resta, con il suo nome e i suoi voti
+ * (`anagrafica_id` e `delegato_anagrafica_id` diventano vuoti).
  */
 class AssembleaPresenza extends Model
 {
@@ -22,7 +26,7 @@ class AssembleaPresenza extends Model
     public const TIPI = ['presente', 'delega', 'assente'];
 
     protected $fillable = [
-        'assemblea_id', 'anagrafica_id', 'tipo', 'delegato_anagrafica_id', 'delegato_nome', 'millesimi', 'unita',
+        'assemblea_id', 'anagrafica_id', 'nome', 'tipo', 'delegato_anagrafica_id', 'delegato_nome', 'millesimi', 'unita',
         'ora_arrivo', 'ora_uscita',
     ];
 
@@ -46,6 +50,14 @@ class AssembleaPresenza extends Model
     public function voti(): HasMany
     {
         return $this->hasMany(AssembleaVoto::class, 'assemblea_presenza_id');
+    }
+
+    /** Il nome di chi rappresenta la testa: quello di adesso in rubrica, o quello fotografato se l'anagrafica non c'è più. */
+    public function nomePersona(): string
+    {
+        $nome = $this->anagrafica?->nome ?? $this->nome;
+
+        return filled($nome) ? trim((string) $nome) : 'Persona senza nome (riga '.$this->id.')';
     }
 
     /** Ha partecipato: di persona o per delega (anche se poi è uscito). */

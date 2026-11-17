@@ -49,13 +49,18 @@ export interface Votazione {
     favorevoli: GruppoVoti;
     contrari: GruppoVoti;
     astenuti: GruppoVoti;
+    // Chi è in sala senza un voto sul punto: conta fra gli intervenuti come non votante (pesa come un astenuto).
+    non_votanti: GruppoVoti;
+    votanti: { teste: number; millesimi: number; millesimi_testo: string };
     intervenuti: { teste: number; millesimi: number; millesimi_testo: string };
     senza_voto: number[];
+    voti_di_assenti: string[];
     teste_ok: boolean;
     valore_ok: boolean;
     raggiunta: boolean;
     esito_proposto: Esito | null;
     esito_diverso: boolean;
+    esito_senza_voti: boolean;
     spiegazione: string;
 }
 
@@ -75,7 +80,8 @@ export interface Punto {
 
 export interface Presenza {
     id: number;
-    anagrafica_id: number;
+    // Vuoto se l'anagrafica è stata eliminata: la riga resta con il nome fotografato.
+    anagrafica_id: number | null;
     nome: string;
     tipo: TipoPresenza;
     delegato_anagrafica_id: number | null;

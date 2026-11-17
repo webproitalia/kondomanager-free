@@ -39,22 +39,13 @@ final class AventiDiritto
     /**
      * Gli aventi diritto calcolati dai titolari, e il totale della tabella.
      *
-     * @return array{gruppi: list<array{chiave:string, rappresentante_id:int, titolari:list<int>, candidati:list<int>, unita:list<int>, millesimi:int}>, totale:int, unita_senza_titolari:list<array{id:int, etichetta:string, millesimi:int}>, giorno:string}
+     * @return array{gruppi: list<array{chiave:string, rappresentante_id:int, titolari:list<int>, candidati:list<int>, unita:list<int>, millesimi:int}>, totale:int, unita_senza_titolari:list<array{id:int, etichetta:string, millesimi:int}>, giorno:string, millesimi_per_unita: array<int, int>, nomi: array<int, string>}
      */
     public function calcola(Assemblea $assemblea): array
     {
         $giorno = CarbonImmutable::parse(($assemblea->giorno() ?? now())->toDateString());
 
-        $quote = $assemblea->tabella_id
-            ? QuotaTabella::where('tabella_id', $assemblea->tabella_id)->get(['immobile_id', 'valore', 'escluso'])
-            : collect();
-        $millesimiPerUnita = [];
-        $totale = 0;
-        foreach ($quote as $q) {
-            $valore = $q->escluso ? 0 : max(0, Millesimi::daValore($q->valore));
-            $millesimiPerUnita[(int) $q->immobile_id] = $valore;
-            $totale += $valore;
-        }
+        [$millesimiPerUnita, $totale] = $this->millesimiDellaTabella($assemblea->tabella_id);
 
         $unita = Immobile::where('condominio_id', $assemblea->condominio_id)->orderBy('id')->get();
         $ruoliTitolari = array_map(fn ($r) => $r->value, RuoloAnagraficaImmobile::titolariDiDirittoReale());
@@ -118,7 +109,32 @@ final class AventiDiritto
         // L'elenco in ordine di nome del rappresentante, come lo si scorre in sala.
         usort($fuori, fn ($a, $b) => [mb_strtolower($nomi[$a['rappresentante_id']] ?? ''), $a['chiave']] <=> [mb_strtolower($nomi[$b['rappresentante_id']] ?? ''), $b['chiave']]);
 
-        return ['gruppi' => $fuori, 'totale' => $totale, 'unita_senza_titolari' => $senzaTitolari, 'giorno' => $giorno->toDateString()];
+        return [
+            'gruppi' => $fuori, 'totale' => $totale, 'unita_senza_titolari' => $senzaTitolari, 'giorno' => $giorno->toDateString(),
+            'millesimi_per_unita' => $millesimiPerUnita, 'nomi' => $nomi,
+        ];
+    }
+
+    /**
+     * I millesimi di ogni unità nella tabella dei conteggi, in centomillesimi, e il loro totale. Le unità escluse
+     * valgono zero; senza tabella non c'è niente.
+     *
+     * @return array{0: array<int, int>, 1: int}
+     */
+    private function millesimiDellaTabella(?int $tabellaId): array
+    {
+        $quote = $tabellaId
+            ? QuotaTabella::where('tabella_id', $tabellaId)->get(['immobile_id', 'valore', 'escluso'])
+            : collect();
+        $perUnita = [];
+        $totale = 0;
+        foreach ($quote as $q) {
+            $valore = $q->escluso ? 0 : max(0, Millesimi::daValore($q->valore));
+            $perUnita[(int) $q->immobile_id] = $valore;
+            $totale += $valore;
+        }
+
+        return [$perUnita, $totale];
     }
 
     /**
@@ -127,25 +143,74 @@ final class AventiDiritto
      * - Un gruppo che c'è già (stesse unità) tiene quello che è stato segnato — presente, delega, orari, rappresentante
      *   scelto — e prende i millesimi di adesso.
      * - Un gruppo nuovo entra come assente.
-     * - Una riga che non corrisponde più a nessun gruppo si toglie, se non ha voti; con i voti resta e si segnala.
+     * - Una riga che non corrisponde più a nessun gruppo si toglie, se non ha voti. **Con i voti resta ferma**, con i
+     *   millesimi ricalcolati sulle sue unità, e si segnala: i gruppi nuovi che coprono le sue stesse unità non entrano
+     *   (e le righe senza voti che quei gruppi avrebbero sostituito restano anche loro), così **le stesse unità non
+     *   finiscono mai in due righe**, e non si contano due volte. Per riallineare una riga ferma si azzerano i suoi voti
+     *   e si prepara di nuovo l'elenco.
      *
-     * @return array{aggiunte:int, aggiornate:int, tolte:int, rimaste:list<int>, totale:int, unita_senza_titolari:list<array{id:int, etichetta:string, millesimi:int}>}
+     * @return array{aggiunte:int, aggiornate:int, tolte:int, rimaste:list<int>, doppie:list<int>, totale:int, unita_senza_titolari:list<array{id:int, etichetta:string, millesimi:int}>}
      */
     public function prepara(Assemblea $assemblea): array
     {
         $calcolo = $this->calcola($assemblea);
 
         return DB::transaction(function () use ($assemblea, $calcolo) {
-            $esistenti = AssembleaPresenza::where('assemblea_id', $assemblea->id)->withCount('voti')->get()
-                ->keyBy(fn (AssembleaPresenza $p) => self::chiaveUnita($p->idUnita()));
-
-            $aggiunte = $aggiornate = $tolte = 0;
-            $viste = [];
-
+            $gruppi = [];
             foreach ($calcolo['gruppi'] as $g) {
-                $chiave = self::chiaveUnita($g['unita']);
-                $viste[$chiave] = true;
-                $riga = $esistenti->get($chiave);
+                $gruppi[self::chiaveUnita($g['unita'])] = $g;
+            }
+            $perUnita = $calcolo['millesimi_per_unita'];
+            $nomi = $calcolo['nomi'];
+
+            // Ogni riga cerca il suo gruppo (stesse unità). Se due righe hanno le stesse unità vale quella con i voti, poi la più vecchia.
+            $esistenti = AssembleaPresenza::where('assemblea_id', $assemblea->id)->withCount('voti')->get()
+                ->sortBy(fn (AssembleaPresenza $p) => [$p->voti_count > 0 ? 0 : 1, (int) $p->id])->values();
+            $corrispondenti = [];
+            $ferme = [];
+            $daTogliere = [];
+            foreach ($esistenti as $riga) {
+                $chiave = self::chiaveUnita($riga->idUnita());
+                if (isset($gruppi[$chiave]) && ! isset($corrispondenti[$chiave])) {
+                    $corrispondenti[$chiave] = $riga;
+                } elseif ($riga->voti_count > 0) {
+                    $ferme[(int) $riga->id] = $riga;
+                } else {
+                    $daTogliere[(int) $riga->id] = $riga;
+                }
+            }
+
+            // Le righe ferme tengono le loro unità: i gruppi nuovi che le toccano non entrano, e le righe senza voti che quei
+            // gruppi avrebbero sostituito restano (altrimenti le loro unità sparirebbero dall'elenco). Si ripete finché non cambia più niente.
+            $saltati = [];
+            do {
+                $cambiato = false;
+                $occupate = [];
+                foreach ($ferme as $riga) {
+                    $occupate += array_flip($riga->idUnita());
+                }
+                foreach ($gruppi as $chiave => $g) {
+                    if (! isset($corrispondenti[$chiave]) && ! isset($saltati[$chiave]) && array_intersect_key(array_flip($g['unita']), $occupate) !== []) {
+                        $saltati[$chiave] = true;
+                        $cambiato = true;
+                    }
+                }
+                $scoperte = [];
+                foreach (array_keys($saltati) as $chiave) {
+                    $scoperte += array_flip($gruppi[$chiave]['unita']);
+                }
+                foreach ($daTogliere as $id => $riga) {
+                    if (array_intersect_key(array_flip($riga->idUnita()), $scoperte) !== []) {
+                        $ferme[$id] = $riga;
+                        unset($daTogliere[$id]);
+                        $cambiato = true;
+                    }
+                }
+            } while ($cambiato);
+
+            $aggiunte = $aggiornate = 0;
+            foreach ($gruppi as $chiave => $g) {
+                $riga = $corrispondenti[$chiave] ?? null;
 
                 if ($riga) {
                     $dati = ['millesimi' => Millesimi::inDecimale($g['millesimi'])];
@@ -153,14 +218,23 @@ final class AventiDiritto
                     if (! in_array((int) $riga->anagrafica_id, $g['candidati'], true)) {
                         $dati['anagrafica_id'] = $g['rappresentante_id'];
                     }
+                    // Il nome fotografato nella riga: quello di chi la rappresenta adesso.
+                    $nome = $nomi[$dati['anagrafica_id'] ?? (int) $riga->anagrafica_id] ?? null;
+                    if (filled($nome)) {
+                        $dati['nome'] = $nome;
+                    }
                     $riga->fill($dati)->save();
                     $aggiornate++;
+                    continue;
+                }
+                if (isset($saltati[$chiave])) {
                     continue;
                 }
 
                 AssembleaPresenza::create([
                     'assemblea_id' => $assemblea->id,
                     'anagrafica_id' => $g['rappresentante_id'],
+                    'nome' => filled($nomi[$g['rappresentante_id']] ?? null) ? $nomi[$g['rappresentante_id']] : null,
                     'tipo' => 'assente',
                     'millesimi' => Millesimi::inDecimale($g['millesimi']),
                     'unita' => $g['unita'],
@@ -168,26 +242,68 @@ final class AventiDiritto
                 $aggiunte++;
             }
 
-            $rimaste = [];
-            foreach ($esistenti as $chiave => $riga) {
-                if (isset($viste[$chiave])) {
-                    continue;
-                }
-                if ($riga->voti_count > 0) {
-                    $rimaste[] = (int) $riga->id;
-                    continue;
-                }
+            foreach ($daTogliere as $riga) {
                 $riga->delete();
-                $tolte++;
+            }
+            // Una riga ferma non resta con i millesimi di una tabella vecchia: valgono quelli di adesso, sulle sue unità.
+            foreach ($ferme as $riga) {
+                $riga->forceFill(['millesimi' => Millesimi::inDecimale(self::millesimiDelleUnita($riga->idUnita(), $perUnita))])->save();
             }
 
             $assemblea->forceFill(['millesimi_totali' => Millesimi::inDecimale($calcolo['totale'])])->save();
 
             return [
-                'aggiunte' => $aggiunte, 'aggiornate' => $aggiornate, 'tolte' => $tolte, 'rimaste' => $rimaste,
+                'aggiunte' => $aggiunte, 'aggiornate' => $aggiornate, 'tolte' => count($daTogliere),
+                'rimaste' => array_map('intval', array_keys($ferme)), 'doppie' => $this->unitaInPiuRighe($assemblea),
                 'totale' => $calcolo['totale'], 'unita_senza_titolari' => $calcolo['unita_senza_titolari'],
             ];
         });
+    }
+
+    /**
+     * La tabella dei conteggi è cambiata con l'elenco già preparato: i millesimi di ogni riga si ricalcolano subito
+     * dalla tabella nuova, sulle unità della riga (la stessa regola di {@see prepara()}), e il valore dell'edificio
+     * diventa il totale della tabella nuova. Le righe restano quelle: presenze, deleghe, orari e voti non si toccano, e
+     * nessuna riga nasce o sparisce. Per rileggere anche i titolari c'è «Prepara l'elenco».
+     *
+     * @return array{righe:int, cambiate:int, totale:int}
+     */
+    public function ricalcolaMillesimi(Assemblea $assemblea): array
+    {
+        [$perUnita, $totale] = $this->millesimiDellaTabella($assemblea->tabella_id);
+
+        return DB::transaction(function () use ($assemblea, $perUnita, $totale) {
+            $righe = AssembleaPresenza::where('assemblea_id', $assemblea->id)->get();
+            $cambiate = 0;
+            foreach ($righe as $riga) {
+                $nuovi = self::millesimiDelleUnita($riga->idUnita(), $perUnita);
+                if (Millesimi::daValore($riga->millesimi) !== $nuovi) {
+                    $riga->forceFill(['millesimi' => Millesimi::inDecimale($nuovi)])->save();
+                    $cambiate++;
+                }
+            }
+            $assemblea->forceFill(['millesimi_totali' => Millesimi::inDecimale($totale)])->save();
+
+            return ['righe' => $righe->count(), 'cambiate' => $cambiate, 'totale' => $totale];
+        });
+    }
+
+    /**
+     * Le unità che compaiono in più di una riga dell'elenco: non dovrebbe succedere mai (i loro millesimi si
+     * conterebbero due volte). Un elenco preparato prima di questa correzione può averne: la pagina lo segnala.
+     *
+     * @return list<int>
+     */
+    public function unitaInPiuRighe(Assemblea $assemblea): array
+    {
+        $volte = [];
+        foreach (AssembleaPresenza::where('assemblea_id', $assemblea->id)->get(['id', 'unita']) as $riga) {
+            foreach (array_unique($riga->idUnita()) as $unita) {
+                $volte[$unita] = ($volte[$unita] ?? 0) + 1;
+            }
+        }
+
+        return array_values(array_map('intval', array_keys(array_filter($volte, fn (int $n) => $n > 1))));
     }
 
     /**
@@ -208,6 +324,17 @@ final class AventiDiritto
         return TitolaritaImmobile::whereIn('immobile_id', $unita)->whereIn('tipologia', $ruoli)->get()
             ->filter(fn (TitolaritaImmobile $r) => $r->inCorsoIl($giorno))
             ->pluck('anagrafica_id')->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
+    }
+
+    /**
+     * La somma dei millesimi di un insieme di unità (quelle che la tabella non ha, o esclude, valgono zero).
+     *
+     * @param  list<int>  $unita
+     * @param  array<int, int>  $perUnita
+     */
+    private static function millesimiDelleUnita(array $unita, array $perUnita): int
+    {
+        return array_sum(array_map(fn (int $id) => $perUnita[$id] ?? 0, array_unique(array_map('intval', $unita))));
     }
 
     /** @param  list<int>  $unita */

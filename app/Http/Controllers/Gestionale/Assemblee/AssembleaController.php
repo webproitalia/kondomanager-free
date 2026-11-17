@@ -13,6 +13,8 @@ use App\Models\Assemblee\AssembleaVoto;
 use App\Models\Condominio;
 use App\Models\Tabella;
 use App\Services\Assemblee\AssembleaService;
+use App\Services\Assemblee\AventiDiritto;
+use App\Services\Assemblee\Millesimi;
 use App\Services\Assemblee\SegnapostiVerbale;
 use App\Services\Assemblee\VerbaleService;
 use App\Traits\HandleFlashMessages;
@@ -132,15 +134,39 @@ class AssembleaController extends Controller
         $this->verbali->assicuraModificabile($assemblea);
         $dati = $request->validated();
 
-        DB::transaction(function () use ($assemblea, $dati) {
+        if (array_key_exists('elimina_punti', $dati) && ! array_key_exists('punti', $dati)) {
+            throw ValidationException::withMessages(['elimina_punti' => '«elimina_punti» vale solo insieme a «punti»: manda l\'ordine del giorno intero senza i punti da togliere, e in «elimina_punti» gli id di quelli che spariscono con i loro voti, esiti o testi.']);
+        }
+
+        // La tabella dei conteggi cambia con l'elenco degli aventi diritto già preparato: i millesimi dell'elenco sono
+        // quelli della tabella di prima, e vanno ricalcolati subito (il verbale scrive il nome della tabella nuova).
+        $cambiaTabella = array_key_exists('tabella_id', $dati) && (int) ($dati['tabella_id'] ?? 0) !== (int) ($assemblea->tabella_id ?? 0)
+            && $assemblea->presenze()->exists();
+        if ($cambiaTabella && blank($dati['tabella_id'])) {
+            throw ValidationException::withMessages(['tabella_id' => 'L\'elenco degli aventi diritto è già preparato con i millesimi di una tabella: la tabella dei conteggi si può cambiare, non togliere. Scegline un\'altra.']);
+        }
+
+        $ricalcolo = DB::transaction(function () use ($assemblea, $dati, $cambiaTabella) {
             $assemblea->fill(self::campiAssemblea($dati, $dati))->save();
             if (array_key_exists('punti', $dati)) {
-                $this->salvaPunti($assemblea, $dati['punti']);
+                $this->salvaPunti($assemblea, $dati['punti'], array_map('intval', $dati['elimina_punti'] ?? []));
             }
+
+            return $cambiaTabella ? app(AventiDiritto::class)->ricalcolaMillesimi($assemblea) : null;
         });
 
-        return to_route('admin.gestionale.assemblee.show', ['condominio' => $condominio->id, 'assemblea' => $assemblea->id])
-            ->with($this->flashSuccess('Assemblea salvata.'));
+        $risposta = to_route('admin.gestionale.assemblee.show', ['condominio' => $condominio->id, 'assemblea' => $assemblea->id]);
+        if ($ricalcolo === null) {
+            return $risposta->with($this->flashSuccess('Assemblea salvata.'));
+        }
+
+        $frase = 'Assemblea salvata. La tabella dei conteggi è cambiata: i millesimi dei '.$ricalcolo['righe'].' aventi diritto sono stati ricalcolati dalla tabella «'
+            .($assemblea->tabella()->value('nome') ?? '').'» (totale '.Millesimi::testoValore($ricalcolo['totale']).'); presenze, deleghe e voti sono rimasti.';
+        $conVoti = AssembleaVoto::whereIn('assemblea_punto_id', $assemblea->punti()->pluck('id'))->exists();
+
+        return $risposta->with($conVoti
+            ? $this->flashWarning($frase.' Ci sono già dei voti: controlla la costituzione e l\'esito dei punti votati, che con i millesimi nuovi possono cambiare.')
+            : $this->flashSuccess($frase));
     }
 
     public function destroy(Request $request, Condominio $condominio, Assemblea $assemblea): RedirectResponse
@@ -232,9 +258,15 @@ class AssembleaController extends Controller
 
     /**
      * L'ordine del giorno, nell'ordine in cui arriva: i punti con `id` si correggono e si rinumerano, quelli senza si
-     * aggiungono, quelli che mancano si tolgono. Un punto con dei voti non si toglie.
+     * aggiungono, quelli che mancano si tolgono.
+     *
+     * Un punto che manca e che ha già dei voti, un esito o un testo (discussione, delibera) **non sparisce in
+     * silenzio**: la modifica è rifiutata dicendo quale punto e che cosa si perderebbe, a meno che il suo id sia in
+     * `$eliminaPunti` (il campo `elimina_punti` della richiesta: chi manda dice in modo esplicito che lo vuole togliere).
+     *
+     * @param  list<int>  $eliminaPunti
      */
-    private function salvaPunti(Assemblea $assemblea, array $punti): void
+    private function salvaPunti(Assemblea $assemblea, array $punti, array $eliminaPunti = []): void
     {
         $esistenti = $assemblea->punti()->withCount('voti')->get()->keyBy('id');
         $tenuti = [];
@@ -247,11 +279,27 @@ class AssembleaController extends Controller
             $tenuti[] = $id;
         }
 
+        foreach ($eliminaPunti as $i => $id) {
+            if (! $esistenti->has($id)) {
+                throw ValidationException::withMessages(["elimina_punti.{$i}" => 'Il punto con id '.$id.' non è di questa assemblea.']);
+            }
+            if (in_array($id, $tenuti, true)) {
+                throw ValidationException::withMessages(["elimina_punti.{$i}" => 'Il punto «'.$esistenti[$id]->titolo.'» è sia nell\'ordine del giorno («punti») sia fra quelli da eliminare («elimina_punti»): scegli una delle due.']);
+            }
+        }
+
         // `reject` e non `except`: sulla collezione di Eloquent `except()` rinumera le chiavi, e gli id si perdono.
         $daTogliere = $esistenti->reject(fn (AssembleaPunto $p) => in_array((int) $p->id, $tenuti, true));
-        $conVoti = $daTogliere->filter(fn (AssembleaPunto $p) => $p->voti_count > 0);
-        if ($conVoti->isNotEmpty()) {
-            throw ValidationException::withMessages(['punti' => 'Il punto «'.$conVoti->first()->titolo.'» ha già dei voti: per toglierlo azzera prima i voti dalla pagina dell\'assemblea.']);
+        $siPerderebbe = [];
+        foreach ($daTogliere as $p) {
+            $contenuto = self::contenutoDelPunto($p);
+            if ($contenuto !== [] && ! in_array((int) $p->id, $eliminaPunti, true)) {
+                $siPerderebbe[] = 'il punto '.$p->numero.' «'.$p->titolo.'» (id '.$p->id.') ha '.implode(', ', $contenuto);
+            }
+        }
+        if ($siPerderebbe !== []) {
+            throw ValidationException::withMessages(['punti' => 'Manca dall\'ordine del giorno un punto che ha già qualcosa: '.implode('; ', $siPerderebbe)
+                .'. Toglierlo cancellerebbe anche questo. Rimettilo fra i punti (con il suo id); se va tolto davvero, conferma mandando il suo id in «elimina_punti».']);
         }
         AssembleaPunto::whereIn('id', $daTogliere->pluck('id'))->delete();
 
@@ -269,6 +317,22 @@ class AssembleaController extends Controller
                 $assemblea->punti()->create($valori);
             }
         }
+    }
+
+    /**
+     * Che cosa si perderebbe togliendo il punto: i voti, l'esito confermato, i testi. Vuoto se il punto non ha ancora
+     * niente (l'esito «informativa» di un punto informativo lo scrive il programma da solo, e non conta).
+     *
+     * @return list<string>
+     */
+    private static function contenutoDelPunto(AssembleaPunto $p): array
+    {
+        return array_values(array_filter([
+            $p->voti_count > 0 ? ($p->voti_count === 1 ? '1 voto registrato' : $p->voti_count.' voti registrati') : null,
+            $p->esito !== null && ! ($p->informativo() && $p->esito === 'informativa') ? 'l\'esito «'.$p->esito.'»' : null,
+            filled($p->discussione) ? 'il testo della discussione' : null,
+            filled($p->delibera) ? 'il testo della delibera' : null,
+        ]));
     }
 
     private function datiDelModulo(Condominio $condominio): array
@@ -316,12 +380,15 @@ class AssembleaController extends Controller
     {
         return [
             'leggere' => 'admin.gestionale.assemblee.dati',
+            'ordine_del_giorno' => 'admin.gestionale.assemblee.update (PUT: i campi dell\'assemblea e punti[{id, titolo, descrizione, maggioranza}] = l\'ordine del giorno INTERO; un punto che manca e ha voti, esito o testo si toglie solo con elimina_punti[id]; cambiare tabella_id con l\'elenco già preparato ricalcola i millesimi)',
             'svolgimento' => 'admin.gestionale.assemblee.svolgimento (PUT: stato, convocazione_tenuta, presidente, segretario, ora_inizio, ora_fine, registrata)',
-            'presenza' => 'admin.gestionale.assemblee.presenze.update (PUT: tipo, delegato_anagrafica_id, delegato_nome, anagrafica_id, ora_arrivo, ora_uscita, segna)',
-            'voti' => 'admin.gestionale.assemblee.punti.voti (PUT: tutti, voti[{presenza_id, voto}], azzera)',
+            'presenza' => 'admin.gestionale.assemblee.presenze.update (PUT: tipo, delegato_anagrafica_id, delegato_nome, anagrafica_id, ora_arrivo, ora_uscita, segna): segnare «assente» chi ha già votato toglie i suoi voti, e la risposta lo dice',
+            'voti' => 'admin.gestionale.assemblee.punti.voti (PUT: tutti, voti[{presenza_id, voto}], azzera): non si registra il voto di chi è segnato assente',
             'punto' => 'admin.gestionale.assemblee.punti.update (PUT: discussione, delibera, esito)',
             'bozza_dei_punti' => 'admin.gestionale.assemblee.verbale.precompila (POST: punti[{numero, discussione, delibera}], fonte): riempie solo i campi vuoti',
             'genera_verbale' => 'admin.gestionale.assemblee.verbale.genera (POST: modello_id, sovrascrivi)',
+            'controlli_prima_di_mandare' => 'admin.gestionale.assemblee.verbale.invia accetta dati_riletti ed esiti_confermati[id dei punti]: rifiuta se mancano le ore, se nel testo restano parti da compilare, se un esito non corrisponde ai voti o se i dati sono cambiati dopo l\'ultimo testo',
+            'ritira' => 'admin.gestionale.assemblee.verbale.ritira (POST): in attesa di approvazione niente dell\'assemblea si modifica, prima si ritira il verbale',
             'scrivi_verbale' => 'admin.gestionale.assemblee.verbale.update (PUT: testo, intestazione, apertura, chiusura, punti[{id, discussione, delibera}])',
             'manda_in_approvazione' => 'admin.gestionale.assemblee.verbale.invia (POST)',
             'modelli' => 'admin.gestionale.assemblee.modelli.store / .update (tipo [verbale|convocazione|email_convocazione|trasmissione_verbale], nome, descrizione, corpo, predefinito)',

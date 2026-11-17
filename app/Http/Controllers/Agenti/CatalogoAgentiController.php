@@ -31,7 +31,7 @@ use Throwable;
  */
 class CatalogoAgentiController extends Controller
 {
-    public const VERSIONE = 'agenti-4';
+    public const VERSIONE = 'agenti-5';
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -266,11 +266,15 @@ class CatalogoAgentiController extends Controller
             }
 
             $risolutori = $risolviRotta ? [$risolviRotta] : [fn () => null, $this->rottaConModelliVuoti($rotta, $riflesso)];
+            // Il metodo della rotta: molte regole cambiano fra creazione e modifica (`isMethod('post')` → obbligatorio, altrimenti
+            // facoltativo). Senza, il modulo si credeva una GET e il catalogo dava per facoltativi i campi obbligatori di una creazione.
+            $metodoRotta = array_values(array_diff($rotta->methods(), ['HEAD', 'OPTIONS']))[0] ?? 'GET';
 
             foreach ($risolutori as $i => $risolutore) {
                 try {
                     /** @var FormRequest $modulo */
                     $modulo = (new ReflectionClass($nomeClasse))->newInstance();
+                    $modulo->setMethod($metodoRotta);
                     $modulo->setContainer(app());
                     $modulo->setUserResolver(fn () => request()->user());
                     $modulo->setRouteResolver($risolutore);

@@ -6,9 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Il voto di un avente diritto su un punto. Una riga c'è solo per chi ha preso parte alla votazione: chi non ha la riga
- * non era fra gli intervenuti di quel punto (arrivato dopo, uscito prima). L'astenuto ha la sua riga e conta fra gli
- * intervenuti.
+ * Il voto di un avente diritto su un punto. Una riga c'è solo per chi ha espresso un voto: l'astenuto ha la sua riga.
+ * Chi è in sala e non ha la riga è un non votante: conta lo stesso fra gli intervenuti del punto, e per la maggioranza
+ * pesa come un astenuto (`ConteggiAssemblea`). Chi è uscito tiene i voti dati prima; chi è segnato assente non ne ha.
  */
 class AssembleaVoto extends Model
 {

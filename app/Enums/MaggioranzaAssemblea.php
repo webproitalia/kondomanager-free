@@ -13,7 +13,10 @@ namespace App\Enums;
  *   maggioranza degli intervenuti e almeno un terzo del valore in seconda;
  * - `art1136c4`: le delibere che il comma 4 elenca (nomina e revoca dell'amministratore, liti attive e passive
  *   fuori dalle sue attribuzioni, ricostruzione dell'edificio, riparazioni straordinarie di notevole entità e le
- *   altre che il comma richiama): maggioranza degli intervenuti e almeno metà del valore, in ogni convocazione;
+ *   altre che il comma richiama): maggioranza degli intervenuti e almeno metà del valore, in ogni convocazione.
+ *   Qui sta anche **l'approvazione e la modifica del regolamento** (art. 1138 c. 3 c.c.: la maggioranza dell'art.
+ *   1136 c. 2, cioè gli stessi numeri, in prima e in seconda convocazione). Il regolamento non è una delibera
+ *   «ordinaria»: in seconda convocazione un terzo del valore non basta;
  * - `art1136c5`: le innovazioni dell'art. 1120 c. 1 e le altre che il comma 5 richiama: maggioranza degli intervenuti
  *   e almeno due terzi del valore;
  * - `unanimita`: tutti i partecipanti al condominio e tutto il valore;
@@ -53,8 +56,8 @@ enum MaggioranzaAssemblea: string
     public function aCheServe(): string
     {
         return match ($this) {
-            self::ORDINARIA => 'Le decisioni di tutti i giorni: approvare il rendiconto e il preventivo, le spese ordinarie, il regolamento quando non tocca i diritti dei singoli.',
-            self::ART1136C4 => 'Nomina e revoca dell\'amministratore, liti fuori dalle sue attribuzioni, ricostruzione dell\'edificio, riparazioni straordinarie di notevole entità.',
+            self::ORDINARIA => 'Le decisioni di tutti i giorni: approvare il rendiconto e il preventivo, le spese ordinarie.',
+            self::ART1136C4 => 'Nomina e revoca dell\'amministratore, liti fuori dalle sue attribuzioni, ricostruzione dell\'edificio, riparazioni straordinarie di notevole entità, approvazione e modifica del regolamento (art. 1138 c.c.).',
             self::ART1136C5 => 'Le innovazioni (art. 1120 c. 1): opere nuove che migliorano o rendono più comodo l\'uso delle parti comuni.',
             self::UNANIMITA => 'Le decisioni che toccano i diritti di ognuno: servono tutti i condòmini e tutti i millesimi.',
             self::INFORMATIVA => 'Comunicazioni dell\'amministratore e varie ed eventuali: si discute e si mette a verbale, senza votare.',

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Gestionale\Registrazioni;
 
 use App\Helpers\DateHelper;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Gestionale\Assemblee\AssembleaController;
+use App\Http\Middleware\AutenticaAgente;
 use App\Http\Resources\Condominio\CondominioResource;
 use App\Jobs\Registrazioni\ElaboraRegistrazione;
 use App\Models\Condominio;
@@ -34,7 +36,11 @@ use Inertia\Response;
  * Dal browser: `avvia` (con la conferma di aver avvisato i presenti), un `segmento` ogni 25 secondi (salvato e subito trascritto: il testo
  * in diretta), `termina` (mette in coda l'elaborazione finale). Il browser che si chiude non perde niente: i pezzi saliti restano, e la
  * registrazione si chiude dall'elenco con lo stesso `termina`. Agli agenti AI avviare e mandare l'audio sono vietati (`AutenticaAgente`):
- * leggono elenco e dettaglio, collegano un'assemblea, chiudono o riprovano.
+ * leggono elenco e dettaglio, collegano un'assemblea, chiudono o riprovano. Una registrazione che sta ancora ricevendo audio un agente non
+ * la chiude: troncherebbe la riunione (vedi `termina`).
+ *
+ * I permessi sono quelli delle assemblee (le rotte): leggere elenco, dettaglio e stato del servizio chiede «Visualizza assemblee», tutto
+ * il resto «Gestisci assemblee». Una trascrizione è materiale dell'assemblea, e collegandola si scrive nei punti del suo verbale.
  *
  * `{registrazione}` arriva grezzo: che sia di questo condominio lo controlla `assicuraRegistrazione()` (404), come per le dispense.
  * Le risposte: una pagina Inertia (o un rimando con l'avviso) per il browser e per gli agenti; JSON per il registratore, che usa axios.
@@ -43,6 +49,9 @@ class RegistrazioneController extends Controller
 {
     use HandleFlashMessages, HasCondomini, HasEsercizio;
 
+    /** Un agente AI chiude una registrazione in corso solo se è rimasta aperta: nessun pezzo di audio da almeno questi minuti. */
+    public const MINUTI_FERMA_PER_UN_AGENTE = 5;
+
     public function __construct(
         private ArchivioAudio $archivio,
         private Deepgram $deepgram,
@@ -50,7 +59,7 @@ class RegistrazioneController extends Controller
         private Assemblee $assemblee,
     ) {}
 
-    public function index(Condominio $condominio): Response
+    public function index(Request $request, Condominio $condominio): Response
     {
         $registrazioni = Registrazione::where('condominio_id', $condominio->id)
             ->orderByDesc('id')
@@ -65,10 +74,12 @@ class RegistrazioneController extends Controller
             'esercizio' => $this->getEsercizioCorrente($condominio),
             'registrazioni' => $registrazioni,
             'servizio' => $this->servizioDati(),
+            // Che cosa può fare chi guarda: senza «Gestisci assemblee» la pagina non mostra i tasti che scrivono.
+            'puo' => AssembleaController::permessi($request),
         ]);
     }
 
-    public function show(Condominio $condominio, string|int $registrazione): Response
+    public function show(Request $request, Condominio $condominio, string|int $registrazione): Response
     {
         $r = $this->assicuraRegistrazione($condominio, $registrazione);
         $r->loadMissing('autore:id,name');
@@ -100,6 +111,7 @@ class RegistrazioneController extends Controller
             'punti' => $this->assemblee->punti($r->assemblea_id),
             'assemblee' => $this->assemblee->elenco($condominio->id),
             'servizio' => $this->servizioDati(),
+            'puo' => AssembleaController::permessi($request),
         ]);
     }
 
@@ -206,10 +218,23 @@ class RegistrazioneController extends Controller
     /**
      * Chiude la registrazione e mette in coda l'elaborazione finale. Vale anche per una registrazione rimasta aperta (il browser si è chiuso)
      * e, come «Riprova», per una finita in errore. Due clic insieme ne mettono in coda una sola: passa chi cambia lo stato.
+     *
+     * Un agente AI non può troncare una riunione che si sta registrando: chiusa la registrazione, i pezzi successivi sono rifiutati. Per lui
+     * `termina` su una registrazione in corso vale solo se è rimasta aperta, cioè se l'ultimo pezzo di audio è arrivato da più di
+     * `MINUTI_FERMA_PER_UN_AGENTE` minuti (ogni pezzo salvato aggiorna la riga: fa fede `updated_at`). Per la persona nel browser resta com'è.
      */
     public function termina(Request $request, Condominio $condominio, string|int $registrazione): JsonResponse|RedirectResponse
     {
         $r = $this->assicuraRegistrazione($condominio, $registrazione);
+
+        if ($r->stato === Registrazione::IN_CORSO && $request->attributes->get(AutenticaAgente::ATTRIBUTO) !== null) {
+            $ultimo = $r->updated_at ?? $r->iniziata_at ?? $r->created_at;
+            if ($ultimo === null || $ultimo->gt(now()->subMinutes(self::MINUTI_FERMA_PER_UN_AGENTE))) {
+                return $this->rispondi($request, 'Questa registrazione è ancora in corso: l\'ultimo pezzo di audio è arrivato da meno di '.self::MINUTI_FERMA_PER_UN_AGENTE
+                    .' minuti, e chiuderla adesso troncherebbe la riunione. La chiude chi sta registrando, dal suo browser. Un agente può chiuderla solo se è rimasta aperta: riprova quando non arriva audio da più di '
+                    .self::MINUTI_FERMA_PER_UN_AGENTE.' minuti.', 409, $r, 'error');
+            }
+        }
 
         if ($r->stato === Registrazione::PRONTA) {
             return $this->rispondi($request, 'La registrazione è già pronta.', 200, $r, 'info');
@@ -258,6 +283,8 @@ class RegistrazioneController extends Controller
         }
 
         $r->forceFill(['assemblea_id' => $assembleaId, 'bozza_punti' => null])->save();
+        // Con il verbale approvato o in attesa di approvazione l'assemblea non si tocca: né il segno «registrata», né i testi dei punti.
+        $fermo = $this->assemblee->verbaleFermo($assembleaId);
         $this->assemblee->segnaRegistrata($assembleaId);
 
         $bozza = $assembleaId && $r->stato === Registrazione::PRONTA && $this->gemini->disponibile() && $this->assemblee->punti($assembleaId) !== [];
@@ -267,6 +294,7 @@ class RegistrazioneController extends Controller
 
         return $this->rispondi($request, $assembleaId
             ? 'Registrazione collegata all\'assemblea.'.($bozza ? ' Preparo la bozza per i punti dell\'ordine del giorno.' : '')
+                .($fermo ? ' Il verbale di questa assemblea è approvato o in attesa di approvazione: l\'assemblea non cambia, e la bozza resta nella pagina della registrazione senza entrare nel verbale.' : '')
             : 'Registrazione scollegata dall\'assemblea.', 200, $r->fresh());
     }
 

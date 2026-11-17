@@ -89,14 +89,30 @@ class Assemblee
     /**
      * L'assemblea è stata registrata: lo si segna sull'assemblea, così il verbale scrive la frase dell'avviso ai presenti (che chi registra
      * ha confermato prima di partire). Senza la tabella o senza la colonna non fa niente.
+     *
+     * Con il verbale approvato o in attesa di approvazione il segno non si tocca ({@see verbaleFermo()}): collegare una registrazione non
+     * cambia i dati di un'assemblea che qualcuno sta approvando o ha già approvato.
      */
     public function segnaRegistrata(?int $assembleaId): void
     {
-        if (! $assembleaId || ! $this->ciSono() || ! Schema::hasColumn('assemblee', 'registrata')) {
+        if (! $assembleaId || ! $this->ciSono() || ! Schema::hasColumn('assemblee', 'registrata') || $this->verbaleFermo($assembleaId)) {
             return;
         }
 
         DB::table('assemblee')->where('id', $assembleaId)->where('registrata', false)->update(['registrata' => true, 'updated_at' => now()]);
+    }
+
+    /**
+     * Il verbale dell'assemblea è approvato o in attesa di approvazione: da lì niente dell'assemblea si modifica (né il segno «registrata»,
+     * né i testi dei punti, dove la bozza della registrazione non entra). Senza la tabella dei verbali non c'è niente di fermo.
+     */
+    public function verbaleFermo(?int $assembleaId): bool
+    {
+        if (! $assembleaId || ! Schema::hasTable('verbali') || ! Schema::hasColumn('verbali', 'stato')) {
+            return false;
+        }
+
+        return DB::table('verbali')->where('assemblea_id', $assembleaId)->whereIn('stato', ['da_approvare', 'approvato'])->exists();
     }
 
     /**
