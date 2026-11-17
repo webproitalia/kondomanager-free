@@ -24,12 +24,14 @@ use App\Services\System\SystemFinalizer;
  * categoria «Fatture» cercata per nome da `FatturaPassivaService`: è la **Coda 106**, ed è un
  * problema diverso — questa migrazione garantisce che la categoria *esista*, non che il nome resti.
  */
-it('⚠️ un\'installazione si ritrova le cinque categorie, non una tabella vuota', function () {
+it('⚠️ un\'installazione si ritrova le sei categorie, non una tabella vuota', function () {
     // ⚠️ È la lezione della beta.8 e della beta.59: una tabella che nasce vuota non dà errori, non
     // lascia log, e si nota solo aprendo la tendina. Qui la consegna la fa una migrazione, quindi
     // basta che le migrazioni siano girate — cioè quello che `RefreshDatabase` fa.
-    expect(CategoriaDocumento::count())->toBe(5)
+    // Le cinque di serie più «Verbali di assemblea», seminata dalla sua migrazione (Web Pro Italia, 17/11/2026).
+    expect(CategoriaDocumento::count())->toBe(6)
         ->and(CategoriaDocumento::where('name', 'Bilanci')->exists())->toBeTrue()
+        ->and(CategoriaDocumento::where('slug', CategoriaDocumento::SLUG_VERBALI_ASSEMBLEA)->exists())->toBeTrue()
         ->and(CategoriaDocumento::where('name', 'Fatture')->exists())->toBeTrue();
 });
 
@@ -41,7 +43,7 @@ it('⚠️ una categoria cancellata NON torna, nemmeno rilanciando la finalizzaz
     app(SystemFinalizer::class)->finalize();
 
     expect(CategoriaDocumento::where('name', 'Avvisi')->exists())->toBeFalse()
-        ->and(CategoriaDocumento::count())->toBe(4);
+        ->and(CategoriaDocumento::count())->toBe(5);
 });
 
 it('⚠️ nessun seeder può far risorgere una categoria di documento', function () {

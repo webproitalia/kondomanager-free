@@ -24,6 +24,9 @@ class CategoriaDocumento extends Model
     /** Le chiavi stabili in uso. Aggiungerne una qui significa che il codice la cerca. */
     public const SLUG_FATTURE = 'fatture';
 
+    /** I verbali che il gestionale scrive all'approvazione di un'assemblea (Web Pro Italia, 17/11/2026). */
+    public const SLUG_VERBALI_ASSEMBLEA = 'verbali-assemblea';
+
     /**
      * I documenti di questa categoria — dalla 1.11.0-beta.10 il legame è **molti a molti**.
      *
@@ -66,5 +69,15 @@ class CategoriaDocumento extends Model
     {
         return static::where('slug', self::SLUG_FATTURE)->first()
             ?? static::where('name', 'Fatture')->first();
+    }
+
+    /**
+     * La categoria dei verbali di assemblea, con la stessa regola di {@see perFatture()}: prima la chiave stabile, poi
+     * l'etichetta. Null se l'amministratore l'ha cancellata: il verbale entra in archivio lo stesso, senza categoria.
+     */
+    public static function perVerbaliAssemblea(): ?self
+    {
+        return static::where('slug', self::SLUG_VERBALI_ASSEMBLEA)->first()
+            ?? static::where('name', 'Verbali di assemblea')->first();
     }
 }

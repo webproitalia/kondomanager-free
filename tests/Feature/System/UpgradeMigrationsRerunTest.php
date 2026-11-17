@@ -267,6 +267,12 @@ it('resta rieseguibile dopo un\'interruzione a metà', function (string $file) {
     '2026_11_08_200000_add_allegati_to_segnalazioni_e_comunicazioni',
     '2026_11_08_200100_add_moderazione_to_documenti',
     '2026_11_08_200300_seed_preferenze_notifica_allegati',
+    // Le assemblee (Web Pro Italia, 17/11/2026): sei tabelle (assemblee, punti, presenze, voti, modelli di verbale, verbali), una guardia per
+    // tabella; la categoria «Verbali di assemblea», con una guardia sulla chiave e una sul nome; il modello di verbale di serie, scritto solo se
+    // non c'è ancora nessun modello.
+    '2026_11_17_100000_create_assemblee_tables',
+    '2026_11_17_100100_seed_categoria_verbali_assemblea',
+    '2026_11_17_100200_seed_modello_verbale_canonico',
 ]);
 
 it('la migrazione dei modelli delle lettere interrotta dopo la tabella e prima dell\'indice e delle chiavi si riprende e li mette, uno per nome', function () {

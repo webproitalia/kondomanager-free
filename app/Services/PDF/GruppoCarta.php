@@ -8,7 +8,8 @@ namespace App\Services\PDF;
  *
  * - Lettere ai condòmini: promemoria, sollecito, diffida, messa in mora.
  * - Ricevute e avvisi di compensazione.
- * - Rendiconto e assemblea: il fascicolo e le sue parti, i riparti, il preventivo, lo scadenziario del piano, il registro per l'assemblea.
+ * - Rendiconto e assemblea: il fascicolo e le sue parti, i riparti, il preventivo, lo scadenziario del piano, il registro per l'assemblea, il
+ *   verbale dell'assemblea.
  * - Estratti conto e prospetti per la persona.
  * - Registri ed elenchi dello studio: il libro giornale, la copia di controllo del registro, il mastrino, il libro mastro, le rate scadute, la
  *   distinta del pagamento, il rapporto dell'importazione.
@@ -42,7 +43,7 @@ enum GruppoCarta: string
         return match ($this) {
             self::LETTERE => 'promemoria, sollecito, diffida, messa in mora',
             self::RICEVUTE_E_AVVISI => 'la ricevuta dell\'incasso, l\'avviso di compensazione',
-            self::RENDICONTO_E_ASSEMBLEA => 'il fascicolo e le sue parti, i riparti, il preventivo, lo scadenziario del piano, il registro per l\'assemblea',
+            self::RENDICONTO_E_ASSEMBLEA => 'il fascicolo e le sue parti, i riparti, il preventivo, lo scadenziario del piano, il registro per l\'assemblea, il verbale dell\'assemblea',
             self::PER_LA_PERSONA => 'l\'estratto conto della persona, il foglio del conguaglio, il prospetto degli oneri accessori',
             self::REGISTRI_E_ELENCHI => 'il libro giornale, la copia di controllo del registro, il mastrino, il libro mastro, le rate scadute, la distinta del pagamento, il rapporto dell\'importazione',
             self::NESSUNO => 'il modello F24, che è dell\'Agenzia delle Entrate',

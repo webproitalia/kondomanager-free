@@ -9,19 +9,23 @@ namespace App\Services\Fascicolo;
  * una riga che comincia con «# » è un titolo di paragrafo («# I. Il conto corrente»); righe che cominciano con «- » o con
  * «1. » sono un elenco; `**testo**` è in grassetto; una riga vuota separa i paragrafi. Tutto il resto è testo, e
  * qualunque HTML scritto dentro viene mostrato com'è, non eseguito.
+ *
+ * Con `$aCapo` (il verbale dell'assemblea, Web Pro Italia 17/11/2026) le righe di un paragrafo restano su righe
+ * diverse invece di unirsi: nel verbale «Favorevoli…», «Contrari…» e «Astenuti…» stanno una sotto l'altra. Senza, la
+ * nota del fascicolo esce come sempre.
  */
 class TestoNota
 {
-    public static function html(string $testo): string
+    public static function html(string $testo, bool $aCapo = false): string
     {
         $righe = preg_split('/\r\n|\r|\n/', trim($testo)) ?: [];
         $html = '';
         $paragrafo = [];
         $elenco = null; // 'ul' | 'ol'
 
-        $chiudiParagrafo = function () use (&$paragrafo, &$html) {
+        $chiudiParagrafo = function () use (&$paragrafo, &$html, $aCapo) {
             if ($paragrafo) {
-                $html .= '<p>'.implode(' ', $paragrafo).'</p>';
+                $html .= '<p>'.implode($aCapo ? '<br>' : ' ', $paragrafo).'</p>';
                 $paragrafo = [];
             }
         };
