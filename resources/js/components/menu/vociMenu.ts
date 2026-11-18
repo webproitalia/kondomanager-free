@@ -16,6 +16,8 @@
  *
  * `nome` è il nome breve, del solo menu («Unità», «Conti», «Rate»); `titolo` è il nome intero della pagina («Immobili», «Piani
  * conti», «Piani rate»), che si legge al passaggio del mouse e nella ricerca rapida. Le pagine tengono i loro titoli.
+ * Le voci dello studio prendono il nome dalle traduzioni della testata (`appHeader.*`), nella lingua dell'installazione; quelle
+ * del condominio sono scritte qui, come nella testata del gestionale.
  *
  * ## La voce accesa
  *
@@ -161,16 +163,16 @@ export function useVociMenu(opzioni: { gestionale?: boolean } = {}) {
 
     // ─── Lo studio: le voci di `AppHeader.vue` ───────────────────────────────────────────────────────────────────────────────
     const definizioniStudio = computed<Definizione[]>(() => [
-        { chiave: 'dashboard', nome: 'Dashboard', titolo: trans('appHeader.dashboard'), href: generatePath('dashboard'), icona: LayoutGrid, esatta: true },
-        { chiave: 'agenda', nome: 'Agenda', titolo: trans('appHeader.agenda'), href: generatePath('eventi'), icona: CalendarClock, permissions: [Permission.VIEW_EVENTS] },
-        { chiave: 'condomini', nome: 'Condomini', titolo: trans('appHeader.elencoCondomini'), href: '/condomini', icona: House, permissions: [Permission.VIEW_CONDOMINI] },
-        { chiave: 'persone', nome: 'Persone', titolo: `${trans('appHeader.rubrica')}: ${trans('appHeader.anagrafiche').toLowerCase()}`, href: generatePath('anagrafiche'), icona: UsersRound, permissions: [Permission.VIEW_ANAGRAFICHE] },
-        { chiave: 'fornitori', nome: 'Fornitori', titolo: `${trans('appHeader.rubrica')}: ${trans('appHeader.fornitori').toLowerCase()}`, href: generatePath('fornitori'), icona: BriefcaseBusiness, permissions: [Permission.VIEW_ANAGRAFICHE] },
-        { chiave: 'bacheca', nome: 'Bacheca', titolo: trans('appHeader.bacheca'), href: generatePath('comunicazioni'), icona: Megaphone, permissions: [Permission.VIEW_COMUNICAZIONI] },
-        { chiave: 'segnalazioni', nome: 'Segnalazioni', titolo: trans('appHeader.segnalazioni'), href: generatePath('segnalazioni'), icona: Tags, permissions: [Permission.VIEW_SEGNALAZIONI] },
+        { chiave: 'dashboard', nome: trans('appHeader.dashboard'), titolo: trans('appHeader.dashboard'), href: generatePath('dashboard'), icona: LayoutGrid, esatta: true },
+        { chiave: 'agenda', nome: trans('appHeader.agenda'), titolo: trans('appHeader.agenda'), href: generatePath('eventi'), icona: CalendarClock, permissions: [Permission.VIEW_EVENTS] },
+        { chiave: 'condomini', nome: trans('appHeader.condomini'), titolo: trans('appHeader.elencoCondomini'), href: '/condomini', icona: House, permissions: [Permission.VIEW_CONDOMINI] },
+        { chiave: 'persone', nome: trans('appHeader.persone'), titolo: `${trans('appHeader.rubrica')}: ${trans('appHeader.anagrafiche').toLowerCase()}`, href: generatePath('anagrafiche'), icona: UsersRound, permissions: [Permission.VIEW_ANAGRAFICHE] },
+        { chiave: 'fornitori', nome: trans('appHeader.fornitori'), titolo: `${trans('appHeader.rubrica')}: ${trans('appHeader.fornitori').toLowerCase()}`, href: generatePath('fornitori'), icona: BriefcaseBusiness, permissions: [Permission.VIEW_ANAGRAFICHE] },
+        { chiave: 'bacheca', nome: trans('appHeader.bacheca'), titolo: trans('appHeader.bacheca'), href: generatePath('comunicazioni'), icona: Megaphone, permissions: [Permission.VIEW_COMUNICAZIONI] },
+        { chiave: 'segnalazioni', nome: trans('appHeader.segnalazioni'), titolo: trans('appHeader.segnalazioni'), href: generatePath('segnalazioni'), icona: Tags, permissions: [Permission.VIEW_SEGNALAZIONI] },
         {
             chiave: 'documenti',
-            nome: 'Documenti',
+            nome: trans('appHeader.documenti'),
             titolo: trans('appHeader.documenti'),
             // Chi ha il pannello apre l'archivio; il condòmino sfoglia per categoria: come nella testata.
             href: hasPermission([Permission.ACCESS_ADMIN_PANEL]) ? generatePath('documenti') : generatePath('categorie-documenti'),
@@ -179,10 +181,10 @@ export function useVociMenu(opzioni: { gestionale?: boolean } = {}) {
         },
         // Gli allegati da moderare: solo a chi ha il pannello e li può vedere, con il numero di quelli in attesa.
         ...(hasPermission([Permission.ACCESS_ADMIN_PANEL]) && hasPermission([Permission.VIEW_ATTACHMENTS_SEGNALAZIONI, Permission.VIEW_ATTACHMENTS_COMUNICAZIONI])
-            ? [{ chiave: 'allegati', nome: 'Allegati', titolo: trans('appHeader.allegati'), href: '/admin/allegati', icona: Files, contatore: allegatiInAttesa.value }]
+            ? [{ chiave: 'allegati', nome: trans('appHeader.allegati'), titolo: trans('appHeader.allegati'), href: '/admin/allegati', icona: Files, contatore: allegatiInAttesa.value }]
             : []),
         // L'importazione è il modo in cui un condominio entra nel gestionale: nella testata sta sotto «Condomini».
-        { chiave: 'importa', nome: 'Importa dati', titolo: trans('appHeader.importaDati'), href: '/importa-dati', icona: DownloadCloud, permissions: [Permission.IMPORTA_DATI] },
+        { chiave: 'importa', nome: trans('appHeader.importaDati'), titolo: trans('appHeader.importaDati'), href: '/importa-dati', icona: DownloadCloud, permissions: [Permission.IMPORTA_DATI] },
     ]);
 
     // ─── Dentro un condominio: le voci di `GestionaleHeader.vue` e, sotto «Movimenti», quelle di `MovimentiLayout.vue` ─────────
@@ -237,8 +239,10 @@ export function useVociMenu(opzioni: { gestionale?: boolean } = {}) {
 
     // ─── In fondo ────────────────────────────────────────────────────────────────────────────────────────────────────────────
     const definizioniFondo = computed<Definizione[]>(() => [
-        { chiave: 'impostazioni', nome: 'Impostazioni', titolo: trans('appHeader.settings'), href: '/impostazioni', icona: Settings, permissions: [Permission.MANAGE_GENERAL_SETTINGS], avviso: aggiornamento.value },
-        { chiave: 'guida', nome: 'Guida', titolo: trans('appHeader.documentation'), href: 'https://kondomanager.com/docs/index.html', icona: BookText, esterna: true },
+        // Gli utenti, i ruoli, i permessi e gli inviti si aprono dalle impostazioni («Gestione utenti»), su indirizzi loro.
+        { chiave: 'impostazioni', nome: trans('appHeader.settings'), titolo: trans('appHeader.settings'), href: '/impostazioni', icona: Settings, permissions: [Permission.MANAGE_GENERAL_SETTINGS], avviso: aggiornamento.value,
+            anche: ['/utenti', '/ruoli', '/permessi', '/inviti'] },
+        { chiave: 'guida', nome: trans('appHeader.guida'), titolo: trans('appHeader.documentation'), href: 'https://kondomanager.com/docs/index.html', icona: BookText, esterna: true },
     ]);
 
     /** Il codice sorgente (AGPL, sezione 13): nella testata è un'icona; qui sta nella ricerca rapida e nel piè di pagina. */

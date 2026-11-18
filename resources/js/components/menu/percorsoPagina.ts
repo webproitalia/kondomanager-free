@@ -31,3 +31,39 @@ export function offriPercorsoPagina(gestionale = false): PercorsoPagina {
 export function usePercorsoPagina(): PercorsoPagina | null {
     return inject(CHIAVE, null);
 }
+
+/**
+ * Dove si va scegliendo un altro condominio dalla barra.
+ *
+ * Se la pagina sa cambiare condominio restando dov'è, lo stesso indirizzo con l'altro condominio e — dove l'indirizzo porta un
+ * esercizio — con il suo esercizio aperto: è quello che fa la testata della pagina con il menu in alto. Altrimenti il cruscotto
+ * dell'altro condominio: l'indirizzo di una scheda (un'assemblea, una fattura) in un altro condominio non esiste.
+ */
+export function indirizzoAltroCondominio(opzioni: {
+    url: string;
+    attuale: number;
+    nuovo: number;
+    sulPosto: boolean;
+    cruscotto: string;
+    esercizioAperto?: number | null;
+}): string {
+    if (! opzioni.sulPosto) {
+        return opzioni.cruscotto;
+    }
+    const segmenti = opzioni.url.split('/');
+    const posto = segmenti.findIndex((s) => s === String(opzioni.attuale));
+    if (posto !== -1) {
+        segmenti[posto] = String(opzioni.nuovo);
+    }
+    const postoEsercizio = segmenti.findIndex((_, i) => segmenti[i - 1] === 'esercizi');
+    if (postoEsercizio !== -1 && opzioni.esercizioAperto) {
+        segmenti[postoEsercizio] = String(opzioni.esercizioAperto);
+    }
+
+    return segmenti.join('/');
+}
+
+/** Lo stesso indirizzo con un altro esercizio. */
+export function indirizzoAltroEsercizio(url: string, esercizio: number): string {
+    return url.replace(/\/esercizi\/\d+/, `/esercizi/${esercizio}`);
+}

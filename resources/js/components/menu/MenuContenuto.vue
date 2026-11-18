@@ -87,14 +87,15 @@ const studioAcceso = computed(() => studio.value.some((v) => v.attiva));
 
                     <!-- Dentro un condominio, menu aperto: lo studio compatto, una griglia di icone -->
                     <div v-if="gruppoCondominio" class="grid grid-cols-5 gap-1 pb-1" data-menu-studio-compatto>
-                        <Tooltip v-for="voce in studio" :key="voce.chiave" :delay-duration="0">
+                        <Tooltip v-for="(voce, i) in studio" :key="voce.chiave" :delay-duration="0">
                             <TooltipTrigger as-child>
                                 <Link :href="voce.href" class="km-voce relative flex h-10 items-center justify-center rounded-lg" :data-menu-voce="voce.chiave" :data-attiva="voce.attiva ? 'true' : 'false'" :aria-label="voce.titolo">
                                     <IconaSezione :icona="voce.icona" :colore="voce.colore" />
                                     <span v-if="voce.contatore" class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold leading-none text-amber-950 tabular-nums">{{ voce.contatore }}</span>
                                 </Link>
                             </TooltipTrigger>
-                            <TooltipContent side="bottom" :side-offset="6">
+                            <!-- Il nome non copre le altre icone: sopra per la prima riga, sotto per le altre. -->
+                            <TooltipContent :side="i < 5 ? 'top' : 'bottom'" :side-offset="6">
                                 {{ voce.nome }}<span v-if="voce.titolo !== voce.nome" class="ml-1.5 opacity-60">{{ voce.titolo }}</span>
                             </TooltipContent>
                         </Tooltip>

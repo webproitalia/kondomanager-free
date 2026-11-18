@@ -16,4 +16,7 @@ return [
     'repository'    => "Repository",
     'documentation' => "Documentazione",
     'settings'      => "Impostazioni",
+    // Il menu laterale (Web Pro Italia): i nomi brevi che la testata non aveva.
+    'persone'       => "Persone",
+    'guida'         => "Guida",
 ];

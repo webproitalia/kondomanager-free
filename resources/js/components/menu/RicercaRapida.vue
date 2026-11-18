@@ -33,11 +33,12 @@ useEventListener('keydown', (evento: KeyboardEvent) => {
     }
 });
 
+// I condomini si chiedono quando la ricerca si apre (anche se nasce già aperta), non prima.
 watch(aperta, (ora) => {
     if (ora) {
         void carica();
     }
-});
+}, { immediate: true });
 
 /** Le voci del condominio, con quelle dentro «Movimenti» al posto di «Movimenti» (che da sola non porta da nessuna parte). */
 const vociCondominio = computed<VoceMenu[]>(() => (gruppoCondominio.value?.voci ?? []).flatMap((voce) => (voce.figlie?.length ? voce.figlie : [voce])).filter((voce) => ! voce.spenta));

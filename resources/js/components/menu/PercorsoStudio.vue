@@ -12,15 +12,15 @@
  */
 import { computed, ref } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Building2, CalendarDays, Check, ChevronRight, ChevronsUpDown, House, List } from 'lucide-vue-next';
+import { Building2, CalendarDays, Check, ChevronDown, ChevronRight, House, List } from 'lucide-vue-next';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { usePermission } from '@/composables/permissions';
 import { Permission } from '@/enums/Permission';
 import { useElencoCondomini } from './elencoCondomini';
-import { usePercorsoPagina } from './percorsoPagina';
-import { useVociMenu } from './vociMenu';
+import { indirizzoAltroCondominio, indirizzoAltroEsercizio, usePercorsoPagina } from './percorsoPagina';
+import { percorsoDi, useVociMenu } from './vociMenu';
 import type { BreadcrumbItemType } from '@/types';
 import type { Building } from '@/types/buildings';
 import type { Esercizio } from '@/types/gestionale/esercizi';
@@ -61,23 +61,15 @@ const scegliCondominio = (id: number) => {
     if (! condominio.value || id === condominio.value.id) {
         return;
     }
-    if (! dellaPagina?.cambiaCondominioSulPosto) {
-        router.visit(generatePath('gestionale/:condominio', { condominio: id }));
-
-        return;
-    }
-    // Come la testata della pagina: stesso indirizzo, con l'altro condominio e il suo esercizio aperto.
-    const segmenti = page.url.split('/');
-    const posto = segmenti.findIndex((s) => s === String(condominio.value!.id));
-    if (posto !== -1) {
-        segmenti[posto] = String(id);
-    }
-    const aperto = condomini.value.find((c) => c.id === id)?.esercizio_aperto?.id;
-    const postoEsercizio = segmenti.findIndex((_, i) => segmenti[i - 1] === 'esercizi');
-    if (postoEsercizio !== -1 && aperto) {
-        segmenti[postoEsercizio] = String(aperto);
-    }
-    router.visit(segmenti.join('/'), { preserveState: false, preserveScroll: true });
+    const sulPosto = !! dellaPagina?.cambiaCondominioSulPosto;
+    router.visit(indirizzoAltroCondominio({
+        url: page.url,
+        attuale: condominio.value.id,
+        nuovo: id,
+        sulPosto,
+        cruscotto: generatePath('gestionale/:condominio', { condominio: id }),
+        esercizioAperto: condomini.value.find((c) => c.id === id)?.esercizio_aperto?.id,
+    }), sulPosto ? { preserveState: false, preserveScroll: true } : {});
 };
 
 // ─── L'esercizio ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -88,7 +80,7 @@ const scegliEsercizio = (id: number) => {
     if (id === esercizio.value?.id) {
         return;
     }
-    router.visit(page.url.replace(/\/esercizi\/\d+/, `/esercizi/${id}`), { preserveState: false, preserveScroll: true });
+    router.visit(indirizzoAltroEsercizio(page.url, id), { preserveState: false, preserveScroll: true });
 };
 
 /** `2026-01-01` o `2026-01-01T00:00:00Z` → `01/01/2026`. */
@@ -115,6 +107,17 @@ const briciole = computed(() => {
         .filter((b, i) => ! (props.gestionale && i === 0 && b.title === 'Gestionale'));
 });
 
+/** Le pagine dello studio che non hanno una voce nel menu: il percorso dice lo stesso dove si è. */
+const ALTRE_PAGINE: [string, string][] = [['/admin/inbox', 'Casella delle attività'], ['/settings', 'Il mio profilo']];
+const sezione = computed(() => {
+    if (corrente.value) {
+        return corrente.value.nome;
+    }
+    const percorso = percorsoDi(page.url);
+
+    return ALTRE_PAGINE.find(([inizio]) => percorso === inizio || percorso.startsWith(inizio + '/'))?.[1] ?? null;
+});
+
 const classeVoce = 'inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-foreground/90 outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-accent';
 </script>
 
@@ -139,7 +142,7 @@ const classeVoce = 'inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2
                     <button type="button" :class="[classeVoce, 'shrink-0']" data-percorso-condominio :title="condominio.nome">
                         <Building2 class="size-4 shrink-0 text-primary" />
                         <span class="max-w-[9.5rem] truncate sm:max-w-[16rem] xl:max-w-[22rem]">{{ condominio.nome }}</span>
-                        <ChevronsUpDown class="size-3.5 shrink-0 text-muted-foreground" />
+                        <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
                     </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" class="w-80 p-0">
@@ -180,7 +183,7 @@ const classeVoce = 'inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2
                         <CalendarDays class="size-4 shrink-0 text-primary" />
                         <span class="max-w-[11rem] truncate">{{ esercizio!.nome }}</span>
                         <span v-if="periodo(esercizio)" class="hidden text-xs font-normal text-muted-foreground 2xl:inline">{{ periodo(esercizio) }}</span>
-                        <ChevronsUpDown class="size-3.5 shrink-0 text-muted-foreground" />
+                        <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" class="min-w-64">
                         <DropdownMenuLabel class="text-xs font-medium text-muted-foreground">Esercizi</DropdownMenuLabel>
@@ -204,9 +207,9 @@ const classeVoce = 'inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2
         </template>
 
         <!-- ─── Nello studio: la sezione in cui ci si trova ─── -->
-        <template v-else-if="corrente && briciole.length === 0">
+        <template v-else-if="sezione && briciole.length === 0">
             <ChevronRight class="size-3.5 shrink-0 text-muted-foreground/60" />
-            <span class="truncate px-2 text-sm font-medium text-foreground" data-percorso-sezione>{{ corrente.nome }}</span>
+            <span class="truncate px-2 text-sm font-medium text-foreground" data-percorso-sezione>{{ sezione }}</span>
         </template>
 
         <!-- ─── Le briciole della pagina ─── -->

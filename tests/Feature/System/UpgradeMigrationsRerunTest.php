@@ -843,3 +843,27 @@ it('la migrazione della carta per gruppo si riprende e non tocca una scelta già
     $migration->up();
     expect(json_decode((string) $valore(), true))->toBe($vuoto);
 });
+
+it('la migrazione del menu dell\'aspetto si riprende e non tocca una scelta già scritta', function () {
+    $path = database_path('settings/2026_11_18_100000_add_menu_to_aspetto_settings.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_18_100000_add_menu_to_aspetto_settings');
+    $migration = require $path;
+    $valore = fn () => DB::table('settings')->where('group', 'aspetto')->where('name', 'menu')->value('payload');
+    $quante = fn () => DB::table('settings')->where('group', 'aspetto')->where('name', 'menu')->count();
+    // Di serie il menu laterale.
+    expect($valore())->toBe(json_encode('laterale'))->and($quante())->toBe(1);
+
+    // Lo studio ha scelto il menu in alto: la ripresa non lo riporta al predefinito, e non raddoppia la riga.
+    DB::table('settings')->where('group', 'aspetto')->where('name', 'menu')->update(['payload' => json_encode('alto')]);
+    $migration->up();
+    $migration->up();
+    expect($valore())->toBe(json_encode('alto'))->and($quante())->toBe(1);
+
+    // Il colore e gli angoli, che sono di un'altra migrazione, restano dove sono.
+    $migration->down();
+    $migration->down();
+    expect($quante())->toBe(0)
+        ->and(DB::table('settings')->where('group', 'aspetto')->whereIn('name', ['colore', 'angoli'])->count())->toBe(2);
+    $migration->up();
+    expect($valore())->toBe(json_encode('laterale'))->and($quante())->toBe(1);
+});
