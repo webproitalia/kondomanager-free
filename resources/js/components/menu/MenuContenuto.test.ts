@@ -7,6 +7,8 @@
  * **Il menu è un punto fermo**: lo studio a righe intere e, sotto, il condominio in uso con le sue sezioni rientrate, su ogni
  * pagina, nello stesso ordine. Dentro un condominio le sezioni sono le sue; nelle pagine dello studio quelle dell'ultimo
  * aperto; senza un condominio in uso restano al loro posto, da scegliere. Le voci dei Movimenti stanno nel loro cassettino.
+ * La riga di testa del condominio ha due comandi: il nome (si sceglie un altro condominio, o lo si chiude) e la freccia che
+ * ripiega le sezioni; ripiegato resta la sola riga di testa, accesa quando la pagina è di quel condominio.
  *
  * Che cosa NON copre: quali voci ci sono e per chi (`vociMenu.test.ts`); che cosa si ricorda del condominio in uso
  * (`condominioInUso.test.ts`); i suggerimenti e gli elenchi a comparsa, che qui sono sostituiti da contenitori semplici.
@@ -50,9 +52,10 @@ const stubs = {
     PopoverTrigger: { inject: ['finestrella'], template: '<span style="display: contents" @click="finestrella.$emit(\'update:open\', ! finestrella.open)"><slot /></span>' },
     PopoverContent: { inject: ['finestrella'], template: '<div v-if="finestrella.open" data-prova-scelta><slot /></div>' },
     ElencoCondomini: {
-        props: ['condomini', 'attuale'],
-        emits: ['scelto'],
-        template: '<button v-for="c in condomini" :key="c.id" type="button" :data-prova-condominio="c.id" :data-attuale="c.id === attuale" @click="$emit(\'scelto\', c)">{{ c.nome }}</button>',
+        props: { condomini: Array, attuale: Number, chiudibile: Boolean },
+        emits: ['scelto', 'chiudi'],
+        template: '<button v-for="c in condomini" :key="c.id" type="button" :data-prova-condominio="c.id" :data-attuale="c.id === attuale" @click="$emit(\'scelto\', c)">{{ c.nome }}</button>'
+            + '<button v-if="chiudibile && attuale" type="button" data-prova-chiudi @click="$emit(\'chiudi\')">Chiudi il condominio</button>',
     },
 };
 
@@ -187,6 +190,7 @@ describe('nelle pagine dello studio: sotto c\'è il condominio in uso', () => {
         const menu = monta('/admin/anagrafiche');
         expect(menu.get('[data-menu-condominio]').text()).toBe('Le RoseEsercizio 2026');
         expect(menu.get('[data-menu-condominio]').attributes('data-senza-condominio')).toBeUndefined();
+        expect(menu.get('[data-menu-condominio]').find('svg.lucide-chevrons-up-down-icon').exists()).toBe(true);
         expect(menu.get('[data-menu-voce="unita"]').attributes('href')).toBe('/admin/gestionale/7/immobili');
         expect(menu.get('[data-menu-voce="conti"]').attributes('href')).toBe('/admin/gestionale/7/esercizi/3/piani-conti');
     });
@@ -209,6 +213,8 @@ describe('senza un condominio in uso', () => {
         const testa = menu.get('[data-menu-condominio]');
         expect(testa.text()).toBe('Scegli un condominioPer aprire le sue sezioni');
         expect(testa.attributes('data-senza-condominio')).toBe('');
+        // La frase deve leggersi intera: le due freccette del selettore ci sono solo accanto a un nome.
+        expect(testa.find('svg.lucide-chevrons-up-down-icon').exists()).toBe(false);
         expect(voci(menu, '[data-menu-voci="condominio"]')).toEqual(SEZIONI);
         const unita = menu.get('[data-menu-voce="unita"]');
         expect(unita.element.tagName).toBe('BUTTON');
@@ -311,6 +317,156 @@ describe('il menu aperto, dentro un condominio', () => {
         await menu.get('[data-menu-voce="movimenti"]').trigger('click');
         expect(menu.find('[data-menu-voce="fatture"]').exists()).toBe(true);
         expect(localStorage.getItem('km-menu-aperta-movimenti')).toBe('true');
+    });
+});
+
+describe('ripiegare il gruppo del condominio', () => {
+    const ripiegatoNelBrowser = () => localStorage.getItem('km-condominio-ripiegato:5');
+
+    test('la riga di testa ha due comandi distinti: il nome sceglie il condominio, la freccia ripiega le sezioni', async () => {
+        inUso(leRose);
+        const menu = monta('/admin/dashboard');
+        const freccia = menu.get('[data-menu-testa-condominio] [data-menu-ripiega]');
+        expect(freccia.attributes('aria-label')).toBe('Nascondi le sezioni');
+        expect(freccia.attributes('aria-expanded')).toBe('true');
+        expect(menu.get('[data-menu-testa-condominio] [data-menu-condominio]').text()).toBe('Le RoseEsercizio 2026');
+
+        await freccia.trigger('click');
+        await flushPromises();
+        // Le sezioni spariscono, resta la riga di testa; la scelta del condominio non si è aperta.
+        expect(voci(menu, 'nav')).toEqual(STUDIO);
+        expect(menu.get('[data-menu-condominio]').text()).toBe('Le RoseEsercizio 2026');
+        expect(menu.find('[data-prova-scelta]').exists()).toBe(false);
+        expect(freccia.attributes('aria-label')).toBe('Mostra le sezioni');
+        expect(freccia.attributes('aria-expanded')).toBe('false');
+        expect(ripiegatoNelBrowser()).toBe('true');
+
+        await freccia.trigger('click');
+        await flushPromises();
+        expect(voci(menu, '[data-menu-voci="condominio"]')).toEqual(SEZIONI);
+        expect(ripiegatoNelBrowser()).toBeNull();
+    });
+
+    test('si ricorda: alla pagina dopo il gruppo è ancora ripiegato, anche entrando in una pagina del condominio', () => {
+        inUso(leRose);
+        localStorage.setItem('km-condominio-ripiegato:5', 'true');
+        azzeraCondominioInUso();
+        expect(voci(monta('/admin/anagrafiche'), 'nav')).toEqual(STUDIO);
+        w!.unmount();
+        expect(voci(monta('/admin/gestionale/7/immobili', { gestionale: true }, condominio), 'nav')).toEqual(STUDIO);
+    });
+
+    test('ripiegato, la riga di testa è accesa quando la pagina è di quel condominio: si capisce dove si è', async () => {
+        const menu = monta('/admin/gestionale/7/immobili', { gestionale: true }, condominio);
+        // Aperto: accesa è la sezione, non la riga di testa.
+        expect(menu.get('[data-menu-testa-condominio]').attributes('data-attiva')).toBeUndefined();
+        expect(menu.findAll('[data-attiva="true"]').map((v) => v.attributes('data-menu-voce'))).toEqual(['unita']);
+
+        await menu.get('[data-menu-ripiega]').trigger('click');
+        await flushPromises();
+        expect(menu.get('[data-menu-testa-condominio]').attributes('data-attiva')).toBe('true');
+        expect(menu.findAll('[data-attiva="true"]').length).toBe(1);
+    });
+
+    test('ripiegato, nelle pagine dello studio la riga di testa non è accesa: accesa resta la voce dello studio', async () => {
+        inUso(leRose);
+        const menu = monta('/admin/anagrafiche');
+        await menu.get('[data-menu-ripiega]').trigger('click');
+        await flushPromises();
+        expect(menu.get('[data-menu-testa-condominio]').attributes('data-attiva')).toBeUndefined();
+        expect(menu.findAll('[data-attiva="true"]').map((v) => v.attributes('data-menu-voce'))).toEqual(['persone']);
+    });
+
+    test('scegliere un condominio dalla riga di testa riapre il gruppo; ripiegarlo e cambiare pagina no', async () => {
+        inUso(leRose);
+        const menu = monta('/admin/anagrafiche');
+        await menu.get('[data-menu-ripiega]').trigger('click');
+        await menu.get('[data-menu-condominio]').trigger('click');
+        await flushPromises();
+        await menu.get('[data-prova-condominio="9"]').trigger('click');
+        await flushPromises();
+        expect(giro.visit).toHaveBeenCalledWith('/admin/gestionale/9');
+        expect(ripiegatoNelBrowser()).toBeNull();
+        expect(voci(menu, '[data-menu-voci="condominio"]')).toEqual(SEZIONI);
+    });
+
+    test('senza un condominio in uso e con il gruppo ripiegato resta la sola riga «Scegli un condominio»', async () => {
+        const menu = monta('/admin/dashboard');
+        await menu.get('[data-menu-ripiega]').trigger('click');
+        await flushPromises();
+        expect(fila(menu)).toEqual([...STUDIO, '(condominio)']);
+        expect(menu.get('[data-menu-condominio]').text()).toBe('Scegli un condominioPer aprire le sue sezioni');
+    });
+
+    test('nel menu chiuso la freccia sta sul separatore: ripiegato resta la sola icona del condominio, che dice il suo nome', async () => {
+        const menu = monta('/admin/gestionale/7/immobili', { gestionale: true, chiuso: true }, condominio);
+        const freccia = menu.get('[data-menu-separatore][data-menu-ripiega]');
+        expect(freccia.attributes('aria-label')).toBe('Nascondi le sezioni');
+        expect(menu.find('[data-menu-testa-condominio] [data-menu-ripiega]').exists()).toBe(false);
+
+        await freccia.trigger('click');
+        await flushPromises();
+        expect(fila(menu)).toEqual([...STUDIO, '(condominio)']);
+        const icona = menu.get('[data-menu-condominio]');
+        expect(icona.attributes('aria-label')).toBe('Le Rose: scegli il condominio');
+        // Si è dentro quel condominio: l'icona è accesa, con la tacca sul bordo.
+        expect(icona.attributes('data-attiva')).toBe('true');
+        expect(icona.find('.km-tacca').exists()).toBe(true);
+        expect(menu.findAll('[data-attiva="true"]').length).toBe(1);
+        expect(freccia.attributes('aria-label')).toBe('Mostra le sezioni');
+
+        // Riaprendo tornano le icone delle sezioni, e accesa è di nuovo la sezione.
+        await freccia.trigger('click');
+        await flushPromises();
+        expect(fila(menu)).toEqual([...STUDIO, '(condominio)', ...SEZIONI]);
+        expect(menu.findAll('[data-attiva="true"]').map((v) => v.attributes('data-menu-voce'))).toEqual(['unita']);
+    });
+});
+
+describe('«Chiudi il condominio»: nessun condominio in uso', () => {
+    test('dalle pagine dello studio: il gruppo torna a «Scegli un condominio», con le sezioni da scegliere, e si resta dove si è', async () => {
+        inUso(leRose);
+        const menu = monta('/admin/anagrafiche');
+        await menu.get('[data-menu-condominio]').trigger('click');
+        await flushPromises();
+        await menu.get('[data-prova-chiudi]').trigger('click');
+        await flushPromises();
+
+        expect(menu.get('[data-menu-condominio]').text()).toBe('Scegli un condominioPer aprire le sue sezioni');
+        expect(menu.get('[data-menu-voce="unita"]').attributes('data-da-scegliere')).toBe('');
+        expect(localStorage.getItem('km-condominio-in-uso:5')).toBeNull();
+        expect(menu.find('[data-prova-scelta]').exists()).toBe(false);
+        expect(giro.visit).not.toHaveBeenCalled();
+    });
+
+    test('da dentro una pagina di quel condominio: si torna alla dashboard dello studio', async () => {
+        inUso(leRose);
+        const menu = monta('/admin/gestionale/7/immobili', { gestionale: true }, { ...condominio, condomini: [{ id: 7, nome: 'Le Rose' }] });
+        await menu.get('[data-menu-condominio]').trigger('click');
+        await flushPromises();
+        await menu.get('[data-prova-chiudi]').trigger('click');
+        await flushPromises();
+        expect(giro.visit).toHaveBeenCalledWith('/admin/dashboard');
+        expect(localStorage.getItem('km-condominio-in-uso:5')).toBeNull();
+    });
+
+    test('senza un condominio in uso non c\'è niente da chiudere', async () => {
+        const menu = monta('/admin/dashboard');
+        await menu.get('[data-menu-condominio]').trigger('click');
+        await flushPromises();
+        expect(menu.find('[data-prova-chiudi]').exists()).toBe(false);
+    });
+
+    test('con il gruppo ripiegato resta ripiegato: la sola riga «Scegli un condominio»', async () => {
+        inUso(leRose);
+        const menu = monta('/admin/anagrafiche');
+        await menu.get('[data-menu-ripiega]').trigger('click');
+        await menu.get('[data-menu-condominio]').trigger('click');
+        await flushPromises();
+        await menu.get('[data-prova-chiudi]').trigger('click');
+        await flushPromises();
+        expect(fila(menu)).toEqual([...STUDIO, '(condominio)']);
+        expect(menu.get('[data-menu-condominio]').text()).toContain('Scegli un condominio');
     });
 });
 

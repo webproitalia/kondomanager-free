@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * L'elenco in cui si sceglie un condominio, cercandolo per nome: lo aprono il selettore del percorso nella barra in alto e la
- * riga di testa del gruppo del condominio nel menu. In fondo, «Tutti i condomini» porta al loro elenco.
+ * riga di testa del gruppo del condominio nel menu. In fondo, «Tutti i condomini» porta al loro elenco e — nel menu, quando
+ * c'è un condominio in uso — «Chiudi il condominio» lo toglie: il menu torna a «Scegli un condominio».
  */
 import { router } from '@inertiajs/vue3';
-import { Building2, Check, List } from 'lucide-vue-next';
+import { Building2, Check, CircleX, List } from 'lucide-vue-next';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
 import { usePermission } from '@/composables/permissions';
 import { Permission } from '@/enums/Permission';
@@ -14,8 +15,10 @@ defineProps<{
     condomini: CondominioInElenco[];
     /** Il condominio in cui si è, o quello in uso: ha la spunta. */
     attuale?: number | null;
+    /** In fondo c'è anche «Chiudi il condominio» (se ce n'è uno in uso). */
+    chiudibile?: boolean;
 }>();
-defineEmits<{ scelto: [condominio: CondominioInElenco] }>();
+defineEmits<{ scelto: [condominio: CondominioInElenco]; chiudi: [] }>();
 
 const { hasPermission } = usePermission();
 </script>
@@ -32,12 +35,16 @@ const { hasPermission } = usePermission();
                     <Check v-if="c.id === attuale" class="ml-auto text-primary" />
                 </CommandItem>
             </CommandGroup>
-            <template v-if="hasPermission([Permission.VIEW_CONDOMINI])">
+            <template v-if="hasPermission([Permission.VIEW_CONDOMINI]) || (chiudibile && attuale)">
                 <CommandSeparator />
                 <CommandGroup>
-                    <CommandItem value="tutti-i-condomini elenco" class="cursor-pointer" @select="router.visit('/condomini')">
+                    <CommandItem v-if="hasPermission([Permission.VIEW_CONDOMINI])" value="tutti-i-condomini elenco" class="cursor-pointer" @select="router.visit('/condomini')">
                         <List class="text-muted-foreground" />
                         Tutti i condomini
+                    </CommandItem>
+                    <CommandItem v-if="chiudibile && attuale" value="chiudi-il-condominio nessuno" class="cursor-pointer" data-chiudi-condominio @select="$emit('chiudi')">
+                        <CircleX class="text-muted-foreground" />
+                        Chiudi il condominio
                     </CommandItem>
                 </CommandGroup>
             </template>

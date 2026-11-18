@@ -18,13 +18,22 @@
  * su una di loro apre la scelta e poi porta a quella sezione.
  *
  * Il menu chiuso ha le stesse icone, nello stesso ordine, con un separatore fra i due gruppi.
+ *
+ * ## La riga di testa del condominio ha due comandi
+ *
+ * Il nome (un clic: si sceglie un altro condominio, o in fondo all'elenco «Chiudi il condominio») e, a destra, la freccia
+ * che **ripiega** le sezioni: chi lavora su altro non vuole sempre l'elenco spalancato. Ripiegato resta la sola riga di
+ * testa, accesa quando la pagina è di quel condominio, così si capisce dove si è. Lo stato si ricorda per utente, e il
+ * gruppo si riapre da solo solo quando si apre o si cambia condominio con una scelta esplicita (`condominioInUso.ts`).
+ * Nel menu chiuso la freccia sta sul separatore fra i due gruppi: ripiegato si vede la sola icona del condominio.
  */
 import { computed, ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Building2, ChevronsLeft, ChevronsRight, ChevronsUpDown, X } from 'lucide-vue-next';
+import { Building2, ChevronRight, ChevronsLeft, ChevronsRight, ChevronsUpDown, X } from 'lucide-vue-next';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -59,25 +68,42 @@ const nomeApp = computed(() => (page.props.name as string) || 'KondoManager');
 
 // ─── Scegliere il condominio in uso ──────────────────────────────────────────────────────────────────────────────────────
 const { condomini, interi, carica } = useElencoCondomini();
-const { controllaCon } = useCondominioInUso();
-const { vaiAlCondominio } = useCambioCondominio({ gestionale: props.gestionale });
+const { controllaCon, ripiegato, ripiega } = useCondominioInUso();
+const { vaiAlCondominio, chiudiCondominio } = useCambioCondominio({ gestionale: props.gestionale });
 
 const sceltaAperta = ref(false);
 /** La sezione cliccata quando non c'era un condominio in uso: dopo la scelta si va lì. */
 const sezioneInAttesa = ref<VoceMenu | null>(null);
 
+let richiestaDiAprire = 0;
+
 const apriScelta = (aperta: boolean, voce: VoceMenu | null = null) => {
+    const questa = ++richiestaDiAprire;
     sezioneInAttesa.value = aperta ? voce : null;
-    sceltaAperta.value = aperta;
-    if (aperta) {
-        void carica();
+    if (! aperta) {
+        sceltaAperta.value = false;
+
+        return;
     }
+    // L'elenco si apre quando i condomini ci sono (un attimo): aperto prima, nascerebbe con il solo «Tutti i condomini», e la
+    // tastiera partirebbe da lì invece che dal primo condominio.
+    void carica().finally(() => {
+        if (questa === richiestaDiAprire) {
+            sceltaAperta.value = true;
+        }
+    });
 };
 
 const scelto = (condominio: CondominioInElenco) => {
     const sezione = sezioneInAttesa.value?.sezione;
     apriScelta(false);
     vaiAlCondominio(condominio.id, sezione);
+};
+
+/** «Chiudi il condominio»: nessun condominio in uso (da dentro una sua pagina si torna alla dashboard dello studio). */
+const chiudi = () => {
+    apriScelta(false);
+    chiudiCondominio();
 };
 
 // Il condominio in uso non è più nell'elenco intero dei condomini (eliminato): il ricordo si cancella, e il menu chiede di
@@ -88,6 +114,11 @@ const testa = computed(() => ({
     nome: gruppoCondominio.value?.nome ?? 'Scegli un condominio',
     sotto: gruppoCondominio.value?.nome ? (gruppoCondominio.value.esercizio ?? 'Condominio in uso') : 'Per aprire le sue sezioni',
 }));
+
+// ─── Ripiegare il gruppo del condominio ──────────────────────────────────────────────────────────────────────────────────
+const comandoRipiega = computed(() => (ripiegato.value ? 'Mostra le sezioni' : 'Nascondi le sezioni'));
+/** Ripiegato, la riga di testa dice da sola dove si è: è accesa quando la pagina è di quel condominio. */
+const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?.dellaPagina);
 </script>
 
 <template>
@@ -134,48 +165,97 @@ const testa = computed(() => ({
 
             <!-- ─── 2. Il condominio in uso: la riga di testa (un clic: se ne sceglie un altro) e le sue sezioni, rientrate ─── -->
             <template v-if="gruppoCondominio">
-                <div v-if="chiuso" class="mx-1.5 my-1.5 h-px bg-[var(--km-menu-riga)]" data-menu-separatore />
-
-                <Popover :open="sceltaAperta" @update:open="(aperta: boolean) => apriScelta(aperta)">
-                    <PopoverTrigger as-child>
-                        <button
-                            v-if="chiuso"
-                            type="button"
-                            class="km-voce km-riga mx-auto flex w-10 items-center justify-center rounded-lg"
-                            data-menu-condominio
-                            :aria-label="`${testa.nome}: scegli il condominio`"
-                            :title="`${testa.nome} — ${testa.sotto}. Clicca per scegliere il condominio.`"
-                        >
-                            <span class="km-icona-voce flex items-center justify-center bg-white/10 text-white ring-1 ring-inset ring-white/15"><Building2 class="size-[60%]" /></span>
+                <!-- Menu chiuso: il separatore fra i due gruppi è anche la freccia che ripiega le icone delle sezioni -->
+                <Tooltip v-if="chiuso" :delay-duration="0">
+                    <TooltipTrigger as-child>
+                        <button type="button" class="km-ripiega-icone mx-auto flex h-[13px] w-10 items-center gap-1 rounded" data-menu-separatore data-menu-ripiega :aria-expanded="! ripiegato" :aria-label="comandoRipiega" @click="ripiega(! ripiegato)">
+                            <span class="h-px flex-1 bg-white/15" />
+                            <ChevronRight class="size-3 shrink-0 transition-transform duration-200" :class="{ 'rotate-90': ! ripiegato }" :stroke-width="2.6" />
+                            <span class="h-px flex-1 bg-white/15" />
                         </button>
-                        <button
-                            v-else
-                            type="button"
-                            class="km-voce km-condominio mb-px mt-2 flex w-full items-center gap-2.5 rounded-lg px-1.5 text-left ring-1 ring-inset ring-white/[0.08]"
-                            data-menu-condominio
-                            :data-senza-condominio="gruppoCondominio.id ? undefined : ''"
-                            :title="`${testa.nome} — clicca per scegliere il condominio`"
-                        >
-                            <span class="km-icona-voce flex shrink-0 items-center justify-center bg-white/10 text-white"><Building2 class="size-[60%]" /></span>
-                            <span class="min-w-0 flex-1 leading-[1.15]">
-                                <span class="block truncate text-[13px] font-semibold text-white">{{ testa.nome }}</span>
-                                <span class="km-menu-etichetta block truncate text-[10.5px]">{{ testa.sotto }}</span>
-                            </span>
-                            <ChevronsUpDown class="mr-0.5 size-3.5 shrink-0 opacity-50" />
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent side="right" align="start" :side-offset="12" class="w-80 p-0" data-menu-scelta-condominio>
-                        <p v-if="sezioneInAttesa" class="border-b px-3 py-2 text-xs text-muted-foreground">Scegli il condominio: si apre «{{ sezioneInAttesa.nome }}».</p>
-                        <ElencoCondomini :condomini="condomini" :attuale="gruppoCondominio.id" @scelto="scelto" />
-                    </PopoverContent>
-                </Popover>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" :side-offset="10">{{ comandoRipiega }}</TooltipContent>
+                </Tooltip>
 
-                <div class="flex flex-col gap-px" :class="chiuso ? 'items-center' : 'km-rientro'" data-menu-voci="condominio">
-                    <template v-for="voce in gruppoCondominio.voci" :key="voce.chiave">
-                        <VoceConFiglie v-if="voce.figlie?.length" :voce="voce" :solo-icona="chiuso" :livello="2" @scegli="(v: VoceMenu) => apriScelta(true, v)" />
-                        <VoceMenuRiga v-else :voce="voce" :solo-icona="chiuso" :livello="2" @scegli="(v: VoceMenu) => apriScelta(true, v)" />
-                    </template>
-                </div>
+                <Collapsible :open="! ripiegato">
+                    <!-- La riga di testa: il nome (si sceglie il condominio) e la freccia (si ripiegano le sezioni) -->
+                    <div
+                        :class="chiuso ? 'flex justify-center' : 'km-condominio mb-px mt-2 flex items-stretch rounded-lg ring-1 ring-inset ring-white/[0.08]'"
+                        data-menu-testa-condominio
+                        :data-attiva="! chiuso && testaAccesa ? 'true' : undefined"
+                    >
+                        <!-- La scelta sta DENTRO il suggerimento, come l'elenco di «Movimenti» a menu chiuso (`VoceConFiglie.vue`) -->
+                        <Tooltip :delay-duration="chiuso ? 0 : 300">
+                            <TooltipTrigger as-child>
+                                <span class="flex min-w-0" :class="{ 'flex-1': ! chiuso }">
+                                    <Popover :open="sceltaAperta" @update:open="(aperta: boolean) => apriScelta(aperta)">
+                                        <PopoverTrigger as-child>
+                                            <button
+                                                v-if="chiuso"
+                                                type="button"
+                                                class="km-voce km-riga relative flex w-10 items-center justify-center rounded-lg"
+                                                data-menu-condominio
+                                                :data-attiva="testaAccesa ? 'true' : 'false'"
+                                                :aria-label="`${testa.nome}: scegli il condominio`"
+                                            >
+                                                <span v-if="testaAccesa" class="km-tacca" />
+                                                <span class="km-icona-voce flex items-center justify-center bg-white/10 text-white ring-1 ring-inset ring-white/15"><Building2 class="size-[60%]" /></span>
+                                            </button>
+                                            <button
+                                                v-else
+                                                type="button"
+                                                class="km-voce flex min-w-0 flex-1 items-center gap-2 rounded-l-lg pl-1.5 pr-1 text-left"
+                                                data-menu-condominio
+                                                :data-senza-condominio="gruppoCondominio.id ? undefined : ''"
+                                            >
+                                                <span class="km-icona-voce flex shrink-0 items-center justify-center bg-white/10 text-white"><Building2 class="size-[60%]" /></span>
+                                                <span class="min-w-0 flex-1 leading-[1.15]">
+                                                    <span class="block truncate text-[13px] font-semibold text-white">{{ testa.nome }}</span>
+                                                    <span class="km-menu-etichetta block truncate text-[10.5px]">{{ testa.sotto }}</span>
+                                                </span>
+                                                <!-- «Scegli un condominio» si spiega da solo, e deve leggersi intero: le due freccette solo con un nome -->
+                                                <ChevronsUpDown v-if="gruppoCondominio.id" class="size-3 shrink-0 opacity-50" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <!-- Accanto al menu, non sopra la freccia che ripiega (che sta a destra del nome) -->
+                                        <PopoverContent side="right" align="start" :side-offset="chiuso ? 12 : 40" class="w-80 p-0" data-menu-scelta-condominio>
+                                            <p v-if="sezioneInAttesa" class="border-b px-3 py-2 text-xs text-muted-foreground">Scegli il condominio: si apre «{{ sezioneInAttesa.nome }}».</p>
+                                            <ElencoCondomini :condomini="condomini" :attuale="gruppoCondominio.id" chiudibile @scelto="scelto" @chiudi="chiudi" />
+                                        </PopoverContent>
+                                    </Popover>
+                                </span>
+                            </TooltipTrigger>
+                            <!-- Chiuso: il nome, che non si vede. Aperto: il nome intero (nella riga può essere tagliato) e che cosa fa il clic. -->
+                            <TooltipContent v-if="chiuso" side="right" :side-offset="10">{{ testa.nome }}<span class="ml-1.5 opacity-60">{{ testa.sotto }}</span></TooltipContent>
+                            <TooltipContent v-else-if="gruppoCondominio.id" side="right" :side-offset="38">{{ testa.nome }}<span class="ml-1.5 opacity-60">Cambia condominio</span></TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip v-if="! chiuso" :delay-duration="300">
+                            <TooltipTrigger as-child>
+                                <button
+                                    type="button"
+                                    class="km-voce flex w-7 shrink-0 items-center justify-center rounded-r-lg border-l border-white/[0.08]"
+                                    data-menu-ripiega
+                                    :aria-expanded="! ripiegato"
+                                    :aria-label="comandoRipiega"
+                                    @click="ripiega(! ripiegato)"
+                                >
+                                    <ChevronRight class="size-4 opacity-70 transition-transform duration-200" :class="{ 'rotate-90': ! ripiegato }" />
+                                </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" :side-offset="10">{{ comandoRipiega }}</TooltipContent>
+                        </Tooltip>
+                    </div>
+
+                    <CollapsibleContent>
+                        <div class="flex flex-col gap-px" :class="chiuso ? 'items-center' : 'km-rientro'" data-menu-voci="condominio">
+                            <template v-for="voce in gruppoCondominio.voci" :key="voce.chiave">
+                                <VoceConFiglie v-if="voce.figlie?.length" :voce="voce" :solo-icona="chiuso" :livello="2" @scegli="(v: VoceMenu) => apriScelta(true, v)" />
+                                <VoceMenuRiga v-else :voce="voce" :solo-icona="chiuso" :livello="2" @scegli="(v: VoceMenu) => apriScelta(true, v)" />
+                            </template>
+                        </div>
+                    </CollapsibleContent>
+                </Collapsible>
             </template>
         </nav>
 

@@ -13,6 +13,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { usePermission } from '@/composables/permissions';
 import { Permission } from '@/enums/Permission';
+import { useCondominioInUso } from './condominioInUso';
 import IconaSezione from './IconaSezione.vue';
 import { useElencoCondomini } from './elencoCondomini';
 import { useVociMenu, type VoceMenu } from './vociMenu';
@@ -24,6 +25,7 @@ const page = usePage();
 const { generatePath, hasPermission } = usePermission();
 const { studio, gruppoCondominio, fondo, sorgente, nomeStudio, nelPannello } = useVociMenu({ gestionale: props.gestionale });
 const { condomini, carica } = useElencoCondomini();
+const { riapri } = useCondominioInUso();
 
 // Ctrl+K o ⌘K, da qualunque punto della pagina: apre e chiude.
 useEventListener('keydown', (evento: KeyboardEvent) => {
@@ -64,6 +66,12 @@ const vai = (voce: Pick<VoceMenu, 'href' | 'esterna'>) => {
         return;
     }
     router.visit(voce.href);
+};
+
+/** Aprire un condominio è una scelta esplicita: se il suo gruppo nel menu era ripiegato, si riapre. */
+const apriCondominio = (id: number) => {
+    riapri();
+    vai({ href: generatePath('gestionale/:condominio', { condominio: id }) });
 };
 
 /** Il nome intero accanto a quello breve, dove sono diversi: «Unità» si trova anche scrivendo «immobili». */
@@ -107,7 +115,7 @@ const altroNome = (voce: VoceMenu) => (voce.titolo.toLowerCase() !== voce.nome.t
                     </template>
 
                     <CommandGroup v-if="condomini.length" heading="Apri un condominio">
-                        <CommandItem v-for="c in condomini" :key="c.id" :value="`k-${c.id}`" class="cursor-pointer gap-2.5 py-1.5" @select="vai({ href: generatePath('gestionale/:condominio', { condominio: c.id }) })">
+                        <CommandItem v-for="c in condomini" :key="c.id" :value="`k-${c.id}`" class="cursor-pointer gap-2.5 py-1.5" @select="apriCondominio(c.id)">
                             <span class="flex size-6 shrink-0 items-center justify-center rounded-[6px] bg-muted text-muted-foreground"><Building2 class="size-3.5" /></span>
                             <span class="truncate">{{ c.nome }}</span>
                             <span v-if="gruppoCondominio?.id === c.id" class="ml-auto text-xs text-muted-foreground">{{ gruppoCondominio.dellaPagina ? 'aperto' : 'in uso' }}</span>

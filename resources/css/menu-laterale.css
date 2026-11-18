@@ -131,11 +131,40 @@
   border-radius: 5px;
 }
 
-/* La riga di testa del condominio in uso: un clic e se ne sceglie un altro. */
+/*
+ * La riga di testa del condominio in uso. Ha due comandi: il nome (un clic e se ne sceglie un altro) e, a destra, la freccia
+ * che ripiega le sue sezioni. Ripiegata, è accesa quando la pagina è di quel condominio: dice da sola dove si è.
+ */
 .km-condominio {
   height: calc(var(--km-riga) + 0.5rem);
   flex-shrink: 0;
   background-color: hsl(0 0% 100% / 0.05);
+}
+.km-condominio[data-attiva='true'] {
+  background-color: var(--km-menu-attiva);
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.12);
+}
+.km-condominio[data-attiva='true'] .km-voce {
+  color: var(--km-menu-attiva-testo);
+}
+.km-condominio[data-attiva='true'] .km-menu-etichetta {
+  color: hsl(0 0% 100% / 0.8);
+}
+.km-condominio[data-attiva='true'] .km-voce:hover,
+.km-condominio[data-attiva='true'] .km-voce:focus-visible {
+  background-color: hsl(0 0% 100% / 0.12);
+}
+
+/* Nel menu chiuso la freccia che ripiega sta sul separatore fra i due gruppi: un filo, la freccia, un filo. */
+.km-ripiega-icone {
+  color: var(--km-menu-tenue);
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+.km-ripiega-icone:hover,
+.km-ripiega-icone:focus-visible {
+  color: hsl(0 0% 100%);
+  background-color: var(--km-menu-passaggio);
+  outline: none;
 }
 
 /*

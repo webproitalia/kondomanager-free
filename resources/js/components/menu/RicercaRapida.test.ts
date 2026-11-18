@@ -163,6 +163,21 @@ describe('scegliere', () => {
         expect(giro.visit).toHaveBeenCalledWith('/admin/gestionale/2');
     });
 
+    test('aprire un condominio è una scelta esplicita: se il suo gruppo nel menu era ripiegato, si riapre; una sezione no', async () => {
+        localStorage.setItem('km-condominio-ripiegato:5', 'true');
+        azzeraCondominioInUso();
+        const ricerca = monta('/admin/dashboard');
+        await flushPromises();
+        await scegli(ricerca, 'Agenda');
+        expect(localStorage.getItem('km-condominio-ripiegato:5')).toBe('true');
+        ricerca.unmount();
+
+        const dopo = monta('/admin/dashboard');
+        await flushPromises();
+        await scegli(dopo, 'I Tigli');
+        expect(localStorage.getItem('km-condominio-ripiegato:5')).toBeNull();
+    });
+
     test('la guida e il codice sorgente si aprono in un\'altra scheda', async () => {
         const apri = vi.spyOn(window, 'open').mockImplementation(() => null);
         const ricerca = monta('/admin/dashboard');

@@ -21,7 +21,7 @@
  * la struttura. Così «Apri a pagina intera» toglie la scheda senza ridisegnare la pagina, e un modulo mezzo compilato resta
  * com'è.
  */
-import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import Footer from '@/components/Footer.vue';
 import SchedaFondo from '@/components/scheda/SchedaFondo.vue';
@@ -46,17 +46,19 @@ const props = withDefaults(defineProps<{
 offriPercorsoPagina(props.gestionale);
 
 // Dentro un condominio: è quello in uso, e il menu se lo ricorda anche nelle pagine dello studio (`condominioInUso.ts`).
+// Lo si ricorda quando la pagina lo porta, non quando il ricordo cambia: «Chiudi il condominio», da dentro una sua pagina, lo
+// toglie, e non deve tornare da solo prima che si arrivi alla dashboard.
 const page = usePage();
 const { ricorda } = useCondominioInUso();
 ascoltaCondominioInUso();
-watchEffect(() => {
-    const condominio = page.props.condominio as { id?: number; nome?: string } | undefined;
-    if (! props.gestionale || ! condominio?.id || ! condominio.nome) {
+watch(() => [props.gestionale, page.props.condominio, page.props.esercizio] as const, ([gestionale, delCondominio, dellEsercizio]) => {
+    const condominio = delCondominio as { id?: number; nome?: string } | undefined;
+    if (! gestionale || ! condominio?.id || ! condominio.nome) {
         return;
     }
-    const esercizio = page.props.esercizio as { id?: number; nome?: string } | null | undefined;
+    const esercizio = dellEsercizio as { id?: number; nome?: string } | null | undefined;
     ricorda({ id: condominio.id, nome: condominio.nome, esercizio: esercizio?.id ? { id: esercizio.id, nome: esercizio.nome ?? null } : null });
-});
+}, { immediate: true });
 
 const CHIAVE = 'km-menu-aperto';
 

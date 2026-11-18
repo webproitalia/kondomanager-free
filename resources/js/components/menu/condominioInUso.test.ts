@@ -6,7 +6,8 @@
  *
  * Che cosa copre: che cosa si scrive e si rilegge; l'esercizio, che una pagina senza esercizio non cancella; il ricordo
  * illeggibile; quando il ricordo si cancella (il condominio non è più nell'elenco, una sua sezione non si trova) e quando
- * no (una pagina qualunque non trovata); l'ascolto delle pagine non trovate.
+ * no (una pagina qualunque non trovata); il gruppo ripiegato, che si ricorda per utente e si riapre da solo solo quando si
+ * apre un condominio da fuori; l'ascolto delle pagine.
  *
  * Che cosa NON copre: come il menu lo mostra (`MenuContenuto.test.ts`) e a quali indirizzi porta (`vociMenu.test.ts`).
  */
@@ -17,7 +18,7 @@ const giro = vi.hoisted(() => ({ on: vi.fn() }));
 
 vi.mock('@inertiajs/vue3', () => ({ usePage: () => pagina, router: { on: giro.on } }));
 
-const { useCondominioInUso, paginaNonTrovata, ascoltaCondominioInUso, azzeraCondominioInUso } = await import('./condominioInUso');
+const { useCondominioInUso, paginaNonTrovata, arrivoA, ascoltaCondominioInUso, azzeraCondominioInUso } = await import('./condominioInUso');
 
 const CHIAVE = 'km-condominio-in-uso:5';
 const leRose = { id: 7, nome: 'Le Rose', esercizio: { id: 3, nome: 'Esercizio 2026' } };
@@ -151,14 +152,75 @@ describe('dimenticare', () => {
     });
 });
 
-describe('l\'ascolto delle pagine non trovate', () => {
-    test('parte una volta sola, e cancella il ricordo quando la sezione aperta dal menu risponde «non trovata»', () => {
-        ascoltaCondominioInUso();
-        ascoltaCondominioInUso();
-        expect(giro.on.mock.calls.map(([evento]) => evento)).toEqual(['before', 'httpException']);
-        const [[, prima], [, errore]] = giro.on.mock.calls as [string, (e: unknown) => void][];
+describe('ripiegare il gruppo del condominio', () => {
+    test('nasce aperto; ripiegato si ricorda nel browser, per quell\'utente soltanto', () => {
+        const { ripiegato, ripiega } = entra();
+        expect(ripiegato.value).toBe(false);
 
-        const { inUso, ricorda } = entra();
+        ripiega(true);
+        expect(ripiegato.value).toBe(true);
+        expect(entra().ripiegato.value).toBe(true);
+        expect(entra(8).ripiegato.value).toBe(false);
+
+        // Riaperto torna com'era nato: non resta niente da ricordare.
+        entra().ripiega(false);
+        expect(localStorage.getItem('km-condominio-ripiegato:5')).toBeNull();
+        expect(entra().ripiegato.value).toBe(false);
+    });
+
+    test('entrare in un condominio, o in un\'altra sua pagina, non lo riapre', () => {
+        const { ripiegato, ripiega, ricorda } = entra();
+        ripiega(true);
+        ricorda(leRose);
+        ricorda({ id: 9, nome: 'I Tigli', esercizio: null });
+        expect(ripiegato.value).toBe(true);
+    });
+
+    test('una scelta esplicita lo riapre', () => {
+        const { ripiegato, ripiega, riapri } = entra();
+        ripiega(true);
+        riapri();
+        expect(ripiegato.value).toBe(false);
+        expect(entra().ripiegato.value).toBe(false);
+    });
+
+    test('togliere il condominio in uso non lo riapre: resta la sola riga «Scegli un condominio»', () => {
+        const { ripiegato, ripiega, ricorda, dimentica } = entra();
+        ricorda(leRose);
+        ripiega(true);
+        dimentica();
+        expect(ripiegato.value).toBe(true);
+    });
+
+    test('aprire il cruscotto di un condominio da fuori lo riapre: dall\'elenco dei condomini, dalla dashboard, da un altro condominio', () => {
+        for (const da of ['/condomini', '/admin/dashboard', '/admin/gestionale/9/immobili', '/admin/gestionale/70']) {
+            const { ripiegato, ripiega } = entra();
+            ripiega(true);
+            arrivoA(da, '/admin/gestionale/7', 'visit');
+            expect(ripiegato.value, da).toBe(false);
+        }
+    });
+
+    test('non lo riaprono le altre pagine, il cruscotto del condominio in cui si è già, il «torna indietro» e la pagina caricata per intero', () => {
+        const { ripiegato, ripiega } = entra();
+        ripiega(true);
+        arrivoA('/admin/dashboard', '/admin/gestionale/7/fatture/12', 'visit');   // un collegamento qualunque verso una sua pagina
+        arrivoA('/admin/gestionale/7/immobili', '/admin/gestionale/7', 'visit'); // si è già dentro
+        arrivoA('/admin/dashboard', '/admin/gestionale/7', 'history');           // «torna indietro»
+        arrivoA('', '/admin/gestionale/7', 'initial');                           // la pagina aperta dai preferiti
+        arrivoA('/admin/gestionale/7', '/admin/anagrafiche', 'visit');
+        expect(ripiegato.value).toBe(true);
+    });
+});
+
+describe('l\'ascolto delle pagine', () => {
+    test('parte una volta sola: cancella il ricordo quando la sezione aperta dal menu risponde «non trovata», e riapre il gruppo quando si apre un condominio', () => {
+        ascoltaCondominioInUso();
+        ascoltaCondominioInUso();
+        expect(giro.on.mock.calls.map(([evento]) => evento)).toEqual(['navigate', 'before', 'httpException']);
+        const [[, arrivo], [, prima], [, errore]] = giro.on.mock.calls as [string, (e: unknown) => void][];
+
+        const { inUso, ripiegato, ripiega, ricorda } = entra();
         ricorda(leRose);
 
         // Un errore del server non è una pagina non trovata.
@@ -170,5 +232,16 @@ describe('l\'ascolto delle pagine non trovate', () => {
         prima({ detail: { visit: { url: new URL('https://studio.test/admin/anagrafiche'), prefetch: true } } });
         errore({ detail: { response: { status: 404 } } });
         expect(inUso.value).toBeNull();
+
+        // Dall'elenco dei condomini al cruscotto di uno di loro: il gruppo ripiegato si riapre. Poi, dentro, resta com'è.
+        ripiega(true);
+        arrivo({ detail: { page: { url: '/condomini?pagina=2' }, type: 'visit' } });
+        expect(ripiegato.value).toBe(true);
+        arrivo({ detail: { page: { url: '/admin/gestionale/7' }, type: 'visit' } });
+        expect(ripiegato.value).toBe(false);
+        ripiega(true);
+        arrivo({ detail: { page: { url: '/admin/gestionale/7/immobili' }, type: 'visit' } });
+        arrivo({ detail: { page: { url: '/admin/gestionale/7' }, type: 'visit' } });
+        expect(ripiegato.value).toBe(true);
     });
 });

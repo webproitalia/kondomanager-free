@@ -10,6 +10,15 @@
  * Si aggiorna ogni volta che si entra in un condominio. Se il condominio non c'è più (una sua sezione risponde «non
  * trovata», o non è più nell'elenco dei condomini) il ricordo si cancella e il menu chiede di sceglierne uno; se non c'è più
  * solo l'esercizio, si dimentica l'esercizio, e le voci che ne hanno bisogno portano all'elenco degli esercizi.
+ *
+ * ## Ripiegare il gruppo
+ *
+ * Chi lavora su altro non vuole sempre l'elenco delle sezioni spalancato: la freccia sulla riga di testa del gruppo lo
+ * ripiega, e resta la sola riga di testa. Anche questo si ricorda nel browser, utente per utente. Il gruppo si riapre da solo
+ * **solo** quando si apre o si cambia condominio con una scelta esplicita (dalla scelta del menu, dal selettore della barra,
+ * dalla ricerca rapida, o aprendo il cruscotto di un condominio dall'elenco dei condomini): non a ogni pagina.
+ *
+ * «Chiudi il condominio», nella scelta del condominio, toglie quello in uso: il menu torna a «Scegli un condominio».
  */
 import { ref } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
@@ -22,11 +31,15 @@ export interface CondominioInUso {
 
 // Fuori dalla funzione: è lo stesso per il menu, la ricerca e la testata, e vale per tutta la visita.
 const inUso = ref<CondominioInUso | null>(null);
+/** Il gruppo del condominio è ripiegato: nel menu resta la sola riga di testa. */
+const ripiegato = ref(false);
 let lettoPer: string | null = null;
 let inAscolto = false;
 let ultimaDestinazione = '';
+let paginaPrima = '';
 
 const chiave = (utente: string) => `km-condominio-in-uso:${utente}`;
+const chiaveRipiegato = (utente: string) => `km-condominio-ripiegato:${utente}`;
 
 function leggi(utente: string): CondominioInUso | null {
     try {
@@ -57,12 +70,38 @@ function scrivi(utente: string, condominio: CondominioInUso | null): void {
     }
 }
 
+function leggiRipiegato(utente: string): boolean {
+    try {
+        return localStorage.getItem(chiaveRipiegato(utente)) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+function ripiega(valore: boolean): void {
+    if (ripiegato.value === valore) {
+        return;
+    }
+    ripiegato.value = valore;
+    try {
+        // Aperto è come nasce: non serve ricordarlo.
+        if (valore) {
+            localStorage.setItem(chiaveRipiegato(lettoPer ?? ''), 'true');
+        } else {
+            localStorage.removeItem(chiaveRipiegato(lettoPer ?? ''));
+        }
+    } catch {
+        // Vale lo stesso, fino alla prossima pagina intera.
+    }
+}
+
 export function useCondominioInUso() {
     const page = usePage();
     const utente = String((page.props.auth as { user?: { id?: string | number } } | undefined)?.user?.id ?? '');
 
     if (lettoPer !== utente) {
         inUso.value = leggi(utente);
+        ripiegato.value = leggiRipiegato(utente);
         lettoPer = utente;
     }
 
@@ -93,7 +132,22 @@ export function useCondominioInUso() {
         }
     };
 
-    return { inUso, ricorda, dimentica, controllaCon };
+    /** Si apre o si cambia condominio con una scelta esplicita: se il gruppo era ripiegato, si riapre. */
+    const riapri = (): void => ripiega(false);
+
+    return { inUso, ripiegato, ricorda, dimentica, controllaCon, ripiega, riapri };
+}
+
+/**
+ * Si è arrivati a una pagina. Aprire un condominio da fuori — il suo cruscotto: dall'elenco dei condomini, dalla dashboard,
+ * dalla ricerca — è una scelta esplicita, e il gruppo ripiegato si riapre. Non lo riaprono le altre pagine del condominio (ci
+ * si arriva seguendo un collegamento qualunque), il cruscotto del condominio in cui si è già, né il «torna indietro».
+ */
+export function arrivoA(da: string, a: string, tipo: 'initial' | 'visit' | 'history'): void {
+    const cruscotto = a.split(/[?#]/)[0].replace(/\/+$/, '').match(/\/gestionale\/(\d+)$/);
+    if (tipo === 'visit' && cruscotto && ! new RegExp(`/gestionale/${cruscotto[1]}(/|$)`).test(da)) {
+        ripiega(false);
+    }
 }
 
 /**
@@ -124,14 +178,22 @@ export function paginaNonTrovata(percorso: string): void {
 }
 
 /**
- * L'ascolto delle pagine non trovate: lo avvia l'impalcatura (`ImpalcaturaLaterale.vue`), una volta sola per visita.
- * Quale pagina non è stata trovata lo dice l'ultima visita partita (le letture in anticipo non contano).
+ * L'ascolto delle pagine: lo avvia l'impalcatura (`ImpalcaturaLaterale.vue`), una volta sola per visita. Serve a due cose:
+ * cancellare il ricordo quando una sezione del condominio non si trova (quale pagina non è stata trovata lo dice l'ultima
+ * visita partita: le letture in anticipo non contano), e riaprire il gruppo quando si apre un condominio da fuori.
  */
 export function ascoltaCondominioInUso(): void {
     if (inAscolto || typeof window === 'undefined') {
         return;
     }
     inAscolto = true;
+    paginaPrima = window.location.pathname;
+    router.on('navigate', (evento) => {
+        const { page, type } = (evento as { detail: { page: { url: string }; type: 'initial' | 'visit' | 'history' } }).detail;
+        const ora = page.url.split(/[?#]/)[0];
+        arrivoA(paginaPrima, ora, type);
+        paginaPrima = ora;
+    });
     router.on('before', (evento) => {
         const visita = (evento as { detail: { visit: { url: URL | string; prefetch?: boolean } } }).detail.visit;
         if (! visita.prefetch) {
@@ -148,5 +210,6 @@ export function ascoltaCondominioInUso(): void {
 /** Per i test: dimentica tutto, anche per quale utente si era letto. */
 export function azzeraCondominioInUso(): void {
     inUso.value = null;
+    ripiegato.value = false;
     lettoPer = null;
 }
