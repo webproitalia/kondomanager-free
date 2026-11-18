@@ -867,3 +867,27 @@ it('la migrazione del menu dell\'aspetto si riprende e non tocca una scelta già
     $migration->up();
     expect($valore())->toBe(json_encode('laterale'))->and($quante())->toBe(1);
 });
+
+it('la migrazione delle schede dell\'aspetto si riprende e non tocca una scelta già scritta', function () {
+    $path = database_path('settings/2026_11_18_110000_add_schede_to_aspetto_settings.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_18_110000_add_schede_to_aspetto_settings');
+    $migration = require $path;
+    $valore = fn () => DB::table('settings')->where('group', 'aspetto')->where('name', 'schede')->value('payload');
+    $quante = fn () => DB::table('settings')->where('group', 'aspetto')->where('name', 'schede')->count();
+    // Di serie le schede si aprono di lato.
+    expect($valore())->toBe(json_encode('lato'))->and($quante())->toBe(1);
+
+    // Lo studio le vuole a pagina intera: la ripresa non lo riporta al predefinito, e non raddoppia la riga.
+    DB::table('settings')->where('group', 'aspetto')->where('name', 'schede')->update(['payload' => json_encode('pagina')]);
+    $migration->up();
+    $migration->up();
+    expect($valore())->toBe(json_encode('pagina'))->and($quante())->toBe(1);
+
+    // Il menu, il colore e gli angoli, che sono di altre migrazioni, restano dove sono.
+    $migration->down();
+    $migration->down();
+    expect($quante())->toBe(0)
+        ->and(DB::table('settings')->where('group', 'aspetto')->whereIn('name', ['colore', 'angoli', 'menu'])->count())->toBe(3);
+    $migration->up();
+    expect($valore())->toBe(json_encode('lato'))->and($quante())->toBe(1);
+});

@@ -202,6 +202,11 @@
   background: hsl(0 0% 100%);
 }
 
+/* Nel menu aperto le icone in fondo (impostazioni, guida) stanno accanto all'utente, non sul bordo: lì la tacca non serve. */
+[data-menu-chiuso='false'] [data-menu-fondo] .km-tacca {
+  display: none;
+}
+
 /*
  * Richiudere e riaprire il menu dal menu stesso.
  * Il bordo destro è tutto cliccabile (un filo che si accende al passaggio del mouse); a metà altezza una linguetta del colore
