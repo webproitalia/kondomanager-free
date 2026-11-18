@@ -79,6 +79,70 @@
   pointer-events: none;
 }
 
+/* La voce accesa a menu chiuso: una tacca chiara sul bordo sinistro, come nelle barre a sole icone. */
+.km-tacca {
+  position: absolute;
+  left: -0.625rem;
+  top: 50%;
+  height: 1.25rem;
+  width: 3px;
+  transform: translateY(-50%);
+  border-radius: 0 3px 3px 0;
+  background: hsl(0 0% 100%);
+}
+
+/*
+ * Richiudere e riaprire il menu dal menu stesso.
+ * Il bordo destro è tutto cliccabile (un filo che si accende al passaggio del mouse); a metà altezza una linguetta del colore
+ * del menu sporge nell'area di lavoro, con la freccia che dice da che parte va.
+ */
+.km-menu-bordo {
+  position: absolute;
+  inset-block: 0;
+  right: -6px;
+  width: 12px;
+  z-index: 1;
+}
+.km-menu-bordo::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 5px;
+  width: 2px;
+  background: transparent;
+  transition: background-color 0.15s ease;
+}
+.km-menu-bordo:hover::after,
+.km-menu-linguetta:hover ~ .km-menu-bordo::after {
+  background: var(--km-menu-attiva);
+}
+
+.km-menu-linguetta {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  z-index: 2;
+  display: flex;
+  height: 3.25rem;
+  width: 14px;
+  transform: translateY(-50%);
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 8px 8px 0;
+  background: var(--km-menu-fondo);
+  color: hsl(0 0% 100% / 0.75);
+  box-shadow: 2px 0 6px hsl(0 0% 0% / 0.18);
+  transition: width 0.15s ease, right 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+.km-menu-linguetta:hover,
+.km-menu-linguetta:focus-visible {
+  right: -18px;
+  width: 18px;
+  background: var(--km-menu-attiva);
+  color: hsl(0 0% 100%);
+  outline: none;
+}
+
 /* L'icona della sezione: un quadratino arrotondato del colore della sezione (`--c`), con l'icona bianca e un filo di rilievo. */
 .km-icona {
   background: linear-gradient(180deg, color-mix(in srgb, var(--c) 86%, white) 0%, var(--c) 100%);
@@ -115,9 +179,139 @@
   }
 }
 
+/* ─── La scheda laterale ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/*
+ * La scheda di una persona, di un'unità o un modulo si aprono in un pannello che entra da destra, sopra la pagina in cui si è
+ * (`resources/js/components/scheda/schedaLaterale.ts`). Sotto c'è la pagina di prima, ferma (`.km-scheda-fondo`), con un velo;
+ * il pannello è la stessa area di lavoro (`.km-lavoro`) messa a destra, e scorre da sé.
+ */
+.km-scheda-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.km-scheda-velo {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  background: hsl(var(--km-tinta) 30% 7% / 0.4);
+}
+
+.km-scheda {
+  position: fixed;
+  inset-block: 0;
+  right: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  /* Comoda per le pagine di oggi, pensate a tutta larghezza: circa due terzi dello schermo, mai sotto i 62rem dove ci stanno. */
+  width: min(calc(100vw - 2.5rem), clamp(62rem, 70vw, 76rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: -1px 0 0 hsl(0 0% 0% / 0.08), -24px 0 60px -12px hsl(0 0% 0% / 0.35);
+  /* Chi resta agganciato in cima alla pagina si ferma sotto la testata della scheda. */
+  --km-barra: 3rem;
+}
+.km-scheda:focus {
+  outline: none;
+}
+
+.km-scheda-testata {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  height: 3rem;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  padding: 0 0.625rem 0 1.25rem;
+  backdrop-filter: blur(10px);
+}
+
+/* Nella scheda i riquadri di spiegazione della pagina non ci sono: si va dritti al contenuto. A pagina intera restano. */
+.km-scheda [data-guide-pagina] {
+  display: none;
+}
+
+/* Sul telefono, e dove lo schermo è stretto, la scheda è a tutto schermo. */
+@media (max-width: 900px) {
+  .km-scheda {
+    width: 100vw;
+    box-shadow: none;
+  }
+}
+
+/* Il pannello entra da destra e, chiudendo, esce; il velo compare e scompare con lui. */
+@keyframes km-scheda-entra {
+  from {
+    transform: translateX(3.5rem);
+    opacity: 0;
+  }
+}
+@keyframes km-scheda-esce {
+  to {
+    transform: translateX(3.5rem);
+    opacity: 0;
+  }
+}
+@keyframes km-velo-entra {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes km-velo-esce {
+  to {
+    opacity: 0;
+  }
+}
+.km-scheda[data-fase='apertura'] {
+  animation: km-scheda-entra 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.km-scheda[data-fase='chiusura'] {
+  animation: km-scheda-esce 0.18s ease-in forwards;
+}
+.km-scheda-velo[data-fase='apertura'] {
+  animation: km-velo-entra 0.2s ease-out;
+}
+.km-scheda-velo[data-fase='chiusura'] {
+  animation: km-velo-esce 0.18s ease-in forwards;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .km-scheda,
+  .km-scheda-velo {
+    animation-duration: 0.01s !important;
+  }
+}
+
+/*
+ * Dove le barre di scorrimento occupano spazio: con la scheda aperta la pagina non scorre più, e senza questo la barra
+ * sparirebbe allargando di colpo la pagina di sotto. Resta il suo posto, vuoto.
+ */
+html.km-scheda-con-barra {
+  overflow-y: scroll;
+}
+
 @media print {
-  /* Su carta: né il menu né la barra, e il foglio bianco. */
+  /* Su carta: né il menu né la barra, e il foglio bianco. Della scheda si stampa la pagina, non il pannello. */
   .km-lavoro {
     background-color: #fff !important;
+  }
+  .km-scheda-fondo,
+  .km-scheda-velo,
+  .km-scheda-testata {
+    display: none !important;
+  }
+  .km-scheda {
+    position: static;
+    width: auto;
+    overflow: visible;
+    box-shadow: none;
   }
 }

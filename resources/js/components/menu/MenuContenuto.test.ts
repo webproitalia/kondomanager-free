@@ -21,6 +21,13 @@ vi.mock('@inertiajs/vue3', () => ({
 }));
 vi.mock('laravel-vue-i18n', async () => ({ trans: (await import('./provaTraduzioni')).tradotto }));
 
+const menu = vi.hoisted(() => ({ toggleSidebar: vi.fn(), telefono: false }));
+vi.mock('@/components/ui/sidebar', async () => {
+    const { ref } = await import('vue');
+
+    return { useSidebar: () => ({ toggleSidebar: menu.toggleSidebar, isMobile: ref(menu.telefono) }) };
+});
+
 const MenuContenuto = (await import('./MenuContenuto.vue')).default;
 
 // I suggerimenti e gli elenchi a comparsa: contenitori che mostrano il loro contenuto.
@@ -36,7 +43,7 @@ const TUTTI = ['Accesso pannello amministratore', 'Gestisci impostazioni general
     'Visualizza comunicazioni', 'Visualizza segnalazioni', 'Visualizza documenti archivio', 'Visualizza allegati segnalazioni', 'Importa dati'];
 
 let w: VueWrapper | null = null;
-afterEach(() => { w?.unmount(); w = null; localStorage.clear(); });
+afterEach(() => { w?.unmount(); w = null; localStorage.clear(); menu.toggleSidebar.mockClear(); menu.telefono = false; });
 
 function monta(url: string, props: Record<string, unknown> = {}, altro: Record<string, unknown> = {}) {
     pagina.url = url;
@@ -124,12 +131,40 @@ describe('il menu aperto, dentro un condominio', () => {
     });
 });
 
+describe('richiudere e riaprire il menu dal menu stesso', () => {
+    test('aperto: accanto al nome c\'è la freccia che lo richiude', async () => {
+        const aperto = monta('/admin/dashboard');
+        expect(aperto.find('[data-menu-riapri]').exists()).toBe(false);
+        const freccia = aperto.get('[data-menu-richiudi]');
+        expect(freccia.attributes('aria-label')).toBe('Richiudi il menu');
+        await freccia.trigger('click');
+        expect(menu.toggleSidebar).toHaveBeenCalledTimes(1);
+    });
+
+    test('chiuso: sotto il marchio c\'è la freccia che lo riapre', async () => {
+        const chiuso = monta('/admin/dashboard', { chiuso: true });
+        expect(chiuso.find('[data-menu-richiudi]').exists()).toBe(false);
+        const freccia = chiuso.get('[data-menu-riapri]');
+        expect(freccia.attributes('aria-label')).toBe('Apri il menu');
+        await freccia.trigger('click');
+        expect(menu.toggleSidebar).toHaveBeenCalledTimes(1);
+    });
+
+    test('nel cassetto del telefono la freccia è una × che lo chiude', () => {
+        menu.telefono = true;
+        expect(monta('/admin/dashboard').get('[data-menu-richiudi]').attributes('aria-label')).toBe('Chiudi il menu');
+    });
+});
+
 describe('il menu chiuso', () => {
     test('solo le icone: nessun nome scritto, ma ogni voce dice il suo nome a chi non la vede', () => {
         const menu = monta('/admin/eventi', { chiuso: true });
         expect(menu.get('nav').text()).toBe('');
         expect(menu.get('[data-menu-voce="agenda"]').attributes('aria-label')).toBe('Agenda');
         expect(menu.get('[data-menu-voce="agenda"]').attributes('data-attiva')).toBe('true');
+        // La voce accesa ha anche la tacca sul bordo, e solo lei.
+        expect(menu.findAll('.km-tacca').length).toBe(1);
+        expect(menu.get('[data-menu-voce="agenda"]').find('.km-tacca').exists()).toBe(true);
         expect(menu.get('[data-menu-utente]').text()).toBe('AB');
     });
 

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-{{-- data-km-menu: dove sta il menu, scelto in Impostazioni → Aspetto (Web Pro Italia): lo legge resources/js/composables/useImpalcatura.ts --}}
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-km-menu="{{ \App\Support\Tema::menu() }}">
+{{-- data-km-menu e data-km-schede: dove sta il menu e dove si aprono le schede, scelti in Impostazioni → Aspetto (Web Pro Italia): li legge resources/js/composables/useImpalcatura.ts --}}
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-km-menu="{{ \App\Support\Tema::menu() }}" data-km-schede="{{ \App\Support\Tema::schede() }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">

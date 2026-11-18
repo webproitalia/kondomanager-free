@@ -12,6 +12,21 @@
  */
 export type Impalcatura = 'laterale' | 'alto';
 
+/**
+ * Dove si aprono le schede (la scheda di una persona, un modulo): «lato», in una scheda che entra da destra sopra la pagina in
+ * cui si è, o «pagina», a pagina intera come sempre. Vale solo con il menu laterale, e solo se la pagina lo dice
+ * (`<html data-km-schede="lato">`): è la stessa regola del menu.
+ */
+export type Schede = 'lato' | 'pagina';
+
+export function schedeScelte(): Schede {
+    if (typeof document === 'undefined' || impalcaturaScelta() !== 'laterale') {
+        return 'pagina';
+    }
+
+    return document.documentElement.dataset.kmSchede === 'lato' ? 'lato' : 'pagina';
+}
+
 export function impalcaturaScelta(): Impalcatura {
     if (typeof document === 'undefined') {
         return 'alto';
@@ -23,5 +38,5 @@ export function impalcaturaScelta(): Impalcatura {
 export function useImpalcatura() {
     const impalcatura = impalcaturaScelta();
 
-    return { impalcatura, menuLaterale: impalcatura === 'laterale' };
+    return { impalcatura, menuLaterale: impalcatura === 'laterale', schedeDiLato: schedeScelte() === 'lato' };
 }

@@ -470,6 +470,11 @@ return [
         'menu_description' => 'Dónde están las secciones de la aplicación.',
         'menu_laterale_description' => 'Las secciones en una lista a la izquierda, que se pliega a solo iconos.',
         'menu_alto_description' => 'La barra horizontal de arriba, como antes.',
+        'schede_title' => 'Fichas y formularios',
+        'schede_description' => 'Dónde se abren la ficha de una persona, de una unidad y los formularios.',
+        'schede_lato_description' => 'En un panel que entra por la derecha, sin dejar la página en la que estás.',
+        'schede_pagina_description' => 'A página completa, como antes.',
+        'schede_solo_laterale' => 'Los paneles laterales solo existen con el menú lateral.',
     ],
 
 ];

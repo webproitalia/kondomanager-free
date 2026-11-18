@@ -40,6 +40,8 @@ const titoloAlPassaggio = computed(() => {
     <Tooltip v-if="soloIcona" :delay-duration="0">
         <TooltipTrigger as-child>
             <component :is="voce.esterna ? 'a' : Link" v-bind="attributi" class="km-voce relative flex size-10 items-center justify-center rounded-lg" :aria-label="voce.titolo">
+                <!-- La voce accesa: oltre al fondo, una tacca chiara sul bordo del menu -->
+                <span v-if="voce.attiva" class="km-tacca" />
                 <IconaSezione :icona="voce.icona" :colore="voce.colore" />
                 <span v-if="voce.contatore" class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold leading-none text-amber-950 tabular-nums">{{ voce.contatore }}</span>
                 <span v-else-if="voce.avviso" class="absolute right-1 top-1 size-2 rounded-full bg-orange-400 ring-2 ring-[var(--km-menu-fondo)]" />

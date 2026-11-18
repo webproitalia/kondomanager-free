@@ -60,6 +60,7 @@ const ricorda = (valore: boolean) => {
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                         <button type="button" class="km-voce relative flex size-10 items-center justify-center rounded-lg" :data-menu-voce="voce.chiave" :data-attiva="voce.attiva ? 'true' : 'false'" :aria-label="voce.titolo">
+                            <span v-if="voce.attiva" class="km-tacca" />
                             <IconaSezione :icona="voce.icona" :colore="voce.colore" />
                         </button>
                     </DropdownMenuTrigger>

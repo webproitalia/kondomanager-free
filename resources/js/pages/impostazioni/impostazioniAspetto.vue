@@ -2,6 +2,7 @@
 // Impostazioni → Aspetto (Web Pro Italia, 09/11/2026): colore principale e angoli dell'installazione.
 // L'anteprima è immediata (stesse variabili CSS del layout); salvando, la pagina si ricarica e l'aspetto vale ovunque.
 // Dal 18/11/2026 anche dove sta il menu: laterale (predefinito) o in alto, com'era. Il menu cambia al salvataggio.
+// E dove si aprono le schede e i moduli: di lato (predefinito), senza lasciare la pagina, o a pagina intera. Solo con il menu laterale.
 import { computed, watch, onBeforeUnmount } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
@@ -15,8 +16,8 @@ import type { BreadcrumbItem } from '@/types'
 
 interface Scelta { valore: string; nome: string; campione?: string }
 interface Props {
-  aspetto: { colore: string; angoli: string; menu: string }
-  scelte: { colori: Scelta[]; angoli: Scelta[]; menu: Scelta[]; anteprime: Record<string, Record<string, string>> }
+  aspetto: { colore: string; angoli: string; menu: string; schede: string }
+  scelte: { colori: Scelta[]; angoli: Scelta[]; menu: Scelta[]; schede: Scelta[]; anteprime: Record<string, Record<string, string>> }
 }
 const props = defineProps<Props>()
 const page = usePage()
@@ -27,7 +28,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: trans('impostazioni.header.aspetto_title'), href: '/impostazioni/aspetto' },
 ])
 
-const form = useForm({ colore: props.aspetto.colore, angoli: props.aspetto.angoli, menu: props.aspetto.menu })
+const form = useForm({ colore: props.aspetto.colore, angoli: props.aspetto.angoli, menu: props.aspetto.menu, schede: props.aspetto.schede })
 
 const anteprima = () => {
   const css = props.scelte.anteprime?.[form.colore]?.[form.angoli] ?? ''
@@ -138,6 +139,47 @@ const submit = () => form.post('/impostazioni/aspetto', {
                   </span>
                 </button>
               </div>
+            </div>
+
+            <div class="border rounded-lg p-4 space-y-4">
+              <div>
+                <label class="block text-sm font-medium leading-none mb-1">{{ trans('impostazioni.aspetto.schede_title') }}</label>
+                <p class="text-sm text-muted-foreground">{{ trans('impostazioni.aspetto.schede_description') }}</p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button v-for="sc in scelte.schede" :key="sc.valore" type="button" @click="form.schede = sc.valore"
+                  class="flex items-center gap-4 rounded-lg border p-3 text-left transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                  :class="form.schede === sc.valore && form.menu === 'laterale' ? 'ring-2 ring-ring border-transparent' : ''"
+                  :disabled="form.menu !== 'laterale'"
+                  :aria-pressed="form.schede === sc.valore" :data-schede-scelta="sc.valore">
+                  <!-- Un disegnino: la scheda che entra da destra sopra la pagina, oppure la pagina intera -->
+                  <span v-if="sc.valore === 'lato'" class="relative flex h-14 w-24 shrink-0 overflow-hidden rounded-md border bg-muted" aria-hidden="true">
+                    <span class="w-4 bg-[var(--km-menu-fondo)]" />
+                    <span class="m-1.5 flex-1 rounded-sm border bg-background opacity-60" />
+                    <span class="absolute inset-y-0 right-0 flex w-[58%] flex-col gap-1 border-l bg-background p-1.5 shadow-[-6px_0_10px_-4px_rgb(0_0_0/0.25)]">
+                      <span class="h-1.5 w-2/3 rounded-sm bg-primary" />
+                      <span class="h-1 rounded-sm bg-foreground/20" />
+                      <span class="h-1 w-4/5 rounded-sm bg-foreground/20" />
+                    </span>
+                  </span>
+                  <span v-else class="flex h-14 w-24 shrink-0 overflow-hidden rounded-md border bg-muted" aria-hidden="true">
+                    <span class="w-4 bg-[var(--km-menu-fondo)]" />
+                    <span class="m-1.5 flex flex-1 flex-col gap-1 rounded-sm border bg-background p-1.5">
+                      <span class="h-1.5 w-1/2 rounded-sm bg-primary" />
+                      <span class="h-1 rounded-sm bg-foreground/20" />
+                      <span class="h-1 w-4/5 rounded-sm bg-foreground/20" />
+                    </span>
+                  </span>
+                  <span class="min-w-0">
+                    <span class="flex items-center gap-1.5 text-sm font-medium">
+                      {{ sc.nome }}
+                      <Check v-if="form.schede === sc.valore && form.menu === 'laterale'" class="size-4 text-primary" />
+                    </span>
+                    <span class="mt-0.5 block text-xs text-muted-foreground">{{ trans(`impostazioni.aspetto.schede_${sc.valore}_description`) }}</span>
+                  </span>
+                </button>
+              </div>
+              <p v-if="form.menu !== 'laterale'" class="text-xs text-muted-foreground">{{ trans('impostazioni.aspetto.schede_solo_laterale') }}</p>
             </div>
 
             <div class="rounded-lg border p-4 flex flex-wrap items-center gap-3">

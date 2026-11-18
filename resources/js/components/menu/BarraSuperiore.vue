@@ -16,6 +16,7 @@ import { usePermission } from '@/composables/permissions';
 import { Permission } from '@/enums/Permission';
 import PercorsoStudio from './PercorsoStudio.vue';
 import RicercaRapida from './RicercaRapida.vue';
+import { scorciatoia, suMac } from './tasti';
 import type { BreadcrumbItemType } from '@/types';
 
 withDefaults(defineProps<{
@@ -28,7 +29,6 @@ const { hasPermission, getRolePrefix } = usePermission();
 const { toggleSidebar, state, isMobile } = useSidebar();
 
 const ricercaAperta = ref(false);
-const suMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
 
 // La casella delle attività si apre con «Visualizza scadenze in agenda», come sulla dashboard (Coda 402), ed è del pannello.
 const casella = computed(() => (getRolePrefix() === 'admin' && hasPermission([Permission.VIEW_EVENTS])
@@ -54,7 +54,7 @@ const classeTasto = 'relative inline-flex size-9 shrink-0 items-center justify-c
                     <PanelLeft class="size-[1.15rem]" />
                 </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">{{ tastoMenu }} <span class="ml-1 opacity-60">{{ suMac ? '⌘B' : 'Ctrl+B' }}</span></TooltipContent>
+            <TooltipContent side="bottom">{{ tastoMenu }} <span class="ml-1 opacity-60">{{ scorciatoia('B') }}</span></TooltipContent>
         </Tooltip>
 
         <span class="mx-1 hidden h-5 w-px shrink-0 bg-border sm:block" />

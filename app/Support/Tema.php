@@ -54,6 +54,30 @@ class Tema
         'alto'     => ['nome' => 'In alto'],
     ];
 
+    /**
+     * Dove si aprono la scheda di una persona, di un'unità e i moduli: in una scheda che entra da destra, sopra la pagina in cui
+     * si è (predefinito), o a pagina intera come sempre. La scheda laterale c'è solo con il menu laterale.
+     */
+    public const SCHEDE = [
+        'lato'   => ['nome' => 'Di lato'],
+        'pagina' => ['nome' => 'A pagina intera'],
+    ];
+
+    /** Le schede salvate (per il layout): «pagina» con il menu in alto, e «lato» anche prima della migrazione delle impostazioni. */
+    public static function schede(): string
+    {
+        if (self::menu() !== 'laterale') {
+            return 'pagina';
+        }
+        try {
+            $schede = app(AspettoSettings::class)->schede;
+        } catch (\Throwable) {
+            return 'lato';
+        }
+
+        return isset(self::SCHEDE[$schede]) ? $schede : 'lato';
+    }
+
     /** Il menu salvato (per il layout): «laterale» anche prima della migrazione delle impostazioni, o a database spento. */
     public static function menu(): string
     {
@@ -138,6 +162,7 @@ class Tema
             'colori' => collect(self::COLORI)->map(fn ($c, $k) => ['valore' => $k, 'nome' => $c['nome'], 'campione' => $c['campione']])->values(),
             'angoli' => collect(self::ANGOLI)->map(fn ($a, $k) => ['valore' => $k, 'nome' => $a['nome']])->values(),
             'menu' => collect(self::MENU)->map(fn ($m, $k) => ['valore' => $k, 'nome' => $m['nome']])->values(),
+            'schede' => collect(self::SCHEDE)->map(fn ($m, $k) => ['valore' => $k, 'nome' => $m['nome']])->values(),
             // anteprima immediata: il CSS di ogni combinazione colore/angoli
             'anteprime' => collect(self::COLORI)->keys()->mapWithKeys(fn ($c) => [
                 $c => collect(self::ANGOLI)->keys()->mapWithKeys(fn ($a) => [$a => self::cssPer($c, $a)]),

@@ -467,6 +467,11 @@ return [
         'menu_description' => 'Dove stanno le sezioni del gestionale.',
         'menu_laterale_description' => 'Le sezioni in un elenco a sinistra, che si richiude a sole icone.',
         'menu_alto_description' => 'La barra orizzontale in alto, com\'era prima.',
+        'schede_title' => 'Schede e moduli',
+        'schede_description' => 'Dove si aprono la scheda di una persona, di un\'unità e i moduli da compilare.',
+        'schede_lato_description' => 'In una scheda che entra da destra, senza lasciare la pagina in cui sei.',
+        'schede_pagina_description' => 'A pagina intera, com\'era prima.',
+        'schede_solo_laterale' => 'Le schede di lato ci sono solo con il menu laterale.',
     ],
 
 ];

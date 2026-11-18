@@ -470,6 +470,11 @@ return [
         'menu_description' => 'Where the sections of the application are.',
         'menu_laterale_description' => 'The sections in a list on the left, which collapses to icons only.',
         'menu_alto_description' => 'The horizontal bar at the top, as it was before.',
+        'schede_title' => 'Records and forms',
+        'schede_description' => 'Where a person, a unit and the forms to fill in open.',
+        'schede_lato_description' => 'In a panel that slides in from the right, without leaving the page you are on.',
+        'schede_pagina_description' => 'On a full page, as it was before.',
+        'schede_solo_laterale' => 'Side panels are available only with the side menu.',
     ],
 
 ];

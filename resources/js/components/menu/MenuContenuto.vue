@@ -9,15 +9,17 @@
  */
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Building2, ChevronsUpDown, LayoutGrid } from 'lucide-vue-next';
+import { Building2, ChevronsLeft, ChevronsRight, ChevronsUpDown, LayoutGrid, X } from 'lucide-vue-next';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useSidebar } from '@/components/ui/sidebar';
 import { getInitials } from '@/composables/useInitials';
 import { usePermission } from '@/composables/permissions';
 import IconaSezione from './IconaSezione.vue';
+import { scorciatoia } from './tasti';
 import VoceConFiglie from './VoceConFiglie.vue';
 import VoceMenuRiga from './VoceMenu.vue';
 import { useVociMenu } from './vociMenu';
@@ -32,6 +34,8 @@ const props = defineProps<{
 
 const page = usePage();
 const { generatePath } = usePermission();
+// Il comando per richiudere e riaprire sta sul menu stesso (oltre che nella barra in alto e sul suo bordo): lì lo si cerca.
+const { toggleSidebar, isMobile } = useSidebar();
 const { studio, gruppoCondominio, fondo, nomeStudio } = useVociMenu({ gestionale: props.gestionale });
 
 const utente = computed(() => (page.props.auth as Auth).user);
@@ -42,13 +46,36 @@ const studioAcceso = computed(() => studio.value.some((v) => v.attiva));
 <template>
     <div class="flex h-full min-h-0 flex-col" :data-menu-chiuso="chiuso ? 'true' : 'false'">
         <!-- Il marchio -->
-        <div class="flex h-14 shrink-0 items-center" :class="chiuso ? 'justify-center' : 'px-3.5'">
-            <Link :href="generatePath('dashboard')" class="flex min-w-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/40" :title="nomeApp">
+        <div class="flex h-14 shrink-0 items-center" :class="chiuso ? 'justify-center' : 'pl-3.5 pr-2'">
+            <Link :href="generatePath('dashboard')" class="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/40" :class="{ 'flex-none': chiuso }" :title="nomeApp">
                 <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--km-menu-attiva)] text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_1px_2px_hsl(0_0%_0%/0.3)]">
                     <AppLogoIcon class="size-5" />
                 </span>
                 <span v-if="! chiuso" class="truncate text-[15px] font-semibold tracking-tight text-white">{{ nomeApp }}</span>
             </Link>
+
+            <!-- Richiudere: la freccia accanto al nome (nel cassetto del telefono, la × che lo chiude) -->
+            <Tooltip v-if="! chiuso" :delay-duration="300">
+                <TooltipTrigger as-child>
+                    <button type="button" class="km-voce ml-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-white/70 hover:text-white" data-menu-richiudi :aria-label="isMobile ? 'Chiudi il menu' : 'Richiudi il menu'" @click="toggleSidebar">
+                        <X v-if="isMobile" class="size-4" />
+                        <ChevronsLeft v-else class="size-[1.15rem]" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{{ isMobile ? 'Chiudi il menu' : 'Richiudi il menu' }}<span v-if="! isMobile" class="ml-1.5 opacity-60">{{ scorciatoia('B') }}</span></TooltipContent>
+            </Tooltip>
+        </div>
+
+        <!-- Riaprire: con il menu chiuso, la freccia subito sotto il marchio -->
+        <div v-if="chiuso" class="flex shrink-0 justify-center pb-1">
+            <Tooltip :delay-duration="0">
+                <TooltipTrigger as-child>
+                    <button type="button" class="km-voce flex h-7 w-10 items-center justify-center rounded-lg text-white/70 hover:text-white" data-menu-riapri aria-label="Apri il menu" @click="toggleSidebar">
+                        <ChevronsRight class="size-[1.15rem]" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" :side-offset="10">Apri il menu<span class="ml-1.5 opacity-60">{{ scorciatoia('B') }}</span></TooltipContent>
+            </Tooltip>
         </div>
 
         <nav class="km-menu-scorre min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3" aria-label="Menu principale">

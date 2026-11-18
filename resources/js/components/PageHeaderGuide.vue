@@ -270,6 +270,7 @@ function selectEsercizio(esercizioId: number | string) {
 
     <div
       v-if="guides.length > 0"
+      data-guide-pagina
       class="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 rounded-2xl border border-slate-200/60 bg-slate-50/50 dark:border-slate-800/50 dark:bg-slate-900/20"
     >
       <div v-for="(guide, index) in guides" :key="index" class="space-y-3 relative" :class="{ 'md:px-6 md:border-l border-slate-200 dark:border-slate-800': index > 0 }">
