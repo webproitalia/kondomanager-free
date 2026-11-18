@@ -1631,7 +1631,8 @@ const printRipartoCapitoli = () => {
 
             <TabsContent :value="tab" class="mt-0 space-y-6">
               <template v-if="isReady">
-                <div class="overflow-x-auto border rounded-lg shadow-sm">
+                <!-- `isolate`: le colonne agganciate della matrice hanno livelli alti (fino a z-50) e, scorrendo la pagina, passerebbero sopra la barra fissa del menu laterale. -->
+                <div class="isolate overflow-x-auto border rounded-lg shadow-sm">
                   <table class="w-full text-sm border-collapse bg-white whitespace-nowrap min-w-[1000px] dark:bg-card">
                     <thead class="sticky top-0 bg-white z-20 shadow-sm dark:bg-card">
                       <tr class="border-b bg-gray-50/80 text-gray-500 dark:bg-neutral-900/80">

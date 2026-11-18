@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Impostazioni → Aspetto (Web Pro Italia, 09/11/2026): colore principale e angoli dell'installazione.
 // L'anteprima è immediata (stesse variabili CSS del layout); salvando, la pagina si ricarica e l'aspetto vale ovunque.
+// Dal 18/11/2026 anche dove sta il menu: laterale (predefinito) o in alto, com'era. Il menu cambia al salvataggio.
 import { computed, watch, onBeforeUnmount } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
@@ -14,8 +15,8 @@ import type { BreadcrumbItem } from '@/types'
 
 interface Scelta { valore: string; nome: string; campione?: string }
 interface Props {
-  aspetto: { colore: string; angoli: string }
-  scelte: { colori: Scelta[]; angoli: Scelta[]; anteprime: Record<string, Record<string, string>> }
+  aspetto: { colore: string; angoli: string; menu: string }
+  scelte: { colori: Scelta[]; angoli: Scelta[]; menu: Scelta[]; anteprime: Record<string, Record<string, string>> }
 }
 const props = defineProps<Props>()
 const page = usePage()
@@ -26,7 +27,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: trans('impostazioni.header.aspetto_title'), href: '/impostazioni/aspetto' },
 ])
 
-const form = useForm({ colore: props.aspetto.colore, angoli: props.aspetto.angoli })
+const form = useForm({ colore: props.aspetto.colore, angoli: props.aspetto.angoli, menu: props.aspetto.menu })
 
 const anteprima = () => {
   const css = props.scelte.anteprime?.[form.colore]?.[form.angoli] ?? ''
@@ -93,6 +94,49 @@ const submit = () => form.post('/impostazioni/aspetto', {
                   class="rounded-lg border px-4 py-2 text-sm transition hover:bg-accent"
                   :class="form.angoli === a.valore ? 'ring-2 ring-ring border-transparent font-medium' : ''"
                   :aria-pressed="form.angoli === a.valore">{{ a.nome }}</button>
+              </div>
+            </div>
+
+            <div class="border rounded-lg p-4 space-y-4">
+              <div>
+                <label class="block text-sm font-medium leading-none mb-1">{{ trans('impostazioni.aspetto.menu_title') }}</label>
+                <p class="text-sm text-muted-foreground">{{ trans('impostazioni.aspetto.menu_description') }}</p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button v-for="m in scelte.menu" :key="m.valore" type="button" @click="form.menu = m.valore"
+                  class="flex items-center gap-4 rounded-lg border p-3 text-left transition hover:bg-accent"
+                  :class="form.menu === m.valore ? 'ring-2 ring-ring border-transparent' : ''"
+                  :aria-pressed="form.menu === m.valore" :data-menu-scelta="m.valore">
+                  <!-- Un disegnino dell'impalcatura: il menu scuro a sinistra, oppure la barra in alto -->
+                  <span v-if="m.valore === 'laterale'" class="flex h-14 w-24 shrink-0 overflow-hidden rounded-md border bg-muted" aria-hidden="true">
+                    <span class="flex w-6 flex-col gap-1 bg-[var(--km-menu-fondo)] p-1">
+                      <span class="h-1.5 rounded-sm bg-[var(--km-menu-attiva)]" />
+                      <span class="h-1.5 rounded-sm bg-white/25" />
+                      <span class="h-1.5 rounded-sm bg-white/25" />
+                      <span class="h-1.5 rounded-sm bg-white/25" />
+                    </span>
+                    <span class="flex flex-1 flex-col">
+                      <span class="h-2.5 border-b bg-background" />
+                      <span class="m-1.5 flex-1 rounded-sm border bg-background" />
+                    </span>
+                  </span>
+                  <span v-else class="flex h-14 w-24 shrink-0 flex-col overflow-hidden rounded-md border bg-background" aria-hidden="true">
+                    <span class="flex h-3.5 items-center gap-1 border-b px-1.5">
+                      <span class="size-1.5 rounded-sm bg-primary" />
+                      <span class="h-1 w-3 rounded-sm bg-foreground/25" />
+                      <span class="h-1 w-3 rounded-sm bg-foreground/25" />
+                      <span class="h-1 w-3 rounded-sm bg-foreground/25" />
+                    </span>
+                    <span class="m-1.5 flex-1 rounded-sm border" />
+                  </span>
+                  <span class="min-w-0">
+                    <span class="flex items-center gap-1.5 text-sm font-medium">
+                      {{ m.nome }}
+                      <Check v-if="form.menu === m.valore" class="size-4 text-primary" />
+                    </span>
+                    <span class="mt-0.5 block text-xs text-muted-foreground">{{ trans(`impostazioni.aspetto.menu_${m.valore}_description`) }}</span>
+                  </span>
+                </button>
               </div>
             </div>
 

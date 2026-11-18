@@ -9,6 +9,9 @@ use App\Settings\AspettoSettings;
  * resources/css/app.css (primario, anello del focus, barra laterale, sfondo dei passaggi del mouse),
  * in chiaro e in scuro. «grafite» è l'aspetto originale di Kondomanager e non scrive niente.
  * I primari sono scuri abbastanza da tenere leggibile il testo bianco sui pulsanti.
+ *
+ * Dal 18/11/2026 il colore dà anche la tinta del menu laterale (`--km-tinta`, `--km-menu-*`): il fondo del menu è una versione
+ * molto scura del colore, la voce attiva lo usa pieno. Le variabili e i loro valori di «grafite» stanno in resources/css/menu-laterale.css.
  */
 class Tema
 {
@@ -45,6 +48,24 @@ class Tema
         'squadrati' => ['nome' => 'Squadrati', 'raggio' => '0.25rem'],
     ];
 
+    /** Dove sta il menu: l'impalcatura a menu laterale (predefinita) o la testata di sempre. */
+    public const MENU = [
+        'laterale' => ['nome' => 'Laterale'],
+        'alto'     => ['nome' => 'In alto'],
+    ];
+
+    /** Il menu salvato (per il layout): «laterale» anche prima della migrazione delle impostazioni, o a database spento. */
+    public static function menu(): string
+    {
+        try {
+            $menu = app(AspettoSettings::class)->menu;
+        } catch (\Throwable) {
+            return 'laterale';
+        }
+
+        return isset(self::MENU[$menu]) ? $menu : 'laterale';
+    }
+
     /** Il CSS dell'aspetto salvato (per il layout). */
     public static function css(): string
     {
@@ -63,7 +84,7 @@ class Tema
         $colore = self::COLORI[$chiaveColore] ?? self::COLORI['grafite'];
         $angoli = self::ANGOLI[$chiaveAngoli] ?? self::ANGOLI['standard'];
 
-        $chiaro = self::variabili($colore['chiaro'], '0 0% 98%');
+        $chiaro = self::variabili($colore['chiaro'], '0 0% 98%').self::variabiliMenu($colore['chiaro']);
         $scuro  = self::variabili($colore['scuro'], '0 0% 9%');
         if ($angoli['raggio']) {
             $chiaro .= "--radius:{$angoli['raggio']};";
@@ -94,12 +115,29 @@ class Tema
             ."--sidebar-accent:hsl({$v['a']});--sidebar-accent-foreground:hsl({$v['af']});";
     }
 
+    /**
+     * Il menu laterale prende la tinta del colore dello studio: il fondo è il colore molto scuro, la voce attiva il colore pieno
+     * (quello dei pulsanti in chiaro, anche nel tema scuro: il menu è scuro in tutti e due). «grafite» non scrive niente.
+     *
+     * @param array<string,string> $v
+     */
+    private static function variabiliMenu(array $v): string
+    {
+        if (! isset($v['p'])) {
+            return '';
+        }
+        $tinta = (int) strtok($v['p'], ' ');
+
+        return "--km-tinta:{$tinta};--km-menu-sat:42%;--km-menu-attiva:hsl({$v['p']});";
+    }
+
     /** Per la pagina delle impostazioni: chiave, nome e campione di ogni scelta. */
     public static function scelte(): array
     {
         return [
             'colori' => collect(self::COLORI)->map(fn ($c, $k) => ['valore' => $k, 'nome' => $c['nome'], 'campione' => $c['campione']])->values(),
             'angoli' => collect(self::ANGOLI)->map(fn ($a, $k) => ['valore' => $k, 'nome' => $a['nome']])->values(),
+            'menu' => collect(self::MENU)->map(fn ($m, $k) => ['valore' => $k, 'nome' => $m['nome']])->values(),
             // anteprima immediata: il CSS di ogni combinazione colore/angoli
             'anteprime' => collect(self::COLORI)->keys()->mapWithKeys(fn ($c) => [
                 $c => collect(self::ANGOLI)->keys()->mapWithKeys(fn ($a) => [$a => self::cssPer($c, $a)]),

@@ -130,7 +130,8 @@ const currentPath = window.location.pathname;
 
 <template>
     <div class="">
-        <NavSezione :items="topbarNavItems" una-riga class="mb-4" />
+        <!-- `km-voci-nel-menu` (Web Pro Italia): con il menu laterale aperto queste voci stanno nel menu, sotto «Movimenti», e la barra non si ripete; vedi resources/css/menu-laterale.css. -->
+        <NavSezione :items="topbarNavItems" una-riga class="mb-4 km-voci-nel-menu" />
 
         <!-- Main content -->
         <div class="w-full shadow ring-1 ring-black/5 md:rounded-lg p-4">

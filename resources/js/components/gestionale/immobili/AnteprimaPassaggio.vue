@@ -138,7 +138,7 @@ const dataBreve = (iso: string) => iso.split('-').reverse().join('/');
   <!-- Verifica a video della .50, su richiesta di Vincenzo: da desktop il pannello non supera l'altezza dello schermo e scorre al suo
        interno, con il titolo sempre in vista; le due voci della scelta, in fondo, si raggiungono senza scorrere tutta la pagina. Da
        telefono resta nella colonna, senza scorrimento interno. -->
-  <aside class="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] space-y-0 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden lg:overflow-y-auto">
+  <aside class="lg:sticky lg:top-[calc(var(--km-barra,0px)+1.5rem)] lg:max-h-[calc(100vh-3rem-var(--km-barra,0px))] space-y-0 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden lg:overflow-y-auto">
     <div class="lg:sticky lg:top-0 lg:z-10 px-5 py-4 border-b border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 lg:bg-slate-50 dark:lg:bg-slate-800 flex items-start gap-3">
       <div class="p-2 rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 shrink-0">
         <Scale class="w-4 h-4" />

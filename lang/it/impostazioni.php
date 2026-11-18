@@ -151,7 +151,7 @@ return [
      | ------------------------------------------------------------------ */
     'header' => [
         'aspetto_title' => 'Aspetto',
-        'aspetto_description' => 'Colore principale e forma degli angoli del gestionale',
+        'aspetto_description' => 'Colore principale, angoli e posizione del menu del gestionale',
         'installazione_title' => 'Questa installazione',
         'installazione_description' => 'Quanti condomini, quanto spazio e quali funzioni: i fatti di questa installazione',
         'settings_head' => 'Settings',
@@ -257,7 +257,7 @@ return [
      | ------------------------------------------------------------------ */
     'dialogs' => [
         'aspetto_title' => 'Aspetto',
-        'aspetto_description' => 'Colore principale e forma degli angoli del gestionale',
+        'aspetto_description' => 'Colore principale, angoli e posizione del menu del gestionale',
         'installazione_title' => 'Questa installazione',
         'installazione_description' => 'Limiti, spazio e funzioni attive di questa installazione',
         'general_settings_title' => 'Impostazioni generali',
@@ -463,6 +463,10 @@ return [
         'angoli_title' => 'Angoli',
         'angoli_description' => 'Quanto sono arrotondati riquadri e pulsanti.',
         'salva' => 'Salva',
+        'menu_title' => 'Menu',
+        'menu_description' => 'Dove stanno le sezioni del gestionale.',
+        'menu_laterale_description' => 'Le sezioni in un elenco a sinistra, che si richiude a sole icone.',
+        'menu_alto_description' => 'La barra orizzontale in alto, com\'era prima.',
     ],
 
 ];

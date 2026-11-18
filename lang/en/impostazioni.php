@@ -148,7 +148,7 @@ return [
      | ------------------------------------------------------------------ */
     'header' => [
         'aspetto_title' => 'Appearance',
-        'aspetto_description' => 'Main colour and corner style of the application',
+        'aspetto_description' => 'Main colour, corner style and menu position of the application',
         'installazione_title' => 'This installation',
         'installazione_description' => 'How many buildings, how much storage and which functions: the facts of this installation',
         'settings_head' => 'Settings',
@@ -254,7 +254,7 @@ return [
      | ------------------------------------------------------------------ */
     'dialogs' => [
         'aspetto_title' => 'Appearance',
-        'aspetto_description' => 'Main colour and corner style of the application',
+        'aspetto_description' => 'Main colour, corner style and menu position of the application',
         'installazione_title' => 'This installation',
         'installazione_description' => 'Limits, storage and enabled functions of this installation',
         'general_settings_title' => 'General settings',
@@ -466,6 +466,10 @@ return [
         'angoli_title' => 'Corners',
         'angoli_description' => 'How rounded cards and buttons are.',
         'salva' => 'Save',
+        'menu_title' => 'Menu',
+        'menu_description' => 'Where the sections of the application are.',
+        'menu_laterale_description' => 'The sections in a list on the left, which collapses to icons only.',
+        'menu_alto_description' => 'The horizontal bar at the top, as it was before.',
     ],
 
 ];

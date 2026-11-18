@@ -148,7 +148,7 @@ return [
      | ------------------------------------------------------------------ */
     'header' => [
         'aspetto_title' => 'Aparência',
-        'aspetto_description' => 'Cor principal e forma dos cantos',
+        'aspetto_description' => 'Cor principal, cantos e posição do menu',
         'installazione_title' => 'Esta instalação',
         'installazione_description' => 'Quantos condomínios, quanto espaço e que funções: os factos desta instalação',
         'settings_head' => 'Configurações',
@@ -254,7 +254,7 @@ return [
      | ------------------------------------------------------------------ */
     'dialogs' => [
         'aspetto_title' => 'Aparência',
-        'aspetto_description' => 'Cor principal e forma dos cantos',
+        'aspetto_description' => 'Cor principal, cantos e posição do menu',
         'installazione_title' => 'Esta instalação',
         'installazione_description' => 'Limites, espaço e funções ativas desta instalação',
         'general_settings_title' => 'Configurações gerais',
@@ -466,6 +466,10 @@ return [
         'angoli_title' => 'Cantos',
         'angoli_description' => 'Quão arredondados são os painéis e botões.',
         'salva' => 'Guardar',
+        'menu_title' => 'Menu',
+        'menu_description' => 'Onde ficam as secções da aplicação.',
+        'menu_laterale_description' => 'As secções numa lista à esquerda, que se recolhe só a ícones.',
+        'menu_alto_description' => 'A barra horizontal em cima, como antes.',
     ],
 
 ];

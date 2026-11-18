@@ -1,0 +1,123 @@
+/*
+ * L'impalcatura a menu laterale (Web Pro Italia, 18/11/2026).
+ *
+ * Il menu è scuro, della tinta del colore dello studio (Impostazioni → Aspetto): `App\Support\Tema` scrive `--km-tinta`,
+ * `--km-menu-sat` e `--km-menu-attiva` per ogni colore; qui sotto ci sono i valori di «grafite», l'aspetto originale, e i
+ * colori che ne derivano. La voce attiva usa il colore pieno.
+ *
+ * L'area di lavoro è leggermente grigia, con le schede bianche che risaltano: vale solo dentro `.km-lavoro`, cioè con il menu
+ * laterale. Con il menu in alto niente di questo file tocca le pagine.
+ */
+
+:root {
+  --km-tinta: 220;
+  --km-menu-sat: 9%;
+  --km-menu-attiva: hsl(220 9% 32%);
+  --km-menu-attiva-testo: hsl(0 0% 100%);
+
+  --km-menu-fondo: hsl(var(--km-tinta) var(--km-menu-sat) 8.5%);
+  --km-menu-fondo-alto: hsl(var(--km-tinta) var(--km-menu-sat) 12.5%);
+  --km-menu-testo: hsl(var(--km-tinta) 22% 90%);
+  --km-menu-tenue: hsl(var(--km-tinta) 14% 62%);
+  --km-menu-riga: hsl(0 0% 100% / 0.07);
+  --km-menu-passaggio: hsl(0 0% 100% / 0.07);
+
+  --km-lavoro: hsl(var(--km-tinta) 16% 95.5%);
+}
+
+.dark {
+  /* Nel tema scuro l'area di lavoro resta quella di sempre: le pagine sono già scure, e il menu lo è in tutti e due. */
+  --km-lavoro: var(--background);
+  --km-menu-fondo: hsl(var(--km-tinta) var(--km-menu-sat) 6.5%);
+  --km-menu-fondo-alto: hsl(var(--km-tinta) var(--km-menu-sat) 9.5%);
+}
+
+/* ─── Il menu ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.km-menu {
+  background: linear-gradient(180deg, var(--km-menu-fondo-alto) 0%, var(--km-menu-fondo) 38%);
+  color: var(--km-menu-testo);
+}
+
+/* Lo scorrimento del menu, quando le voci non stanno nello schermo: una barra sottile, che si vede solo passandoci sopra. */
+.km-menu-scorre {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.km-menu-scorre:hover {
+  scrollbar-color: hsl(0 0% 100% / 0.22) transparent;
+}
+
+.km-menu-etichetta {
+  color: var(--km-menu-tenue);
+}
+
+.km-voce {
+  color: var(--km-menu-testo);
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.km-voce:hover,
+.km-voce:focus-visible {
+  background-color: var(--km-menu-passaggio);
+  outline: none;
+}
+.km-voce:focus-visible {
+  box-shadow: 0 0 0 2px hsl(0 0% 100% / 0.35);
+}
+.km-voce[data-attiva='true'] {
+  background-color: var(--km-menu-attiva);
+  color: var(--km-menu-attiva-testo);
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.12);
+}
+/* La madre di una voce accesa («Movimenti» quando si è nelle fatture): si vede che si è lì dentro, ma l'accesa è la figlia. */
+.km-voce[data-attiva='dentro'] {
+  background-color: var(--km-menu-passaggio);
+  color: hsl(0 0% 100%);
+}
+.km-voce[aria-disabled='true'] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* L'icona della sezione: un quadratino arrotondato del colore della sezione (`--c`), con l'icona bianca e un filo di rilievo. */
+.km-icona {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 86%, white) 0%, var(--c) 100%);
+  color: hsl(0 0% 100%);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.22), inset 0 0 0 1px hsl(0 0% 0% / 0.08), 0 1px 1.5px hsl(0 0% 0% / 0.25);
+}
+
+/* ─── L'area di lavoro ────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.km-lavoro {
+  background-color: var(--km-lavoro);
+  /* L'altezza della barra fissa: chi resta agganciato in cima alla pagina si ferma sotto di lei (`top-[var(--km-barra,0px)]`). */
+  --km-barra: 3.5rem;
+}
+
+/*
+ * Il menu dei Movimenti (`km-voci-nel-menu`): con il menu laterale aperto le sue voci stanno nel menu, sotto «Movimenti», e in
+ * pagina non si ripetono. Con il menu chiuso a icone, e sugli schermi stretti dove il menu è un cassetto, la barra resta.
+ */
+@media (min-width: 768px) {
+  .km-impalcatura:has(aside[data-menu-laterale][data-stato='aperto']) .km-voci-nel-menu {
+    display: none;
+  }
+}
+
+@layer components {
+  /*
+   * Le schede. Molte pagine disegnano i riquadri con il solo bordo, senza un fondo loro: sul bianco andava bene, sul grigio
+   * sparirebbero. Qui un riquadro (bordo oppure ombra, e angoli arrotondati) che non dichiara un fondo prende quello delle
+   * schede. È nel livello dei componenti: una classe di fondo scritta sulla pagina (`bg-slate-50`, `bg-amber-50`…) vince sempre.
+   */
+  .km-lavoro :where(div, section, nav, form, article, aside):where(.border, .shadow, .shadow-sm, .shadow-md, .ring-1):where(.rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .md\:rounded-lg) {
+    background-color: var(--card);
+  }
+}
+
+@media print {
+  /* Su carta: né il menu né la barra, e il foglio bianco. */
+  .km-lavoro {
+    background-color: #fff !important;
+  }
+}

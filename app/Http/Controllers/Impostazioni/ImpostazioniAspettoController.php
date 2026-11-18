@@ -14,7 +14,7 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
-/** Impostazioni → Aspetto (Web Pro Italia, 09/11/2026): colore principale e angoli dell'installazione. */
+/** Impostazioni → Aspetto (Web Pro Italia, 09/11/2026): colore principale e angoli dell'installazione; dal 18/11/2026 anche dove sta il menu. */
 class ImpostazioniAspettoController extends Controller
 {
     use HandleFlashMessages;
@@ -24,7 +24,7 @@ class ImpostazioniAspettoController extends Controller
         Gate::authorize('manage', $settings);
 
         return Inertia::render('impostazioni/impostazioniAspetto', [
-            'aspetto' => ['colore' => $aspetto->colore, 'angoli' => $aspetto->angoli],
+            'aspetto' => ['colore' => $aspetto->colore, 'angoli' => $aspetto->angoli, 'menu' => Tema::menu()],
             'scelte'  => Tema::scelte(),
         ]);
     }
@@ -36,10 +36,15 @@ class ImpostazioniAspettoController extends Controller
         $dati = $request->validate([
             'colore' => ['required', 'string', Rule::in(array_keys(Tema::COLORI))],
             'angoli' => ['required', 'string', Rule::in(array_keys(Tema::ANGOLI))],
+            // Facoltativo: una pagina aperta prima dell'aggiornamento salva colore e angoli e non tocca il menu.
+            'menu'   => ['sometimes', 'required', 'string', Rule::in(array_keys(Tema::MENU))],
         ]);
 
         $aspetto->colore = $dati['colore'];
         $aspetto->angoli = $dati['angoli'];
+        if (isset($dati['menu'])) {
+            $aspetto->menu = $dati['menu'];
+        }
         $aspetto->save();
 
         return back()->with($this->flashSuccess(__('impostazioni.aspetto.salvato')));

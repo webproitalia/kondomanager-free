@@ -179,8 +179,8 @@ const bottone = 'h-9 px-3 rounded-md border text-sm font-medium transition-color
                 Il verbale di questa assemblea è approvato: presenze e voti non si modificano più.
             </p>
 
-            <!-- Teste e millesimi, sempre in vista -->
-            <div class="sticky top-0 z-10 rounded-xl border bg-white/95 dark:bg-slate-900/95 backdrop-blur p-3 flex flex-wrap items-center gap-x-6 gap-y-2" data-testid="conteggi">
+            <!-- Teste e millesimi, sempre in vista: in cima alla pagina, sotto la barra fissa del menu laterale quando c'è (`--km-barra`) -->
+            <div class="sticky top-[var(--km-barra,0px)] z-10 rounded-xl border bg-white/95 dark:bg-slate-900/95 backdrop-blur p-3 flex flex-wrap items-center gap-x-6 gap-y-2" data-testid="conteggi">
                 <div class="flex items-baseline gap-2">
                     <span class="text-2xl font-bold tabular-nums">{{ costituzione.teste_presenti }}</span>
                     <span class="text-sm text-slate-500">su {{ costituzione.teste_totali }} condòmini in sala<template v-if="costituzione.teste_per_delega"> ({{ costituzione.teste_per_delega }} per delega)</template></span>

@@ -6,6 +6,9 @@
 @import '@fontsource/instrument-sans/500.css';
 @import '@fontsource/instrument-sans/600.css';
 
+/* L'impalcatura a menu laterale (Web Pro Italia): i colori del menu e l'area di lavoro. */
+@import './menu-laterale.css';
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 

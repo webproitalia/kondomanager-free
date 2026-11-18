@@ -148,7 +148,7 @@ return [
      | ------------------------------------------------------------------ */
     'header' => [
         'aspetto_title' => 'Apariencia',
-        'aspetto_description' => 'Color principal y forma de las esquinas',
+        'aspetto_description' => 'Color principal, esquinas y posición del menú',
         'installazione_title' => 'Esta instalación',
         'installazione_description' => 'Cuántos edificios, cuánto espacio y qué funciones: los hechos de esta instalación',
         'settings_head' => 'Settings',
@@ -254,7 +254,7 @@ return [
      | ------------------------------------------------------------------ */
     'dialogs' => [
         'aspetto_title' => 'Apariencia',
-        'aspetto_description' => 'Color principal y forma de las esquinas',
+        'aspetto_description' => 'Color principal, esquinas y posición del menú',
         'installazione_title' => 'Esta instalación',
         'installazione_description' => 'Límites, espacio y funciones activas de esta instalación',
         'general_settings_title' => 'General settings',
@@ -466,6 +466,10 @@ return [
         'angoli_title' => 'Esquinas',
         'angoli_description' => 'Qué tan redondeados son los paneles y botones.',
         'salva' => 'Guardar',
+        'menu_title' => 'Menú',
+        'menu_description' => 'Dónde están las secciones de la aplicación.',
+        'menu_laterale_description' => 'Las secciones en una lista a la izquierda, que se pliega a solo iconos.',
+        'menu_alto_description' => 'La barra horizontal de arriba, como antes.',
     ],
 
 ];

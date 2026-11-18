@@ -4,6 +4,8 @@ import { Building2, PlayCircle, Calendar, ChevronRight, ChevronDown, CornerLeftU
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuPortal } from '@/components/ui/dropdown-menu';
 import { usePermission } from "@/composables/permissions";
+import { useImpalcatura } from '@/composables/useImpalcatura';
+import TestataPagina from '@/components/menu/TestataPagina.vue';
 import type { Building } from '@/types/buildings';
 import type { Esercizio } from '@/types/gestionale/esercizi';
 
@@ -57,6 +59,10 @@ const hasBreadcrumbs = computed(() => props.breadcrumbs && props.breadcrumbs.len
 const { generatePath } = usePermission();
 const isMobileMenuOpen = ref(false);
 
+// Web Pro Italia, 18/11/2026: con il menu laterale la riga di sempre (percorso, selettori, titolo) è una scheda sola,
+// `TestataPagina`; il condominio, l'esercizio e «Dashboard social» stanno nella barra in alto. Con il menu in alto niente cambia.
+const { menuLaterale } = useImpalcatura();
+
 // --- Logica Navigazione ---
 const page = usePage<{ condominio: Building; condomini: (Building & { esercizio_aperto?: { id: number } | null })[] }>();
 
@@ -97,7 +103,12 @@ function selectEsercizio(esercizioId: number | string) {
 
     <!-- La riga del percorso e dei pulsanti va a capo quando non ci sta (un tablet con «Indietro», il condominio, «Guida» e la dashboard):
          prima i pulsanti uscivano dallo schermo e la pagina scorreva di lato. Quando ci sta, resta com'era. -->
-    <div class="flex flex-col md:flex-row md:flex-wrap md:items-center justify-between gap-4">
+    <TestataPagina v-if="menuLaterale" v-bind="$props" @open-text-guide="(id?: string) => $emit('open-text-guide', id)">
+      <template v-if="$slots.breadcrumb" #breadcrumb><slot name="breadcrumb" /></template>
+      <template v-if="$slots.actions" #actions><slot name="actions" /></template>
+    </TestataPagina>
+
+    <div v-if="!menuLaterale" class="flex flex-col md:flex-row md:flex-wrap md:items-center justify-between gap-4">
 
       <div class="min-w-0 max-w-full">
         <slot name="breadcrumb">
@@ -248,7 +259,7 @@ function selectEsercizio(esercizioId: number | string) {
       </div>
     </div>
 
-    <div v-if="hasBreadcrumbs || $slots.breadcrumb" class="pl-5 border-l-2 border-primary py-1">
+    <div v-if="!menuLaterale && (hasBreadcrumbs || $slots.breadcrumb)" class="pl-5 border-l-2 border-primary py-1">
         <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none">
             {{ pageTitle }}
         </h1>
