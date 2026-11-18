@@ -19,6 +19,9 @@
  *
  * Il menu chiuso ha le stesse icone, nello stesso ordine, con un separatore fra i due gruppi.
  *
+ * Lo studio non scorre mai: se le voci non stanno nello schermo (con «Movimenti» aperto), scorre il solo gruppo del
+ * condominio, sotto la sua riga di testa. Solo sugli schermi molto bassi (sotto i 560 px) scorre tutto insieme (`menu-laterale.css`).
+ *
  * ## La riga di testa del condominio ha due comandi
  *
  * Il nome (un clic: si sceglie un altro condominio, o in fondo all'elenco «Chiudi il condominio») e, a destra, la freccia
@@ -156,21 +159,27 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
             </Tooltip>
         </div>
 
-        <nav class="km-menu-scorre min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-2" aria-label="Menu principale">
+        <!--
+            Due zone. Lo studio sta fermo: non scorre mai via, nemmeno con «Movimenti» aperto. Sotto, il condominio in uso: se
+            le sue voci non stanno nello schermo scorre lui solo, con la riga di testa che resta in cima (`menu-laterale.css`).
+        -->
+        <nav class="km-menu-scorre km-menu-zone min-h-0 flex-1 px-2.5 pb-2" aria-label="Menu principale">
             <!-- ─── 1. Lo studio: sempre qui, sempre uguale ─── -->
-            <div v-if="! chiuso" class="km-menu-etichetta flex h-6 items-end px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em]" data-menu-gruppo="studio">{{ nomeStudio }}</div>
-            <div class="flex flex-col gap-px" :class="{ 'items-center': chiuso }" data-menu-voci="studio">
-                <VoceMenuRiga v-for="voce in studio" :key="voce.chiave" :voce="voce" :solo-icona="chiuso" />
+            <div class="km-menu-zona-studio" data-menu-zona="studio">
+                <div v-if="! chiuso" class="km-menu-etichetta flex h-6 items-end px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em]" data-menu-gruppo="studio">{{ nomeStudio }}</div>
+                <div class="flex flex-col gap-px" :class="{ 'items-center': chiuso }" data-menu-voci="studio">
+                    <VoceMenuRiga v-for="voce in studio" :key="voce.chiave" :voce="voce" :solo-icona="chiuso" />
+                </div>
             </div>
 
             <!-- ─── 2. Il condominio in uso: la riga di testa (un clic: se ne sceglie un altro) e le sue sezioni, rientrate ─── -->
-            <template v-if="gruppoCondominio">
+            <div v-if="gruppoCondominio" class="km-menu-zona-condominio" data-menu-zona="condominio">
                 <!-- Menu chiuso: il separatore fra i due gruppi è anche la freccia che ripiega le icone delle sezioni -->
                 <Tooltip v-if="chiuso" :delay-duration="0">
                     <TooltipTrigger as-child>
-                        <button type="button" class="km-ripiega-icone mx-auto flex h-[13px] w-10 items-center gap-1 rounded" data-menu-separatore data-menu-ripiega :aria-expanded="! ripiegato" :aria-label="comandoRipiega" @click="ripiega(! ripiegato)">
+                        <button type="button" class="km-ripiega-icone mx-auto flex h-[18px] w-10 items-center gap-1 rounded" data-menu-separatore data-menu-ripiega :aria-expanded="! ripiegato" :aria-label="comandoRipiega" @click="ripiega(! ripiegato)">
                             <span class="h-px flex-1 bg-white/15" />
-                            <ChevronRight class="size-3 shrink-0 transition-transform duration-200" :class="{ 'rotate-90': ! ripiegato }" :stroke-width="2.6" />
+                            <ChevronRight class="size-3.5 shrink-0 transition-transform duration-200" :class="{ 'rotate-90': ! ripiegato }" :stroke-width="2.6" />
                             <span class="h-px flex-1 bg-white/15" />
                         </button>
                     </TooltipTrigger>
@@ -180,7 +189,7 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
                 <Collapsible :open="! ripiegato">
                     <!-- La riga di testa: il nome (si sceglie il condominio) e la freccia (si ripiegano le sezioni) -->
                     <div
-                        :class="chiuso ? 'flex justify-center' : 'km-condominio mb-px mt-2 flex items-stretch rounded-lg ring-1 ring-inset ring-white/[0.08]'"
+                        :class="chiuso ? 'flex justify-center' : 'km-condominio mb-px flex items-stretch rounded-lg ring-1 ring-inset ring-white/[0.08]'"
                         data-menu-testa-condominio
                         :data-attiva="! chiuso && testaAccesa ? 'true' : undefined"
                     >
@@ -256,7 +265,7 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
                         </div>
                     </CollapsibleContent>
                 </Collapsible>
-            </template>
+            </div>
         </nav>
 
         <!-- ─── In fondo, compatti: l'utente con il suo menu, le impostazioni e la guida ─── -->

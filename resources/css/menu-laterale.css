@@ -68,6 +68,61 @@
   scrollbar-color: hsl(0 0% 100% / 0.22) transparent;
 }
 
+/*
+ * Le due zone del menu (Web Pro Italia, 18/11/2026: il menu è «il punto fermo, la stella polare»). Lo studio non scorre mai:
+ * quando le voci non stanno nello schermo (con «Movimenti» aperto) scorre il solo gruppo del condominio, e la sua riga di
+ * testa resta in cima. Niente barra di scorrimento, che stringerebbe le righe di un solo gruppo: una sfumatura in basso
+ * dice che c'è dell'altro (`data-altro-sotto`, lo mette `MenuLaterale.vue`).
+ */
+.km-menu-zone {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.km-menu-zona-studio {
+  flex-shrink: 0;
+}
+/* Lo stacco fra i due gruppi sta sotto lo studio, non sopra la riga di testa: così, scorrendo, la riga non sale. */
+[data-menu-chiuso='false'] .km-menu-zona-studio {
+  padding-bottom: 0.5rem;
+}
+.km-menu-zona-condominio {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.km-menu-zona-condominio::-webkit-scrollbar {
+  display: none;
+}
+.km-menu-zona-condominio[data-altro-sotto='true'] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2rem), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2rem), transparent);
+}
+.km-menu-zona-condominio .km-condominio {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+/* Schermi molto bassi (sotto i 560 px): al condominio resterebbero tre o quattro righe. Lì scorre tutto insieme, come un elenco solo. */
+@media (max-height: 559px) {
+  .km-menu-zone {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .km-menu-zona-condominio {
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .km-menu-zona-condominio .km-condominio {
+    position: static;
+  }
+}
+
 .km-menu-etichetta {
   color: var(--km-menu-tenue);
 }
@@ -138,10 +193,13 @@
 .km-condominio {
   height: calc(var(--km-riga) + 0.5rem);
   flex-shrink: 0;
-  background-color: hsl(0 0% 100% / 0.05);
+  /* Un velo chiaro sopra il fondo del menu, e non trasparente: quando il gruppo scorre, le voci le passano sotto. */
+  background-color: var(--km-menu-fondo);
+  background-image: linear-gradient(hsl(0 0% 100% / 0.05), hsl(0 0% 100% / 0.05));
 }
 .km-condominio[data-attiva='true'] {
   background-color: var(--km-menu-attiva);
+  background-image: none;
   box-shadow: 0 1px 2px hsl(0 0% 0% / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.12);
 }
 .km-condominio[data-attiva='true'] .km-voce {

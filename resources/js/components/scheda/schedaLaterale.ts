@@ -28,6 +28,11 @@
  * messaggio di conferma si vede. Se resta su una pagina da scheda (la modifica appena salvata), resta nella scheda, e alla
  * chiusura la pagina di sotto si rilegge. Con errori di validazione il server rimanda al modulo: resta nella scheda, con quello
  * che si era scritto.
+ *
+ * **L'elenco torna com'era.** Il server rimanda all'elenco «nudo», senza la ricerca, la pagina e l'ordine che si avevano
+ * (stanno nell'indirizzo: `useTabellaServer.ts`). La scheda serve a non perdere il filo, quindi dopo il salvataggio si torna
+ * all'indirizzo della pagina di sotto, con tutto: una seconda lettura, che tiene il messaggio di conferma appena arrivato
+ * (`except: ['flash']`: il server non lo ridarebbe, è già stato mostrato una volta).
  */
 import { computed, reactive, readonly } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
@@ -178,10 +183,19 @@ function dopoLaNavigazione(evento: { detail: { page: { url: string }; type?: str
         const tornatiSotto = stessaPagina(arrivo, stato.base);
         const daRileggere = stato.salvato && tornatiSotto && dallaCronologia;
         const daRiportare = tornatiSotto && ! dallaCronologia ? scorrimentoFondo : null;
+        // Un salvataggio ha portato all'elenco di sotto, ma «nudo»: senza la ricerca, la pagina e l'ordine che si avevano.
+        const conIFiltri = ! tornatiSotto && ! dallaCronologia && !! visita?.salva && stato.base.includes('?') && ! arrivo.includes('?') && percorsoDi(arrivo) === percorsoDi(stato.base)
+            ? stato.base
+            : null;
         azzera({ uscita: stato.fase !== 'chiusura' });
         if (daRileggere) {
             // La cronologia ha ridato la pagina com'era prima del salvataggio: si rilegge, restando dove si è.
             router.reload();
+        }
+        if (conIFiltri) {
+            // Si torna all'elenco com'era. Il messaggio di conferma resta quello appena arrivato: il server non lo ridarebbe.
+            // Un attimo dopo: questa visita deve prima finire.
+            window.setTimeout(() => router.visit(conIFiltri, { replace: true, except: ['flash'] }), 0);
         }
         if (daRiportare !== null) {
             window.requestAnimationFrame(() => window.scrollTo(0, daRiportare));

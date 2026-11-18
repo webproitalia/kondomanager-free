@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { usePermission } from "@/composables/permissions";
 import { useTabellaServer } from '@/composables/useTabellaServer';
+import { filtroIniziale } from '@/composables/filtroIniziale';
 import { Permission } from "@/enums/Permission";
 import { trans } from 'laravel-vue-i18n';
 import type { Table } from '@tanstack/vue-table';
@@ -73,7 +74,8 @@ const rimuoviDemo = () => {
   });
 };
 
-const nameFilter = ref('')
+// Il campo nasce con la ricerca che l'elenco ha già (dopo una scheda laterale, «Indietro», un indirizzo già filtrato).
+const nameFilter = ref(filtroIniziale('nome'))
 
 const { hasPermission } = usePermission();
 

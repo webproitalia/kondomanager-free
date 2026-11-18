@@ -10,6 +10,7 @@ import { Plus, Tags, X } from 'lucide-vue-next';
 import { trans } from 'laravel-vue-i18n';
 import { usePermission } from "@/composables/permissions";
 import { useTabellaServer } from '@/composables/useTabellaServer';
+import { filtroIniziale } from '@/composables/filtroIniziale';
 import { Permission }  from "@/enums/Permission";
 import type { Table } from '@tanstack/vue-table';
 import type { Fornitore } from '@/types/fornitori';
@@ -32,7 +33,8 @@ interface DataTableToolbarProps {
 
 const props = defineProps<DataTableToolbarProps>();
 
-const ragioneSocialeFilter = ref('')
+// Il campo nasce con la ricerca che l'elenco ha già (dopo una scheda laterale, «Indietro», un indirizzo già filtrato).
+const ragioneSocialeFilter = ref(filtroIniziale('ragione_sociale'))
 const { hasPermission, generateRoute } = usePermission();
 
 const colonnaCategoria = props.table.getColumn('categoria');

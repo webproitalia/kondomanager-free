@@ -4,6 +4,7 @@ import { ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import { usePage, Link } from '@inertiajs/vue3';
 import { useTabellaServer } from '@/composables/useTabellaServer';
+import { filtroIniziale } from '@/composables/filtroIniziale';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus } from 'lucide-vue-next';
@@ -22,7 +23,8 @@ const page = usePage<{ condominio: Building }>();
 const { generateRoute } = usePermission();
 
 // Filters
-const nameFilter = ref('')
+// Il campo nasce con la ricerca che l'elenco ha già (dopo una scheda laterale, «Indietro», un indirizzo già filtrato).
+const nameFilter = ref(filtroIniziale('nome'))
 
 /**
  * Il filtro sulle pertinenze.

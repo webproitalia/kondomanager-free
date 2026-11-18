@@ -22,37 +22,81 @@ const comando = computed(() => (chiuso.value ? 'Apri il menu' : 'Richiudi il men
 
 /*
  * L'impalcatura si ridisegna a ogni pagina, e con lei il menu: senza questo, dopo un clic su una voce in fondo all'elenco
- * (con «Movimenti» aperto il menu scorre) ci si ritroverebbe in cima. Il punto si ricorda per la durata della visita.
+ * (con «Movimenti» aperto il gruppo del condominio scorre) ci si ritroverebbe in cima. Il punto si ricorda per la durata
+ * della visita.
+ *
+ * Che cosa scorre: il solo gruppo del condominio (lo studio sta fermo sopra); sugli schermi molto bassi, tutto l'elenco
+ * (`menu-laterale.css`).
  */
 const colonna = ref<HTMLElement | null>(null);
-const elenco = () => colonna.value?.querySelector<HTMLElement>('nav') ?? null;
+const zona = () => colonna.value?.querySelector<HTMLElement>('[data-menu-zona="condominio"]') ?? null;
+const elenco = () => {
+    const z = zona();
+
+    return z && window.getComputedStyle(z).overflowY !== 'visible' ? z : (colonna.value?.querySelector<HTMLElement>('nav') ?? null);
+};
 const ricorda = () => {
     scorrimento = elenco()?.scrollTop ?? 0;
+    segnaAltroSotto();
 };
+
+/** Sotto c'è dell'altro: la zona del condominio sfuma in basso, al posto della barra di scorrimento. */
+const segnaAltroSotto = () => {
+    const z = zona();
+    if (z) {
+        z.dataset.altroSotto = z.scrollHeight - z.clientHeight - z.scrollTop > 4 ? 'true' : 'false';
+    }
+};
+
+/** La voce accesa deve vedersi: se è fuori dallo schermo (una voce in fondo ai Movimenti), l'elenco scorre fino a lei. */
+const mostraLaVoceAccesa = (contenitore: HTMLElement) => {
+    const testa = contenitore.querySelector<HTMLElement>('[data-menu-testa-condominio]');
+    const accesa = [...contenitore.querySelectorAll<HTMLElement>('[data-attiva="true"]')].find((voce) => ! testa?.contains(voce) && voce !== testa);
+    if (! accesa) {
+        return;
+    }
+    // La riga di testa del condominio resta in cima mentre il gruppo scorre: una voce lì sotto non si vede.
+    const coperto = testa && window.getComputedStyle(testa).position === 'sticky' ? testa.offsetHeight : 0;
+    const [voce, visibile] = [accesa.getBoundingClientRect(), contenitore.getBoundingClientRect()];
+    // Un po' di margine: si vede anche la voce dopo (o quella prima). Il meno possibile, però: ogni voce che resta dov'era
+    // è una voce che si ritrova.
+    const margine = voce.height;
+    if (voce.top < visibile.top + coperto) {
+        contenitore.scrollTop += voce.top - visibile.top - coperto - margine;
+    } else if (voce.bottom > visibile.bottom) {
+        contenitore.scrollTop += voce.bottom - visibile.bottom + margine;
+    }
+};
+
+let osservatore: ResizeObserver | null = null;
+let ascoltati: HTMLElement[] = [];
 
 onMounted(() => {
     void nextTick(() => {
-        const nav = elenco();
-        if (nav) {
-            nav.scrollTop = scorrimento;
-            // La voce accesa deve vedersi: se è fuori dallo schermo (una voce in fondo ai Movimenti), il menu scorre fino a lei.
-            // Il meno possibile, però: il menu è un punto fermo, e ogni voce che resta dov'era è una voce che si ritrova.
-            const accesa = nav.querySelector<HTMLElement>('[data-attiva="true"]');
-            if (accesa) {
-                const [voce, elencoVisibile] = [accesa.getBoundingClientRect(), nav.getBoundingClientRect()];
-                // Un po' di margine: si vede anche la voce dopo (o quella prima).
-                const margine = voce.height;
-                if (voce.top < elencoVisibile.top) {
-                    nav.scrollTop += voce.top - elencoVisibile.top - margine;
-                } else if (voce.bottom > elencoVisibile.bottom) {
-                    nav.scrollTop += voce.bottom - elencoVisibile.bottom + margine;
-                }
-            }
-            nav.addEventListener('scroll', ricorda, { passive: true });
+        const contenitore = elenco();
+        if (! contenitore) {
+            return;
         }
+        contenitore.scrollTop = scorrimento;
+        mostraLaVoceAccesa(contenitore);
+        // Può scorrere la zona del condominio o, sugli schermi bassi, tutto l'elenco: si ascoltano tutti e due.
+        ascoltati = [zona(), colonna.value?.querySelector<HTMLElement>('nav') ?? null].filter((nodo): nodo is HTMLElement => !! nodo);
+        ascoltati.forEach((nodo) => nodo.addEventListener('scroll', ricorda, { passive: true }));
+        window.addEventListener('resize', segnaAltroSotto, { passive: true });
+        // «Movimenti» che si apre, il gruppo che si ripiega: cambia quanto c'è sotto.
+        const z = zona();
+        if (z && typeof ResizeObserver !== 'undefined') {
+            osservatore = new ResizeObserver(segnaAltroSotto);
+            [z, ...z.children].forEach((nodo) => osservatore!.observe(nodo));
+        }
+        segnaAltroSotto();
     });
 });
-onBeforeUnmount(() => elenco()?.removeEventListener('scroll', ricorda));
+onBeforeUnmount(() => {
+    ascoltati.forEach((nodo) => nodo.removeEventListener('scroll', ricorda));
+    window.removeEventListener('resize', segnaAltroSotto);
+    osservatore?.disconnect();
+});
 </script>
 
 <script lang="ts">

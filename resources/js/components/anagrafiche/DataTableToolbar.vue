@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Plus } from 'lucide-vue-next';
 import { usePermission } from "@/composables/permissions";
 import { useTabellaServer } from '@/composables/useTabellaServer';
+import { filtroIniziale } from '@/composables/filtroIniziale';
 import { Permission } from "@/enums/Permission";
 import { trans } from 'laravel-vue-i18n';
 import DataTableFacetedFilter from '@/components/documenti/DataTableFacetedFilter.vue';
@@ -29,7 +30,8 @@ const handleOpenDropdown = () => {
 }
 
 // LOGICA FILTRI ATTIVI
-const nomeFilter = ref('')
+// Il campo nasce con la ricerca che l'elenco ha già (dopo una scheda laterale, «Indietro», un indirizzo già filtrato).
+const nomeFilter = ref(filtroIniziale('nome'))
 const condominioFilter = computed(() => {
   const val = condominioColumn?.getFilterValue()
   return Array.isArray(val) ? val : []

@@ -197,6 +197,39 @@ describe('salvare dentro la scheda', () => {
         expect(inertia.reload).not.toHaveBeenCalled();
     });
 
+    test('salvato da un elenco con una ricerca: il server rimanda all\'elenco nudo, e si torna a quello che si aveva, con il messaggio', () => {
+        apro(ELENCO, '/admin/anagrafiche/12/edit');
+        segnaModificato();
+        vado('/admin/anagrafiche/12', { method: 'put' }, '/admin/anagrafiche');
+
+        expect(stato.fase).toBe('chiusa');
+        expect(inertia.visit).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(0);
+        // Stesso elenco, con la sua pagina; al posto di questa voce della cronologia; il messaggio di conferma non si richiede.
+        expect(inertia.visit).toHaveBeenCalledTimes(1);
+        expect(inertia.visit).toHaveBeenCalledWith(ELENCO, { replace: true, except: ['flash'] });
+    });
+
+    test('non si torna ai filtri se non c\'erano, se il server ne ha messi di suoi, o se ha portato a un\'altra pagina', () => {
+        // L'elenco di sotto era senza ricerca: quello che arriva dal server è già lui.
+        apro('/admin/anagrafiche', '/admin/anagrafiche/create');
+        vado('/admin/anagrafiche', { method: 'post' }, '/admin/anagrafiche');
+        // Il server ha scelto lui dove e come tornare.
+        apro(ELENCO, '/admin/anagrafiche/create');
+        vado('/admin/anagrafiche', { method: 'post' }, '/admin/anagrafiche?nuova=1');
+        // Un'altra pagina.
+        apro(ELENCO, '/admin/anagrafiche/create');
+        vado('/admin/anagrafiche', { method: 'post' }, '/admin/fornitori');
+        // «Indietro» fino all'elenco nudo, dopo un salvataggio rimasto nella scheda: è la cronologia, non un salvataggio.
+        apro(ELENCO, '/admin/anagrafiche/12/edit');
+        prima('/admin/anagrafiche', {});
+        arrivo('/admin/anagrafiche', 'history');
+        ascoltatori.dopoLaVisita();
+
+        vi.advanceTimersByTime(10);
+        expect(inertia.visit).not.toHaveBeenCalled();
+    });
+
     test('salvato, e si resta nella scheda: chiudendo non si chiede, e la pagina di sotto si rilegge', () => {
         apro('/admin/gestionale/1/immobili', '/admin/gestionale/1/immobili/4/anagrafiche/create');
         segnaModificato();

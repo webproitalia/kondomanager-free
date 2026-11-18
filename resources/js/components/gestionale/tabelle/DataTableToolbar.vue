@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Plus } from 'lucide-vue-next';
 import { usePermission } from '@/composables/permissions';
 import { useTabellaServer } from '@/composables/useTabellaServer';
+import { filtroIniziale } from '@/composables/filtroIniziale';
 import type { Table } from '@tanstack/vue-table';
 import type { Tabella } from '@/types/gestionale/tabelle';
 import type { Building } from '@/types/buildings';
@@ -21,7 +22,8 @@ const page = usePage<{ condominio: Building }>();
 const { generateRoute } = usePermission();
 
 // Filters
-const nameFilter = ref('')
+// Il campo nasce con la ricerca che l'elenco ha già (dopo una scheda laterale, «Indietro», un indirizzo già filtrato).
+const nameFilter = ref(filtroIniziale('nome'))
 
 // Una sola richiesta che porta tutto: filtri, pagina, righe per pagina, ordinamento
 const { filtra } = useTabellaServer(() =>
