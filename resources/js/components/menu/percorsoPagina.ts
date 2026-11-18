@@ -36,8 +36,11 @@ export function usePercorsoPagina(): PercorsoPagina | null {
  * Dove si va scegliendo un altro condominio dalla barra.
  *
  * Se la pagina sa cambiare condominio restando dov'è, lo stesso indirizzo con l'altro condominio e — dove l'indirizzo porta un
- * esercizio — con il suo esercizio aperto: è quello che fa la testata della pagina con il menu in alto. Altrimenti il cruscotto
- * dell'altro condominio: l'indirizzo di una scheda (un'assemblea, una fattura) in un altro condominio non esiste.
+ * esercizio — con il suo esercizio aperto: è quello che fa la testata della pagina con il menu in alto.
+ *
+ * Altrimenti il cruscotto dell'altro condominio. E anche quando l'indirizzo, cambiato il condominio, non esisterebbe: la scheda
+ * di una cosa (un'assemblea, una fattura, un piano rate hanno un numero che è di questo condominio), o una pagina sotto un
+ * esercizio quando l'altro condominio non ne ha uno aperto. Con il menu in alto lì si finiva su «pagina non trovata».
  */
 export function indirizzoAltroCondominio(opzioni: {
     url: string;
@@ -50,17 +53,25 @@ export function indirizzoAltroCondominio(opzioni: {
     if (! opzioni.sulPosto) {
         return opzioni.cruscotto;
     }
-    const segmenti = opzioni.url.split('/');
+    // La domanda e l'ancora in coda all'indirizzo si tengono da parte: i numeri che contano sono quelli del percorso.
+    const taglio = opzioni.url.search(/[?#]/);
+    const coda = taglio === -1 ? '' : opzioni.url.slice(taglio);
+    const segmenti = (taglio === -1 ? opzioni.url : opzioni.url.slice(0, taglio)).split('/');
     const posto = segmenti.findIndex((s) => s === String(opzioni.attuale));
-    if (posto !== -1) {
-        segmenti[posto] = String(opzioni.nuovo);
+    if (posto === -1) {
+        return opzioni.cruscotto;
     }
-    const postoEsercizio = segmenti.findIndex((_, i) => segmenti[i - 1] === 'esercizi');
-    if (postoEsercizio !== -1 && opzioni.esercizioAperto) {
+    const postoEsercizio = segmenti.findIndex((_, i) => i > posto && segmenti[i - 1] === 'esercizi' && /^\d+$/.test(segmenti[i]));
+    const altriNumeri = segmenti.some((s, i) => i > posto && i !== postoEsercizio && /^\d+$/.test(s));
+    if (altriNumeri || (postoEsercizio !== -1 && ! opzioni.esercizioAperto)) {
+        return opzioni.cruscotto;
+    }
+    segmenti[posto] = String(opzioni.nuovo);
+    if (postoEsercizio !== -1) {
         segmenti[postoEsercizio] = String(opzioni.esercizioAperto);
     }
 
-    return segmenti.join('/');
+    return segmenti.join('/') + coda;
 }
 
 /** Lo stesso indirizzo con un altro esercizio. */

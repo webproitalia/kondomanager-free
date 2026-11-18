@@ -51,7 +51,7 @@ const studioAcceso = computed(() => studio.value.some((v) => v.attiva));
             </Link>
         </div>
 
-        <nav class="km-menu-scorre min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-3" :class="chiuso ? 'px-2.5' : 'px-2.5'" aria-label="Menu principale">
+        <nav class="km-menu-scorre min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3" aria-label="Menu principale">
             <!-- ─── Lo studio ─── -->
             <template v-if="studio.length">
                 <!-- Dentro un condominio, menu chiuso: una sola icona, che apre l'elenco delle voci dello studio (l'elenco dentro il suggerimento: vedi `VoceConFiglie.vue`) -->

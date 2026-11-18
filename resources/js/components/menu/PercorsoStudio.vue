@@ -4,8 +4,9 @@
  *
  * Nello studio dice la sezione («Studio › Agenda»). Dentro un condominio porta i due selettori: il condominio (un elenco in
  * cui si cerca per nome) e l'esercizio. Cambiando condominio si resta nella stessa pagina dove la pagina lo sa fare (la sua
- * testata ha l'elenco dei condomini, o riempie lo slot `breadcrumb-condominio`), altrimenti si apre il cruscotto dell'altro
- * condominio: così non si finisce su un indirizzo che non esiste (l'assemblea 4 di un altro condominio).
+ * testata ha l'elenco dei condomini) e l'indirizzo esiste anche nell'altro condominio; altrimenti si apre il cruscotto
+ * dell'altro condominio: così non si finisce su un indirizzo che non esiste (l'assemblea 4 di un altro condominio). La
+ * regola sta in `indirizzoAltroCondominio` (`percorsoPagina.ts`).
  *
  * Gli slot `breadcrumb-condominio` e `breadcrumb-esercizio` delle pagine continuano a funzionare: se una pagina li riempie, al
  * posto del selettore della barra c'è il suo.
@@ -61,15 +62,14 @@ const scegliCondominio = (id: number) => {
     if (! condominio.value || id === condominio.value.id) {
         return;
     }
-    const sulPosto = !! dellaPagina?.cambiaCondominioSulPosto;
     router.visit(indirizzoAltroCondominio({
         url: page.url,
         attuale: condominio.value.id,
         nuovo: id,
-        sulPosto,
+        sulPosto: !! dellaPagina?.cambiaCondominioSulPosto,
         cruscotto: generatePath('gestionale/:condominio', { condominio: id }),
         esercizioAperto: condomini.value.find((c) => c.id === id)?.esercizio_aperto?.id,
-    }), sulPosto ? { preserveState: false, preserveScroll: true } : {});
+    }), { preserveState: false });
 };
 
 // ─── L'esercizio ─────────────────────────────────────────────────────────────────────────────────────────────────────────

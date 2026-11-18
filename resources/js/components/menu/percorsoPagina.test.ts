@@ -2,8 +2,8 @@
  * Il cambio di condominio e di esercizio dalla barra in alto (Web Pro Italia, 18/11/2026).
  *
  * Dove la pagina sa cambiare condominio restando dov'è (la sua testata ha l'elenco dei condomini) si resta nella stessa pagina,
- * con l'altro condominio e il suo esercizio aperto: è quello che fa `PageHeaderGuide` con il menu in alto. Altrove si apre il
- * cruscotto dell'altro condominio: la scheda di un'assemblea, in un altro condominio, non esiste.
+ * con l'altro condominio e il suo esercizio aperto: è quello che fa `PageHeaderGuide` con il menu in alto. Altrove, e dove
+ * l'indirizzo nell'altro condominio non esisterebbe (la scheda di un'assemblea), si apre il cruscotto dell'altro condominio.
  */
 import { describe, expect, test } from 'vitest';
 import { indirizzoAltroCondominio, indirizzoAltroEsercizio } from './percorsoPagina';
@@ -23,13 +23,23 @@ describe('cambiare condominio', () => {
             .toBe('/admin/gestionale/9/esercizi/12/rendiconto');
     });
 
-    test('l\'altro condominio non ha un esercizio aperto: l\'esercizio dell\'indirizzo resta com\'è, come con il menu in alto', () => {
-        expect(indirizzoAltroCondominio({ url: '/admin/gestionale/7/esercizi/3/gestioni', attuale: 7, nuovo: 9, sulPosto: true, cruscotto, esercizioAperto: null }))
-            .toBe('/admin/gestionale/9/esercizi/3/gestioni');
+    test('la domanda in coda all\'indirizzo resta', () => {
+        expect(indirizzoAltroCondominio({ url: '/admin/gestionale/7/fatture?stato=aperte', attuale: 7, nuovo: 9, sulPosto: true, cruscotto })).toBe('/admin/gestionale/9/fatture?stato=aperte');
+        expect(indirizzoAltroCondominio({ url: '/admin/gestionale/7/fatture?pagina=2#elenco', attuale: 7, nuovo: 9, sulPosto: true, cruscotto })).toBe('/admin/gestionale/9/fatture?pagina=2#elenco');
     });
 
-    test('la pagina non lo sa fare (una scheda): si apre il cruscotto dell\'altro condominio', () => {
-        expect(indirizzoAltroCondominio({ url: '/admin/gestionale/7/assemblee/4', attuale: 7, nuovo: 9, sulPosto: false, cruscotto, esercizioAperto: 12 })).toBe(cruscotto);
+    test('l\'altro condominio non ha un esercizio aperto: una pagina sotto un esercizio non ci sarebbe, si apre il suo cruscotto', () => {
+        expect(indirizzoAltroCondominio({ url: '/admin/gestionale/7/esercizi/3/gestioni', attuale: 7, nuovo: 9, sulPosto: true, cruscotto, esercizioAperto: null })).toBe(cruscotto);
+    });
+
+    test('la scheda di una cosa ha un numero che è di questo condominio: nell\'altro non c\'è, si apre il suo cruscotto', () => {
+        for (const url of ['/admin/gestionale/7/assemblee/4', '/admin/gestionale/7/immobili/12/anagrafiche', '/admin/gestionale/7/esercizi/3/piani-rate/8', '/admin/gestionale/7/fatture/15/edit']) {
+            expect(indirizzoAltroCondominio({ url, attuale: 7, nuovo: 9, sulPosto: true, cruscotto, esercizioAperto: 12 }), url).toBe(cruscotto);
+        }
+    });
+
+    test('la pagina non lo sa fare: si apre il cruscotto dell\'altro condominio', () => {
+        expect(indirizzoAltroCondominio({ url: '/admin/gestionale/7/controlli-import', attuale: 7, nuovo: 9, sulPosto: false, cruscotto, esercizioAperto: 12 })).toBe(cruscotto);
     });
 });
 
