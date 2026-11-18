@@ -21,7 +21,8 @@
  * la struttura. Così «Apri a pagina intera» toglie la scheda senza ridisegnare la pagina, e un modulo mezzo compilato resta
  * com'è.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import Footer from '@/components/Footer.vue';
 import SchedaFondo from '@/components/scheda/SchedaFondo.vue';
 import SchedaInArrivo from '@/components/scheda/SchedaInArrivo.vue';
@@ -30,6 +31,7 @@ import { avviaSchedaLaterale, useSchedaLaterale } from '@/components/scheda/sche
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import BarraSuperiore from './BarraSuperiore.vue';
+import { ascoltaCondominioInUso, useCondominioInUso } from './condominioInUso';
 import MenuLaterale from './MenuLaterale.vue';
 import { offriPercorsoPagina } from './percorsoPagina';
 import type { BreadcrumbItemType } from '@/types';
@@ -42,6 +44,19 @@ const props = withDefaults(defineProps<{
 
 // La testata della pagina dice alla barra che cosa la pagina fa scegliere (`percorsoPagina.ts`).
 offriPercorsoPagina(props.gestionale);
+
+// Dentro un condominio: è quello in uso, e il menu se lo ricorda anche nelle pagine dello studio (`condominioInUso.ts`).
+const page = usePage();
+const { ricorda } = useCondominioInUso();
+ascoltaCondominioInUso();
+watchEffect(() => {
+    const condominio = page.props.condominio as { id?: number; nome?: string } | undefined;
+    if (! props.gestionale || ! condominio?.id || ! condominio.nome) {
+        return;
+    }
+    const esercizio = page.props.esercizio as { id?: number; nome?: string } | null | undefined;
+    ricorda({ id: condominio.id, nome: condominio.nome, esercizio: esercizio?.id ? { id: esercizio.id, nome: esercizio.nome ?? null } : null });
+});
 
 const CHIAVE = 'km-menu-aperto';
 

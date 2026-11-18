@@ -6,8 +6,10 @@
  *
  * Che cosa copre: l'ordine e gli indirizzi delle voci dello studio e del condominio; chi vede che cosa (l'amministratore, il
  * collaboratore senza un permesso, il condòmino); l'esercizio da cui dipendono alcune voci; la voce accesa, che resta accesa
- * in tutte le pagine della sezione; i contatori. E che le voci dentro «Movimenti» sono le stesse del menu dei movimenti
- * (`MovimentiLayout.vue`): una voce aggiunta là e non qui fa fallire questo test.
+ * in tutte le pagine della sezione; i contatori. Che le voci dentro «Movimenti» sono le stesse del menu dei movimenti
+ * (`MovimentiLayout.vue`): una voce aggiunta là e non qui fa fallire questo test. E che il menu è un punto fermo: le sezioni
+ * del condominio ci sono su ogni pagina, le stesse e nello stesso ordine — dentro un condominio le sue, nelle pagine dello
+ * studio quelle del condominio in uso (l'ultimo aperto), e senza un condominio in uso restano al loro posto, da scegliere.
  *
  * Che cosa NON copre: come le voci si disegnano (`MenuContenuto.test.ts`) e le due testate, che restano com'erano.
  *
@@ -25,6 +27,7 @@ vi.mock('@inertiajs/vue3', async (importOriginal) => ({
 vi.mock('laravel-vue-i18n', async () => ({ trans: (await import('./provaTraduzioni')).tradotto }));
 
 const { useVociMenu, COLORI_SEZIONI, percorsoDi } = await import('./vociMenu');
+const { azzeraCondominioInUso } = await import('./condominioInUso');
 const MovimentiLayout = (await import('@/layouts/gestionale/MovimentiLayout.vue')).default;
 
 const TUTTI = [
@@ -34,14 +37,28 @@ const TUTTI = [
 
 function entra(ruoli: string[], permessi: string[], altro: Record<string, unknown> = {}, url = '/admin/dashboard') {
     pagina.url = url;
-    pagina.props = { auth: { user: { roles: ruoli, permissions: permessi } }, ...altro };
+    pagina.props = { auth: { user: { id: 5, roles: ruoli, permissions: permessi } }, ...altro };
+}
+
+/** Il condominio in uso, come lo ha lasciato nel browser l'ultima visita a un condominio. */
+function inUso(ricordo: { id: number; nome: string; esercizio: { id: number; nome: string } | null } | null) {
+    localStorage.clear();
+    if (ricordo) {
+        localStorage.setItem('km-condominio-in-uso:5', JSON.stringify(ricordo));
+    }
+    azzeraCondominioInUso();
 }
 
 const condominio = { id: 7, nome: 'Le Rose' };
 const nelCondominio = (url: string, altro: Record<string, unknown> = {}) => entra(['amministratore'], TUTTI, { condominio, esercizio: { id: 3, nome: 'Esercizio 2026' }, ...altro }, url);
 const chiavi = (voci: { chiave: string }[]) => voci.map((v) => v.chiave);
 
-beforeEach(() => entra(['amministratore'], TUTTI));
+const SEZIONI = ['cruscotto', 'struttura', 'unita', 'tabelle', 'esercizi', 'gestioni', 'conti', 'rate', 'movimenti', 'assemblee', 'registrazioni'];
+
+beforeEach(() => {
+    inUso(null);
+    entra(['amministratore'], TUTTI);
+});
 
 describe('lo studio: le voci della testata, nell\'ordine di chi viene dai gestionali da tavolo', () => {
     test('l\'amministratore le vede tutte, con gli indirizzi di sempre', () => {
@@ -118,11 +135,6 @@ describe('lo studio: le voci della testata, nell\'ordine di chi viene dai gestio
 });
 
 describe('dentro un condominio: le voci della testata del gestionale', () => {
-    test('fuori dal gestionale il gruppo del condominio non c\'è, anche se la pagina porta un condominio (la sua scheda)', () => {
-        entra(['amministratore'], TUTTI, { condominio });
-        expect(useVociMenu().gruppoCondominio.value).toBeNull();
-    });
-
     test('le voci, nell\'ordine, con il nome del condominio e dell\'esercizio', () => {
         nelCondominio('/admin/gestionale/7');
         const gruppo = useVociMenu({ gestionale: true }).gruppoCondominio.value!;
@@ -159,6 +171,112 @@ describe('dentro un condominio: le voci della testata del gestionale', () => {
 
         entra(['collaboratore'], [...TUTTI, 'Visualizza assemblee'], { condominio }, '/admin/gestionale/7');
         expect(chiavi(useVociMenu({ gestionale: true }).gruppoCondominio.value!.voci)).toEqual(expect.arrayContaining(['assemblee', 'registrazioni']));
+    });
+});
+
+describe('il menu è un punto fermo: le sezioni del condominio ci sono su ogni pagina', () => {
+    const gruppoIn = (url: string, altro: Record<string, unknown> = {}, gestionale = false) => {
+        entra(['amministratore'], TUTTI, altro, url);
+
+        return useVociMenu({ gestionale }).gruppoCondominio.value!;
+    };
+
+    test('le stesse voci, nello stesso ordine: dentro un condominio, nelle pagine dello studio e senza un condominio in uso', () => {
+        const senza = gruppoIn('/admin/dashboard');
+        inUso({ id: 7, nome: 'Le Rose', esercizio: { id: 3, nome: 'Esercizio 2026' } });
+        const nelloStudio = gruppoIn('/admin/anagrafiche');
+        const dentro = gruppoIn('/admin/gestionale/7/immobili', { condominio, esercizio: { id: 3, nome: 'Esercizio 2026' } }, true);
+
+        for (const gruppo of [senza, nelloStudio, dentro]) {
+            expect(chiavi(gruppo.voci)).toEqual(SEZIONI);
+            expect(gruppo.voci.map((v) => v.nome)).toEqual(dentro.voci.map((v) => v.nome));
+            expect(chiavi(gruppo.voci.find((v) => v.chiave === 'movimenti')!.figlie!)).toEqual(chiavi(dentro.voci.find((v) => v.chiave === 'movimenti')!.figlie!));
+        }
+        // Anche lo studio: le sue voci non cambiano entrando in un condominio.
+        entra(['amministratore'], TUTTI, {}, '/admin/dashboard');
+        const fuori = chiavi(useVociMenu().studio.value);
+        nelCondominio('/admin/gestionale/7/immobili');
+        expect(chiavi(useVociMenu({ gestionale: true }).studio.value)).toEqual(fuori);
+    });
+
+    test('nelle pagine dello studio le sezioni sono quelle del condominio in uso, con il suo esercizio', () => {
+        inUso({ id: 7, nome: 'Le Rose', esercizio: { id: 3, nome: 'Esercizio 2026' } });
+        const gruppo = gruppoIn('/admin/anagrafiche');
+        expect([gruppo.id, gruppo.nome, gruppo.esercizio, gruppo.dellaPagina]).toEqual([7, 'Le Rose', 'Esercizio 2026', false]);
+        expect(gruppo.voci.map((v) => v.href)).toEqual([
+            '/admin/gestionale/7',
+            '/admin/gestionale/7/struttura',
+            '/admin/gestionale/7/immobili',
+            '/admin/gestionale/7/tabelle',
+            '/admin/gestionale/7/esercizi',
+            '/admin/gestionale/7/esercizi/3/gestioni',
+            '/admin/gestionale/7/esercizi/3/piani-conti',
+            '/admin/gestionale/7/esercizi/3/piani-rate',
+            '/admin/gestionale/7/movimenti',
+            '/admin/gestionale/7/assemblee',
+            '/admin/gestionale/7/registrazioni',
+        ]);
+        expect(gruppo.voci.find((v) => v.chiave === 'movimenti')!.figlie!.find((v) => v.chiave === 'rendiconto')!.href).toBe('/admin/gestionale/7/esercizi/3/rendiconto');
+        expect(gruppo.voci.some((v) => v.daScegliere)).toBe(false);
+    });
+
+    test('nelle pagine dello studio nessuna sezione del condominio è accesa: accesa è la voce dello studio', () => {
+        inUso({ id: 7, nome: 'Le Rose', esercizio: null });
+        entra(['amministratore'], TUTTI, {}, '/admin/anagrafiche/12');
+        const { gruppoCondominio, studio, corrente } = useVociMenu();
+        expect(gruppoCondominio.value!.voci.flatMap((v) => [v, ...(v.figlie ?? [])]).filter((v) => v.attiva)).toEqual([]);
+        expect(studio.value.filter((v) => v.attiva).map((v) => v.chiave)).toEqual(['persone']);
+        expect(corrente.value?.chiave).toBe('persone');
+    });
+
+    test('il condominio in uso senza un esercizio ricordato: Gestioni, Conti e Rate portano all\'elenco degli esercizi', () => {
+        inUso({ id: 7, nome: 'Le Rose', esercizio: null });
+        const gruppo = gruppoIn('/admin/dashboard');
+        expect(gruppo.esercizio).toBeNull();
+        expect(gruppo.voci.filter((v) => ['gestioni', 'conti', 'rate'].includes(v.chiave)).map((v) => v.href)).toEqual(Array(3).fill('/admin/gestionale/7/esercizi'));
+        expect(chiavi(gruppo.voci.find((v) => v.chiave === 'movimenti')!.figlie!.filter((v) => v.spenta))).toEqual(['giornale', 'registro', 'rendiconto', 'fascicolo']);
+    });
+
+    test('senza un condominio in uso le sezioni restano al loro posto, da scegliere: nessun indirizzo, e la sezione a cui andare dopo', () => {
+        const gruppo = gruppoIn('/admin/dashboard');
+        expect([gruppo.id, gruppo.nome, gruppo.esercizio, gruppo.dellaPagina]).toEqual([null, null, null, false]);
+        expect(gruppo.voci.every((v) => v.daScegliere && v.href === '#' && ! v.attiva && ! v.spenta)).toBe(true);
+        expect(gruppo.voci.map((v) => [v.chiave, v.sezione])).toEqual([
+            ['cruscotto', ''], ['struttura', '/struttura'], ['unita', '/immobili'], ['tabelle', '/tabelle'], ['esercizi', '/esercizi'],
+            // Le voci che stanno sotto un esercizio: prima si sceglie l'esercizio.
+            ['gestioni', '/esercizi'], ['conti', '/esercizi'], ['rate', '/esercizi'],
+            ['movimenti', '/movimenti'], ['assemblee', '/assemblee'], ['registrazioni', '/registrazioni'],
+        ]);
+        const figlie = gruppo.voci.find((v) => v.chiave === 'movimenti')!.figlie!;
+        expect(figlie.every((v) => v.daScegliere && ! v.spenta)).toBe(true);
+        expect(figlie.find((v) => v.chiave === 'fatture')!.sezione).toBe('/fatture');
+        expect(JSON.stringify(gruppo)).not.toContain('undefined');
+    });
+
+    test('il condominio della scheda (una pagina dello studio che porta un condominio) non è quello in uso', () => {
+        const gruppo = gruppoIn('/condomini/7/edit', { condominio });
+        expect(gruppo.id).toBeNull();
+        expect(useVociMenu().studio.value.filter((v) => v.attiva).map((v) => v.chiave)).toEqual(['condomini']);
+    });
+
+    test('dentro un condominio vale il suo, anche se quello ricordato è un altro; l\'esercizio ricordato dell\'altro non lo segue', () => {
+        inUso({ id: 9, nome: 'I Tigli', esercizio: { id: 12, nome: 'Esercizio dei Tigli' } });
+        const gruppo = gruppoIn('/admin/gestionale/7/assemblee', { condominio }, true);
+        expect([gruppo.id, gruppo.nome, gruppo.esercizio, gruppo.dellaPagina]).toEqual([7, 'Le Rose', null, true]);
+        expect(gruppo.voci.find((v) => v.chiave === 'conti')!.href).toBe('/admin/gestionale/7/esercizi');
+    });
+
+    test('dentro un condominio, su una pagina senza esercizio: vale quello in cui si lavorava lì l\'ultima volta', () => {
+        inUso({ id: 7, nome: 'Le Rose', esercizio: { id: 3, nome: 'Esercizio 2026' } });
+        const gruppo = gruppoIn('/admin/gestionale/7/assemblee', { condominio }, true);
+        expect(gruppo.esercizio).toBe('Esercizio 2026');
+        expect(gruppo.voci.find((v) => v.chiave === 'conti')!.href).toBe('/admin/gestionale/7/esercizi/3/piani-conti');
+    });
+
+    test('il condòmino non entra nel gestionale: per lui il gruppo del condominio non c\'è', () => {
+        inUso({ id: 7, nome: 'Le Rose', esercizio: null });
+        entra(['utente'], ['Visualizza comunicazioni'], {}, '/user/dashboard');
+        expect(useVociMenu().gruppoCondominio.value).toBeNull();
     });
 });
 

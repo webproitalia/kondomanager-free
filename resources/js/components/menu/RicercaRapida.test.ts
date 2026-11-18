@@ -20,6 +20,7 @@ vi.stubGlobal('route', (nome: string) => (nome === 'admin.inbox' ? '/admin/inbox
 
 const RicercaRapida = (await import('./RicercaRapida.vue')).default;
 const { dimenticaElencoCondomini } = await import('./elencoCondomini');
+const { azzeraCondominioInUso } = await import('./condominioInUso');
 
 const contenitore = { inheritAttrs: false, render() { return (this as any).$slots.default?.(); } };
 const stubs = {
@@ -41,11 +42,13 @@ afterEach(() => {
     giro.visit.mockClear();
     giro.get.mockReset();
     dimenticaElencoCondomini();
+    localStorage.clear();
+    azzeraCondominioInUso();
 });
 
 function monta(url: string, props: Record<string, unknown> = {}, altro: Record<string, unknown> = {}, chi: { ruoli?: string[]; permessi?: string[] } = {}) {
     pagina.url = url;
-    pagina.props = { auth: { user: { roles: chi.ruoli ?? ['amministratore'], permissions: chi.permessi ?? TUTTI } }, ...altro };
+    pagina.props = { auth: { user: { id: 5, roles: chi.ruoli ?? ['amministratore'], permissions: chi.permessi ?? TUTTI } }, ...altro };
     giro.get.mockResolvedValue({ data: [{ id: 1, nome: 'Le Rose' }, { id: 2, nome: 'I Tigli' }] });
     w = mount(RicercaRapida, { props: { open: true, ...props }, global: { stubs }, attachTo: document.body });
 
@@ -112,6 +115,26 @@ describe('che cosa si trova', () => {
         expect(ricerca.findAll('[data-gruppo="Le Rose"] [data-voce]')[2].text()).toBe('UnitàImmobili');
         // I condomini sono quelli della pagina: nessuna chiamata.
         expect(giro.get).not.toHaveBeenCalled();
+    });
+
+    test('nello studio, con un condominio in uso: dopo lo studio le sue sezioni, sotto il suo nome, e nell\'elenco è segnato «in uso»', async () => {
+        localStorage.setItem('km-condominio-in-uso:5', JSON.stringify({ id: 1, nome: 'Le Rose', esercizio: { id: 3, nome: 'Esercizio 2026' } }));
+        azzeraCondominioInUso();
+        const ricerca = monta('/admin/anagrafiche');
+        await flushPromises();
+        expect(gruppi(ricerca)).toEqual(['Studio', 'Le Rose', 'Apri un condominio', 'Altro']);
+        expect(vociDi(ricerca, 'Le Rose').slice(0, 8)).toEqual(['Cruscotto', 'Condominio', 'Unità', 'Tabelle', 'Esercizi', 'Gestioni', 'Conti', 'Rate']);
+        expect(ricerca.findAll('[data-gruppo="Apri un condominio"] [data-voce]').map((v) => v.text())).toEqual(['Le Rosein uso', 'I Tigli']);
+
+        await scegli(ricerca, 'Unità');
+        expect(giro.visit).toHaveBeenCalledWith('/admin/gestionale/1/immobili');
+    });
+
+    test('senza un condominio in uso le sue sezioni non si elencano: non porterebbero da nessuna parte', async () => {
+        const ricerca = monta('/admin/dashboard');
+        await flushPromises();
+        expect(gruppi(ricerca)).toEqual(['Studio', 'Apri un condominio', 'Altro']);
+        expect(ricerca.findAll('[data-voce]').some((v) => v.text().startsWith('Unità'))).toBe(false);
     });
 
     test('il condòmino trova le sue sezioni: né i condomini, né la casella, né le impostazioni', async () => {

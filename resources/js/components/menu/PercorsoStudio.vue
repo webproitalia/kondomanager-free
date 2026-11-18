@@ -13,14 +13,14 @@
  */
 import { computed, ref } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { Building2, CalendarDays, Check, ChevronDown, ChevronRight, House, List } from 'lucide-vue-next';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
+import { Building2, CalendarDays, Check, ChevronDown, ChevronRight, House } from 'lucide-vue-next';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { usePermission } from '@/composables/permissions';
-import { Permission } from '@/enums/Permission';
+import ElencoCondomini from './ElencoCondomini.vue';
 import { useElencoCondomini } from './elencoCondomini';
-import { indirizzoAltroCondominio, indirizzoAltroEsercizio, usePercorsoPagina } from './percorsoPagina';
+import { useCambioCondominio } from './cambioCondominio';
+import { indirizzoAltroEsercizio, usePercorsoPagina } from './percorsoPagina';
 import { percorsoDi, useVociMenu } from './vociMenu';
 import type { BreadcrumbItemType } from '@/types';
 import type { Building } from '@/types/buildings';
@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<{
 }>(), { breadcrumbs: () => [] });
 
 const page = usePage();
-const { generatePath, hasPermission } = usePermission();
+const { generatePath } = usePermission();
 const { corrente, nomeStudio } = useVociMenu({ gestionale: props.gestionale });
 const { condomini, carica } = useElencoCondomini();
 const dellaPagina = usePercorsoPagina();
@@ -57,19 +57,10 @@ const apriElenco = (aperto: boolean) => {
     }
 };
 
+const { vaiAlCondominio } = useCambioCondominio({ gestionale: props.gestionale });
 const scegliCondominio = (id: number) => {
     elencoAperto.value = false;
-    if (! condominio.value || id === condominio.value.id) {
-        return;
-    }
-    router.visit(indirizzoAltroCondominio({
-        url: page.url,
-        attuale: condominio.value.id,
-        nuovo: id,
-        sulPosto: !! dellaPagina?.cambiaCondominioSulPosto,
-        cruscotto: generatePath('gestionale/:condominio', { condominio: id }),
-        esercizioAperto: condomini.value.find((c) => c.id === id)?.esercizio_aperto?.id,
-    }), { preserveState: false });
+    vaiAlCondominio(id);
 };
 
 // ─── L'esercizio ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -146,28 +137,7 @@ const classeVoce = 'inline-flex h-8 min-w-0 items-center gap-1.5 rounded-md px-2
                     </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" class="w-80 p-0">
-                    <Command>
-                        <CommandInput placeholder="Cerca un condominio…" />
-                        <CommandEmpty>Nessun condominio con questo nome.</CommandEmpty>
-                        <CommandList class="max-h-[min(60vh,22rem)]">
-                            <CommandGroup heading="Condomini">
-                                <CommandItem v-for="c in condomini" :key="c.id" :value="`${c.nome} ${c.id}`" class="cursor-pointer" @select="scegliCondominio(c.id)">
-                                    <Building2 class="text-muted-foreground" />
-                                    <span class="truncate" :class="{ 'font-semibold': c.id === condominio.id }">{{ c.nome }}</span>
-                                    <Check v-if="c.id === condominio.id" class="ml-auto text-primary" />
-                                </CommandItem>
-                            </CommandGroup>
-                            <template v-if="hasPermission([Permission.VIEW_CONDOMINI])">
-                                <CommandSeparator />
-                                <CommandGroup>
-                                    <CommandItem value="tutti-i-condomini elenco" class="cursor-pointer" @select="router.visit('/condomini')">
-                                        <List class="text-muted-foreground" />
-                                        Tutti i condomini
-                                    </CommandItem>
-                                </CommandGroup>
-                            </template>
-                        </CommandList>
-                    </Command>
+                    <ElencoCondomini :condomini="condomini" :attuale="condominio.id" @scelto="(c) => scegliCondominio(c.id)" />
                 </PopoverContent>
             </Popover>
 

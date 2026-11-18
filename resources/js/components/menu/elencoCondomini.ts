@@ -57,7 +57,10 @@ export function useElencoCondomini() {
         return richiesta;
     };
 
-    return { condomini, carica, puoVederli };
+    /** L'elenco chiesto al server: quello intero (`null` finché non lo si è chiesto). Quello delle pagine può essere parziale. */
+    const interi = computed<CondominioInElenco[] | null>(() => chiesti.value);
+
+    return { condomini, interi, carica, puoVederli };
 }
 
 /** Per i test: dimentica l'elenco chiesto. */

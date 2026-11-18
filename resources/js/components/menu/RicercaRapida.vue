@@ -40,8 +40,17 @@ watch(aperta, (ora) => {
     }
 }, { immediate: true });
 
-/** Le voci del condominio, con quelle dentro «Movimenti» al posto di «Movimenti» (che da sola non porta da nessuna parte). */
-const vociCondominio = computed<VoceMenu[]>(() => (gruppoCondominio.value?.voci ?? []).flatMap((voce) => (voce.figlie?.length ? voce.figlie : [voce])).filter((voce) => ! voce.spenta));
+/**
+ * Le sezioni si cercano dove si è: dentro un condominio prima le sue, poi lo studio; nelle pagine dello studio prima lo
+ * studio, poi quelle del condominio in uso (l'ultimo aperto), come nel menu.
+ */
+const ordine = computed<('condominio' | 'studio')[]>(() => (gruppoCondominio.value?.dellaPagina ? ['condominio', 'studio'] : ['studio', 'condominio']));
+
+/**
+ * Le voci del condominio, con quelle dentro «Movimenti» al posto di «Movimenti» (che da sola non porta da nessuna parte).
+ * Senza un condominio in uso non ci sono: lo si apre da «Apri un condominio».
+ */
+const vociCondominio = computed<VoceMenu[]>(() => (gruppoCondominio.value?.voci ?? []).flatMap((voce) => (voce.figlie?.length ? voce.figlie : [voce])).filter((voce) => ! voce.spenta && ! voce.daScegliere));
 
 const casella = computed(() => (nelPannello.value && hasPermission([Permission.VIEW_EVENTS])
     ? { href: route('admin.inbox'), numero: Number(page.props.inbox_count ?? 0) }
@@ -72,34 +81,36 @@ const altroNome = (voce: VoceMenu) => (voce.titolo.toLowerCase() !== voce.nome.t
                 <CommandList class="max-h-[min(62vh,30rem)] scroll-py-2 p-1.5">
                     <CommandEmpty class="py-10 text-muted-foreground">Nessuna sezione e nessun condominio con questo nome.</CommandEmpty>
 
-                    <CommandGroup v-if="gruppoCondominio" :heading="gruppoCondominio.nome">
-                        <CommandItem v-for="voce in vociCondominio" :key="voce.chiave" :value="`c-${voce.chiave}`" class="cursor-pointer gap-2.5 py-1.5" @select="vai(voce)">
-                            <IconaSezione :icona="voce.icona" :colore="voce.colore" misura="sm" class="[&_svg]:size-3.5" />
-                            <span>{{ voce.nome }}</span>
-                            <span v-if="altroNome(voce)" class="truncate text-xs text-muted-foreground">{{ altroNome(voce) }}</span>
-                        </CommandItem>
-                    </CommandGroup>
+                    <template v-for="gruppo in ordine" :key="gruppo">
+                        <CommandGroup v-if="gruppo === 'condominio' && gruppoCondominio?.nome" :heading="gruppoCondominio.nome">
+                            <CommandItem v-for="voce in vociCondominio" :key="voce.chiave" :value="`c-${voce.chiave}`" class="cursor-pointer gap-2.5 py-1.5" @select="vai(voce)">
+                                <IconaSezione :icona="voce.icona" :colore="voce.colore" misura="sm" class="[&_svg]:size-3.5" />
+                                <span>{{ voce.nome }}</span>
+                                <span v-if="altroNome(voce)" class="truncate text-xs text-muted-foreground">{{ altroNome(voce) }}</span>
+                            </CommandItem>
+                        </CommandGroup>
 
-                    <CommandGroup :heading="nomeStudio">
-                        <CommandItem v-for="voce in studio" :key="voce.chiave" :value="`s-${voce.chiave}`" class="cursor-pointer gap-2.5 py-1.5" @select="vai(voce)">
-                            <IconaSezione :icona="voce.icona" :colore="voce.colore" misura="sm" class="[&_svg]:size-3.5" />
-                            <span>{{ voce.nome }}</span>
-                            <span v-if="altroNome(voce)" class="truncate text-xs text-muted-foreground">{{ altroNome(voce) }}</span>
-                            <span v-if="voce.contatore" class="ml-auto rounded-full bg-amber-500/15 px-1.5 text-[11px] font-semibold text-amber-700 tabular-nums dark:text-amber-300">{{ voce.contatore }}</span>
-                        </CommandItem>
-                        <CommandItem v-if="casella" value="s-casella" class="cursor-pointer gap-2.5 py-1.5" @select="vai(casella)">
-                            <IconaSezione :icona="Bell" colore="#e2574c" misura="sm" class="[&_svg]:size-3.5" />
-                            <span>Casella delle attività</span>
-                            <span class="truncate text-xs text-muted-foreground">Action inbox</span>
-                            <span v-if="casella.numero" class="ml-auto rounded-full bg-red-500/15 px-1.5 text-[11px] font-semibold text-red-700 tabular-nums dark:text-red-300">{{ casella.numero }}</span>
-                        </CommandItem>
-                    </CommandGroup>
+                        <CommandGroup v-else-if="gruppo === 'studio'" :heading="nomeStudio">
+                            <CommandItem v-for="voce in studio" :key="voce.chiave" :value="`s-${voce.chiave}`" class="cursor-pointer gap-2.5 py-1.5" @select="vai(voce)">
+                                <IconaSezione :icona="voce.icona" :colore="voce.colore" misura="sm" class="[&_svg]:size-3.5" />
+                                <span>{{ voce.nome }}</span>
+                                <span v-if="altroNome(voce)" class="truncate text-xs text-muted-foreground">{{ altroNome(voce) }}</span>
+                                <span v-if="voce.contatore" class="ml-auto rounded-full bg-amber-500/15 px-1.5 text-[11px] font-semibold text-amber-700 tabular-nums dark:text-amber-300">{{ voce.contatore }}</span>
+                            </CommandItem>
+                            <CommandItem v-if="casella" value="s-casella" class="cursor-pointer gap-2.5 py-1.5" @select="vai(casella)">
+                                <IconaSezione :icona="Bell" colore="#e2574c" misura="sm" class="[&_svg]:size-3.5" />
+                                <span>Casella delle attività</span>
+                                <span class="truncate text-xs text-muted-foreground">Action inbox</span>
+                                <span v-if="casella.numero" class="ml-auto rounded-full bg-red-500/15 px-1.5 text-[11px] font-semibold text-red-700 tabular-nums dark:text-red-300">{{ casella.numero }}</span>
+                            </CommandItem>
+                        </CommandGroup>
+                    </template>
 
                     <CommandGroup v-if="condomini.length" heading="Apri un condominio">
                         <CommandItem v-for="c in condomini" :key="c.id" :value="`k-${c.id}`" class="cursor-pointer gap-2.5 py-1.5" @select="vai({ href: generatePath('gestionale/:condominio', { condominio: c.id }) })">
                             <span class="flex size-6 shrink-0 items-center justify-center rounded-[6px] bg-muted text-muted-foreground"><Building2 class="size-3.5" /></span>
                             <span class="truncate">{{ c.nome }}</span>
-                            <span v-if="gruppoCondominio?.id === c.id" class="ml-auto text-xs text-muted-foreground">aperto</span>
+                            <span v-if="gruppoCondominio?.id === c.id" class="ml-auto text-xs text-muted-foreground">{{ gruppoCondominio.dellaPagina ? 'aperto' : 'in uso' }}</span>
                         </CommandItem>
                     </CommandGroup>
 

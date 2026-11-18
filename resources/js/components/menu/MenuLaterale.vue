@@ -36,11 +36,16 @@ onMounted(() => {
         if (nav) {
             nav.scrollTop = scorrimento;
             // La voce accesa deve vedersi: se è fuori dallo schermo (una voce in fondo ai Movimenti), il menu scorre fino a lei.
+            // Il meno possibile, però: il menu è un punto fermo, e ogni voce che resta dov'era è una voce che si ritrova.
             const accesa = nav.querySelector<HTMLElement>('[data-attiva="true"]');
             if (accesa) {
                 const [voce, elencoVisibile] = [accesa.getBoundingClientRect(), nav.getBoundingClientRect()];
-                if (voce.top < elencoVisibile.top || voce.bottom > elencoVisibile.bottom) {
-                    nav.scrollTop += voce.top - elencoVisibile.top - (elencoVisibile.height - voce.height) / 2;
+                // Un po' di margine: si vede anche la voce dopo (o quella prima).
+                const margine = voce.height;
+                if (voce.top < elencoVisibile.top) {
+                    nav.scrollTop += voce.top - elencoVisibile.top - margine;
+                } else if (voce.bottom > elencoVisibile.bottom) {
+                    nav.scrollTop += voce.bottom - elencoVisibile.bottom + margine;
                 }
             }
             nav.addEventListener('scroll', ricorda, { passive: true });

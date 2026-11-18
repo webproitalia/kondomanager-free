@@ -21,7 +21,7 @@ const classeTasto = 'inline-flex h-8 items-center justify-center gap-1.5 rounded
         <div class="flex min-w-0 items-center gap-2.5">
             <IconaSezione v-if="corrente" :icona="corrente.icona" :colore="corrente.colore" misura="sm" />
             <span class="truncate text-sm font-semibold text-foreground">{{ corrente?.nome ?? 'Scheda' }}</span>
-            <span v-if="gruppoCondominio" class="hidden truncate text-xs text-muted-foreground sm:inline">{{ gruppoCondominio.nome }}</span>
+            <span v-if="gruppoCondominio?.dellaPagina" class="hidden truncate text-xs text-muted-foreground sm:inline">{{ gruppoCondominio.nome }}</span>
         </div>
 
         <div class="ml-auto flex shrink-0 items-center gap-1">

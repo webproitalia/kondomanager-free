@@ -1,32 +1,48 @@
 <script setup lang="ts">
 /**
- * Il contenuto del menu laterale: il marchio in testa, i gruppi delle voci, in fondo le impostazioni, la guida e l'utente.
+ * Il contenuto del menu laterale: il marchio in testa, i due gruppi delle voci, in fondo l'utente, le impostazioni e la guida.
  * Lo disegnano la colonna a sinistra (aperta, o chiusa a sole icone) e, sugli schermi stretti, il cassetto.
  *
- * Dentro un condominio il gruppo dello studio resta in cima, compatto: una griglia di icone con il nome al passaggio del mouse
- * (con il menu chiuso, una sola icona che apre l'elenco), così da un condominio si va ovunque con un clic e le voci del
- * condominio stanno tutte nello schermo.
+ * ## Il menu è un punto fermo
+ *
+ * **Non cambia mai** (Web Pro Italia, 18/11/2026: «la sidebar che si trasforma è caotica: quello deve rimanere un punto fermo che
+ * hanno sempre in visione»). Su ogni pagina ci sono, nello stesso posto e nello stesso ordine:
+ *
+ * 1. **lo studio**: Dashboard, Agenda, Condomini, Persone, Fornitori… a righe intere;
+ * 2. **il condominio in uso**: una riga di testa con il suo nome e l'esercizio (un clic: se ne sceglie un altro), e sotto,
+ *    rientrate lungo una linea di guida, le sue sezioni: Cruscotto, Condominio, Unità, Tabelle, Esercizi, Gestioni, Conti,
+ *    Rate, Movimenti (che si apre: un rientro in più), Assemblee, Registrazioni.
+ *
+ * Dentro un condominio il secondo gruppo è il suo; nelle pagine dello studio è l'ultimo aperto (`condominioInUso.ts`).
+ * Senza un condominio in uso la riga di testa dice «Scegli un condominio» e le sezioni restano al loro posto, tenui: un clic
+ * su una di loro apre la scelta e poi porta a quella sezione.
+ *
+ * Il menu chiuso ha le stesse icone, nello stesso ordine, con un separatore fra i due gruppi.
  */
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Building2, ChevronsLeft, ChevronsRight, ChevronsUpDown, LayoutGrid, X } from 'lucide-vue-next';
+import { Building2, ChevronsLeft, ChevronsRight, ChevronsUpDown, X } from 'lucide-vue-next';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSidebar } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getInitials } from '@/composables/useInitials';
 import { usePermission } from '@/composables/permissions';
-import IconaSezione from './IconaSezione.vue';
+import { useCambioCondominio } from './cambioCondominio';
+import { useCondominioInUso } from './condominioInUso';
+import ElencoCondomini from './ElencoCondomini.vue';
+import { useElencoCondomini, type CondominioInElenco } from './elencoCondomini';
 import { scorciatoia } from './tasti';
 import VoceConFiglie from './VoceConFiglie.vue';
 import VoceMenuRiga from './VoceMenu.vue';
-import { useVociMenu } from './vociMenu';
+import { useVociMenu, type VoceMenu } from './vociMenu';
 import type { Auth } from '@/types';
 
 const props = defineProps<{
-    /** Dentro un condominio (`GestionaleLayout`): c'è il gruppo con il nome del condominio. */
+    /** Dentro un condominio (`GestionaleLayout`): il gruppo del condominio è il suo. */
     gestionale?: boolean;
     /** Il menu è chiuso: solo le icone. */
     chiuso?: boolean;
@@ -40,13 +56,44 @@ const { studio, gruppoCondominio, fondo, nomeStudio } = useVociMenu({ gestionale
 
 const utente = computed(() => (page.props.auth as Auth).user);
 const nomeApp = computed(() => (page.props.name as string) || 'KondoManager');
-const studioAcceso = computed(() => studio.value.some((v) => v.attiva));
+
+// ─── Scegliere il condominio in uso ──────────────────────────────────────────────────────────────────────────────────────
+const { condomini, interi, carica } = useElencoCondomini();
+const { controllaCon } = useCondominioInUso();
+const { vaiAlCondominio } = useCambioCondominio({ gestionale: props.gestionale });
+
+const sceltaAperta = ref(false);
+/** La sezione cliccata quando non c'era un condominio in uso: dopo la scelta si va lì. */
+const sezioneInAttesa = ref<VoceMenu | null>(null);
+
+const apriScelta = (aperta: boolean, voce: VoceMenu | null = null) => {
+    sezioneInAttesa.value = aperta ? voce : null;
+    sceltaAperta.value = aperta;
+    if (aperta) {
+        void carica();
+    }
+};
+
+const scelto = (condominio: CondominioInElenco) => {
+    const sezione = sezioneInAttesa.value?.sezione;
+    apriScelta(false);
+    vaiAlCondominio(condominio.id, sezione);
+};
+
+// Il condominio in uso non è più nell'elenco intero dei condomini (eliminato): il ricordo si cancella, e il menu chiede di
+// sceglierne uno.
+watch(interi, (elenco) => elenco && controllaCon(elenco), { immediate: true });
+
+const testa = computed(() => ({
+    nome: gruppoCondominio.value?.nome ?? 'Scegli un condominio',
+    sotto: gruppoCondominio.value?.nome ? (gruppoCondominio.value.esercizio ?? 'Condominio in uso') : 'Per aprire le sue sezioni',
+}));
 </script>
 
 <template>
     <div class="flex h-full min-h-0 flex-col" :data-menu-chiuso="chiuso ? 'true' : 'false'">
         <!-- Il marchio -->
-        <div class="flex h-14 shrink-0 items-center" :class="chiuso ? 'justify-center' : 'pl-3.5 pr-2'">
+        <div class="flex h-[var(--km-testa)] shrink-0 items-center" :class="chiuso ? 'justify-center' : 'pl-3.5 pr-2'">
             <Link :href="generatePath('dashboard')" class="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/40" :class="{ 'flex-none': chiuso }" :title="nomeApp">
                 <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--km-menu-attiva)] text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_1px_2px_hsl(0_0%_0%/0.3)]">
                     <AppLogoIcon class="size-5" />
@@ -67,10 +114,10 @@ const studioAcceso = computed(() => studio.value.some((v) => v.attiva));
         </div>
 
         <!-- Riaprire: con il menu chiuso, la freccia subito sotto il marchio -->
-        <div v-if="chiuso" class="flex shrink-0 justify-center pb-1">
+        <div v-if="chiuso" class="flex shrink-0 justify-center pb-0.5">
             <Tooltip :delay-duration="0">
                 <TooltipTrigger as-child>
-                    <button type="button" class="km-voce flex h-7 w-10 items-center justify-center rounded-lg text-white/70 hover:text-white" data-menu-riapri aria-label="Apri il menu" @click="toggleSidebar">
+                    <button type="button" class="km-voce flex h-6 w-10 items-center justify-center rounded-lg text-white/70 hover:text-white" data-menu-riapri aria-label="Apri il menu" @click="toggleSidebar">
                         <ChevronsRight class="size-[1.15rem]" />
                     </button>
                 </TooltipTrigger>
@@ -78,109 +125,83 @@ const studioAcceso = computed(() => studio.value.some((v) => v.attiva));
             </Tooltip>
         </div>
 
-        <nav class="km-menu-scorre min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3" aria-label="Menu principale">
-            <!-- ─── Lo studio ─── -->
-            <template v-if="studio.length">
-                <!-- Dentro un condominio, menu chiuso: una sola icona, che apre l'elenco delle voci dello studio (l'elenco dentro il suggerimento: vedi `VoceConFiglie.vue`) -->
-                <Tooltip v-if="gruppoCondominio && chiuso" :delay-duration="0">
-                    <TooltipTrigger as-child>
-                        <span class="mt-1 flex">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger as-child>
-                                    <button type="button" class="km-voce flex size-10 items-center justify-center rounded-lg" data-menu-voce="studio" :data-attiva="studioAcceso ? 'true' : 'false'" :aria-label="nomeStudio">
-                                        <span class="flex size-7 items-center justify-center rounded-[7px] bg-white/10 text-white ring-1 ring-inset ring-white/15"><LayoutGrid class="size-4" /></span>
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent side="right" align="start" :side-offset="10" class="w-56">
-                                    <DropdownMenuLabel class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{{ nomeStudio }}</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem v-for="voce in studio" :key="voce.chiave" as-child>
-                                        <Link :href="voce.href" class="flex w-full cursor-pointer items-center gap-2.5">
-                                            <IconaSezione :icona="voce.icona" :colore="voce.colore" misura="sm" />
-                                            <span class="truncate">{{ voce.nome }}</span>
-                                            <span v-if="voce.contatore" class="ml-auto rounded-full bg-amber-500/15 px-1.5 text-[11px] font-semibold text-amber-700 tabular-nums dark:text-amber-300">{{ voce.contatore }}</span>
-                                        </Link>
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" :side-offset="10">{{ nomeStudio }}</TooltipContent>
-                </Tooltip>
+        <nav class="km-menu-scorre min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-2" aria-label="Menu principale">
+            <!-- ─── 1. Lo studio: sempre qui, sempre uguale ─── -->
+            <div v-if="! chiuso" class="km-menu-etichetta flex h-6 items-end px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em]" data-menu-gruppo="studio">{{ nomeStudio }}</div>
+            <div class="flex flex-col gap-px" :class="{ 'items-center': chiuso }" data-menu-voci="studio">
+                <VoceMenuRiga v-for="voce in studio" :key="voce.chiave" :voce="voce" :solo-icona="chiuso" />
+            </div>
 
-                <template v-else>
-                    <div v-if="! chiuso" class="km-menu-etichetta flex h-8 items-end px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]">{{ nomeStudio }}</div>
-                    <div v-else class="h-1" />
-
-                    <!-- Dentro un condominio, menu aperto: lo studio compatto, una griglia di icone -->
-                    <div v-if="gruppoCondominio" class="grid grid-cols-5 gap-1 pb-1" data-menu-studio-compatto>
-                        <Tooltip v-for="(voce, i) in studio" :key="voce.chiave" :delay-duration="0">
-                            <TooltipTrigger as-child>
-                                <Link :href="voce.href" class="km-voce relative flex h-10 items-center justify-center rounded-lg" :data-menu-voce="voce.chiave" :data-attiva="voce.attiva ? 'true' : 'false'" :aria-label="voce.titolo">
-                                    <IconaSezione :icona="voce.icona" :colore="voce.colore" />
-                                    <span v-if="voce.contatore" class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold leading-none text-amber-950 tabular-nums">{{ voce.contatore }}</span>
-                                </Link>
-                            </TooltipTrigger>
-                            <!-- Il nome non copre le altre icone: sopra per la prima riga, sotto per le altre. -->
-                            <TooltipContent :side="i < 5 ? 'top' : 'bottom'" :side-offset="6">
-                                {{ voce.nome }}<span v-if="voce.titolo !== voce.nome" class="ml-1.5 opacity-60">{{ voce.titolo }}</span>
-                            </TooltipContent>
-                        </Tooltip>
-                    </div>
-
-                    <!-- Nello studio: l'elenco intero -->
-                    <div v-else class="flex flex-col gap-0.5">
-                        <VoceMenuRiga v-for="voce in studio" :key="voce.chiave" :voce="voce" :solo-icona="chiuso" />
-                    </div>
-                </template>
-            </template>
-
-            <!-- ─── Il condominio aperto ─── -->
+            <!-- ─── 2. Il condominio in uso: la riga di testa (un clic: se ne sceglie un altro) e le sue sezioni, rientrate ─── -->
             <template v-if="gruppoCondominio">
-                <div v-if="! chiuso" class="mb-1.5 mt-3 flex items-center gap-2.5 rounded-lg bg-white/[0.06] px-2 py-2 ring-1 ring-inset ring-white/[0.07]" data-menu-condominio :title="gruppoCondominio.nome">
-                    <span class="flex size-7 shrink-0 items-center justify-center rounded-[7px] bg-white/10 text-white"><Building2 class="size-4" /></span>
-                    <span class="min-w-0 flex-1 leading-tight">
-                        <span class="block truncate text-[13px] font-semibold text-white">{{ gruppoCondominio.nome }}</span>
-                        <span v-if="gruppoCondominio.esercizio" class="km-menu-etichetta block truncate text-[11px]">{{ gruppoCondominio.esercizio }}</span>
-                    </span>
-                </div>
-                <div v-else class="mx-1.5 my-2 h-px bg-[var(--km-menu-riga)]" />
+                <div v-if="chiuso" class="mx-1.5 my-1.5 h-px bg-[var(--km-menu-riga)]" data-menu-separatore />
 
-                <div class="flex flex-col gap-0.5">
+                <Popover :open="sceltaAperta" @update:open="(aperta: boolean) => apriScelta(aperta)">
+                    <PopoverTrigger as-child>
+                        <button
+                            v-if="chiuso"
+                            type="button"
+                            class="km-voce km-riga mx-auto flex w-10 items-center justify-center rounded-lg"
+                            data-menu-condominio
+                            :aria-label="`${testa.nome}: scegli il condominio`"
+                            :title="`${testa.nome} — ${testa.sotto}. Clicca per scegliere il condominio.`"
+                        >
+                            <span class="km-icona-voce flex items-center justify-center bg-white/10 text-white ring-1 ring-inset ring-white/15"><Building2 class="size-[60%]" /></span>
+                        </button>
+                        <button
+                            v-else
+                            type="button"
+                            class="km-voce km-condominio mb-px mt-2 flex w-full items-center gap-2.5 rounded-lg px-1.5 text-left ring-1 ring-inset ring-white/[0.08]"
+                            data-menu-condominio
+                            :data-senza-condominio="gruppoCondominio.id ? undefined : ''"
+                            :title="`${testa.nome} — clicca per scegliere il condominio`"
+                        >
+                            <span class="km-icona-voce flex shrink-0 items-center justify-center bg-white/10 text-white"><Building2 class="size-[60%]" /></span>
+                            <span class="min-w-0 flex-1 leading-[1.15]">
+                                <span class="block truncate text-[13px] font-semibold text-white">{{ testa.nome }}</span>
+                                <span class="km-menu-etichetta block truncate text-[10.5px]">{{ testa.sotto }}</span>
+                            </span>
+                            <ChevronsUpDown class="mr-0.5 size-3.5 shrink-0 opacity-50" />
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="right" align="start" :side-offset="12" class="w-80 p-0" data-menu-scelta-condominio>
+                        <p v-if="sezioneInAttesa" class="border-b px-3 py-2 text-xs text-muted-foreground">Scegli il condominio: si apre «{{ sezioneInAttesa.nome }}».</p>
+                        <ElencoCondomini :condomini="condomini" :attuale="gruppoCondominio.id" @scelto="scelto" />
+                    </PopoverContent>
+                </Popover>
+
+                <div class="flex flex-col gap-px" :class="chiuso ? 'items-center' : 'km-rientro'" data-menu-voci="condominio">
                     <template v-for="voce in gruppoCondominio.voci" :key="voce.chiave">
-                        <VoceConFiglie v-if="voce.figlie?.length" :voce="voce" :solo-icona="chiuso" />
-                        <VoceMenuRiga v-else :voce="voce" :solo-icona="chiuso" />
+                        <VoceConFiglie v-if="voce.figlie?.length" :voce="voce" :solo-icona="chiuso" :livello="2" @scegli="(v: VoceMenu) => apriScelta(true, v)" />
+                        <VoceMenuRiga v-else :voce="voce" :solo-icona="chiuso" :livello="2" @scegli="(v: VoceMenu) => apriScelta(true, v)" />
                     </template>
                 </div>
             </template>
         </nav>
 
-        <!-- ─── In fondo: impostazioni, guida, utente ─── -->
-        <div class="shrink-0 border-t border-[var(--km-menu-riga)] px-2.5 pb-2.5 pt-2">
-            <div class="flex flex-col gap-0.5">
-                <VoceMenuRiga v-for="voce in fondo" :key="voce.chiave" :voce="voce" :solo-icona="chiuso" />
-            </div>
-
+        <!-- ─── In fondo, compatti: l'utente con il suo menu, le impostazioni e la guida ─── -->
+        <div class="flex shrink-0 gap-1 border-t border-[var(--km-menu-riga)] px-2.5 py-1.5" :class="chiuso ? 'flex-col-reverse items-center' : 'items-center'" data-menu-fondo>
             <DropdownMenu>
                 <DropdownMenuTrigger as-child>
-                    <button type="button" class="km-voce mt-1.5 flex w-full items-center rounded-lg text-left" :class="chiuso ? 'size-10 justify-center' : 'h-11 gap-2.5 px-1.5'" data-menu-utente :aria-label="utente.name">
-                        <Avatar class="size-7 shrink-0 rounded-[7px] bg-white/15 text-[11px] font-bold text-white ring-1 ring-inset ring-white/15">
+                    <button type="button" class="km-voce flex min-w-0 items-center rounded-lg text-left" :class="chiuso ? 'km-riga w-10 justify-center' : 'h-10 flex-1 gap-2.5 px-1.5'" data-menu-utente :aria-label="utente.name">
+                        <Avatar class="km-icona-voce shrink-0 !rounded-[6px] bg-white/15 text-[11px] font-bold text-white ring-1 ring-inset ring-white/15">
                             <AvatarImage v-if="utente.avatar" :src="utente.avatar" :alt="utente.name" />
                             <AvatarFallback>{{ getInitials(utente.name) }}</AvatarFallback>
                         </Avatar>
-                        <template v-if="! chiuso">
-                            <span class="min-w-0 flex-1 leading-tight">
-                                <span class="block truncate text-[13px] font-medium text-white">{{ utente.name }}</span>
-                                <span class="km-menu-etichetta block truncate text-[11px]">{{ utente.email }}</span>
-                            </span>
-                            <ChevronsUpDown class="mr-0.5 size-4 shrink-0 opacity-50" />
-                        </template>
+                        <span v-if="! chiuso" class="min-w-0 flex-1 leading-[1.15]">
+                            <span class="block truncate text-[13px] font-medium text-white">{{ utente.name }}</span>
+                            <span class="km-menu-etichetta block truncate text-[10.5px]">{{ utente.email }}</span>
+                        </span>
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent :side="chiuso ? 'right' : 'top'" align="start" :side-offset="8" class="w-60">
                     <UserMenuContent :user="utente" />
                 </DropdownMenuContent>
             </DropdownMenu>
+
+            <div class="flex shrink-0 gap-px" :class="{ 'flex-col items-center': chiuso }">
+                <VoceMenuRiga v-for="voce in fondo" :key="voce.chiave" :voce="voce" solo-icona />
+            </div>
         </div>
     </div>
 </template>

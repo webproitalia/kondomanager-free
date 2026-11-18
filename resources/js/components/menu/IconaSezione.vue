@@ -9,12 +9,16 @@ import type { Component } from 'vue';
 withDefaults(defineProps<{
     icona: Component;
     colore: string;
-    /** `sm` nella ricerca e nelle voci compatte, `md` nel menu, `lg` in testa alla pagina (più piccola sul telefono). */
-    misura?: 'sm' | 'md' | 'lg';
+    /**
+     * `voce` e `voce2` nel menu (le voci dello studio, e un po' più piccole le sezioni del condominio, che stanno un livello
+     * sotto: la misura segue l'altezza delle righe, vedi `--km-tessera` in `menu-laterale.css`); `sm` nella ricerca; `md` dove
+     * serve una misura fissa; `lg` in testa alla pagina (più piccola sul telefono).
+     */
+    misura?: 'voce' | 'voce2' | 'sm' | 'md' | 'lg';
 }>(), { misura: 'md' });
 
-const riquadro = { sm: 'size-6 rounded-[6px]', md: 'size-7 rounded-[7px]', lg: 'size-9 rounded-[10px] sm:size-11 sm:rounded-xl' };
-const disegno = { sm: 'size-3.5', md: 'size-4', lg: 'size-5 sm:size-6' };
+const riquadro = { voce: 'km-icona-voce', voce2: 'km-icona-voce2', sm: 'size-6 rounded-[6px]', md: 'size-7 rounded-[7px]', lg: 'size-9 rounded-[10px] sm:size-11 sm:rounded-xl' };
+const disegno = { voce: 'size-[60%]', voce2: 'size-[60%]', sm: 'size-3.5', md: 'size-4', lg: 'size-5 sm:size-6' };
 </script>
 
 <template>

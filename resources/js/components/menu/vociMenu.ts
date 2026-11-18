@@ -12,6 +12,13 @@
  * ⚠️ Una voce aggiunta a una delle due testate va aggiunta anche qui (e viceversa): sono due impalcature della stessa
  * applicazione, e la scelta fra le due è di chi usa l'installazione (Impostazioni → Aspetto).
  *
+ * ## Il menu non cambia mai
+ *
+ * I due gruppi — lo studio, e sotto le sezioni del condominio — ci sono su ogni pagina, nello stesso ordine e con gli stessi
+ * nomi: è il punto fermo di chi lavora. Dentro un condominio le sezioni sono le sue. Nelle pagine dello studio sono quelle del
+ * **condominio in uso**, l'ultimo aperto (`condominioInUso.ts`): «Unità» porta alle sue unità. Se non c'è un condominio in
+ * uso le sezioni restano al loro posto, da scegliere (`daScegliere`): un clic apre la scelta del condominio e poi va lì.
+ *
  * ## I nomi
  *
  * `nome` è il nome breve, del solo menu («Unità», «Conti», «Rate»); `titolo` è il nome intero della pagina («Immobili», «Piani
@@ -28,8 +35,9 @@
  * ## L'esercizio
  *
  * Gestioni, Conti, Rate e quattro voci dei Movimenti stanno sotto un esercizio. Si usa quello della pagina; se la pagina non lo
- * porta, quello aperto del condominio (dall'elenco dei condomini della pagina). Senza un esercizio le prime tre portano
- * all'elenco degli esercizi, e le voci dei Movimenti sono spente con la nota «Nessun esercizio aperto», come nel loro menu.
+ * porta, quello aperto del condominio (dall'elenco dei condomini della pagina), poi quello in cui si lavorava l'ultima volta
+ * (ricordato con il condominio in uso). Senza un esercizio le prime tre portano all'elenco degli esercizi, dove se ne sceglie
+ * uno, e le voci dei Movimenti sono spente con la nota «Nessun esercizio aperto», come nel loro menu.
  */
 import { computed, type Component } from 'vue';
 import { usePage } from '@inertiajs/vue3';
@@ -43,6 +51,7 @@ import { usePermission } from '@/composables/permissions';
 import { Permission } from '@/enums/Permission';
 import { Role } from '@/enums/Role';
 import { SORGENTE } from '@/lib/sorgente';
+import { useCondominioInUso } from './condominioInUso';
 import type { Building as Condominio } from '@/types/buildings';
 import type { Esercizio } from '@/types/gestionale/esercizi';
 
@@ -67,14 +76,23 @@ export interface VoceMenu {
     /** Si mostra, non si clicca (le voci dei Movimenti senza un esercizio aperto). */
     spenta?: boolean;
     nota?: string;
+    /**
+     * Non c'è un condominio in uso: la voce resta al suo posto, e un clic apre la scelta del condominio. `sezione` è il pezzo
+     * di indirizzo, sotto il condominio, a cui andare dopo la scelta (`/immobili`; per le voci sotto un esercizio, `/esercizi`).
+     */
+    daScegliere?: boolean;
+    sezione?: string;
     figlie?: VoceMenu[];
 }
 
 export interface GruppoCondominio {
-    id: number;
-    nome: string;
+    /** `null` quando non c'è un condominio in uso: le voci ci sono lo stesso, da scegliere. */
+    id: number | null;
+    nome: string | null;
     esercizio: string | null;
     voci: VoceMenu[];
+    /** Le voci sono quelle del condominio della pagina (si è dentro un condominio), non di quello ricordato. */
+    dellaPagina: boolean;
 }
 
 /**
@@ -144,18 +162,30 @@ export function useVociMenu(opzioni: { gestionale?: boolean } = {}) {
     const percorso = computed(() => percorsoDi(page.url));
     const nelPannello = computed(() => getRolePrefix() === 'admin');
 
-    const condominio = computed(() => (opzioni.gestionale ? (page.props.condominio as Condominio | undefined) : undefined));
+    const { inUso } = useCondominioInUso();
+
+    /** Dentro un condominio, quello della pagina; nelle pagine dello studio, quello in uso (l'ultimo aperto). */
+    const dellaPagina = computed(() => (opzioni.gestionale ? (page.props.condominio as Condominio | undefined) : undefined));
+    const condominio = computed<{ id: number; nome: string } | null>(() => {
+        if (dellaPagina.value?.id) {
+            return { id: dellaPagina.value.id, nome: dellaPagina.value.nome };
+        }
+
+        return inUso.value ? { id: inUso.value.id, nome: inUso.value.nome } : null;
+    });
     const esercizio = computed(() => (opzioni.gestionale ? (page.props.esercizio as Esercizio | null | undefined) : undefined));
     const condomini = computed(() => (page.props.condomini as (Condominio & { esercizio_aperto?: { id: number; nome?: string } | null })[] | undefined) ?? []);
+    /** L'esercizio ricordato vale per il condominio a cui appartiene. */
+    const ricordato = computed(() => (inUso.value && inUso.value.id === condominio.value?.id ? inUso.value.esercizio : null));
 
-    /** L'esercizio delle voci che ne hanno bisogno: quello della pagina, altrimenti quello aperto del condominio. */
+    /** L'esercizio delle voci che ne hanno bisogno: quello della pagina, poi quello aperto del condominio, poi quello ricordato. */
     const esercizioId = computed<number | null>(() => {
         if (esercizio.value?.id) {
             return esercizio.value.id;
         }
-        const corrente = Array.isArray(condomini.value) ? condomini.value.find((c) => c.id === condominio.value?.id) : undefined;
+        const corrente = dellaPagina.value && Array.isArray(condomini.value) ? condomini.value.find((c) => c.id === dellaPagina.value?.id) : undefined;
 
-        return corrente?.esercizio_aperto?.id ?? null;
+        return corrente?.esercizio_aperto?.id ?? ricordato.value?.id ?? null;
     });
 
     const allegatiInAttesa = computed(() => Number(page.props.allegati_in_attesa ?? 0));
@@ -189,51 +219,60 @@ export function useVociMenu(opzioni: { gestionale?: boolean } = {}) {
 
     // ─── Dentro un condominio: le voci di `GestionaleHeader.vue` e, sotto «Movimenti», quelle di `MovimentiLayout.vue` ─────────
     const definizioniCondominio = computed<Definizione[]>(() => {
-        const id = condominio.value?.id;
-        if (! id) {
+        // Chi non ha il pannello (un condòmino) non entra nel gestionale: per lui il gruppo non c'è.
+        if (! nelPannello.value) {
             return [];
         }
-        const c = (percorsoVoce: string) => generatePath(`gestionale/:condominio${percorsoVoce}`, { condominio: id });
-        const e = (percorsoVoce: string) => (esercizioId.value
-            ? generatePath(`gestionale/:condominio/esercizi/:esercizio${percorsoVoce}`, { condominio: id, esercizio: esercizioId.value })
+        const id = condominio.value?.id ?? null;
+        // Senza un condominio in uso le voci restano al loro posto: un clic apre la scelta, poi si va a `sezione`.
+        const c = (sezione: string) => (id ? generatePath(`gestionale/:condominio${sezione}`, { condominio: id }) : '#');
+        const e = (sezione: string) => (id && esercizioId.value
+            ? generatePath(`gestionale/:condominio/esercizi/:esercizio${sezione}`, { condominio: id, esercizio: esercizioId.value })
             : null);
+        const voce = (sezione: string) => ({ href: c(sezione), sezione, ...(id ? {} : { daScegliere: true }) });
         // Senza un esercizio le voci che stanno sotto un esercizio portano all'elenco degli esercizi: lì se ne apre uno.
-        const oElenco = (href: string | null) => href ?? c('/esercizi');
-        const delMovimento = (href: string | null) => (href ? { href } : { href: '#', spenta: true, nota: 'Nessun esercizio aperto' });
+        const sottoEsercizio = (sezione: string) => ({ ...voce('/esercizi'), ...(e(sezione) ? { href: e(sezione) as string } : {}) });
+        const delMovimento = (sezione: string) => {
+            if (! id) {
+                return voce('/esercizi');
+            }
+
+            return e(sezione) ? { href: e(sezione) as string } : { href: '#', spenta: true, nota: 'Nessun esercizio aperto' };
+        };
+        const anche = (...indirizzi: (string | null)[]) => (id ? indirizzi.filter((h): h is string => !! h && h !== '#') : []);
 
         return [
-            { chiave: 'cruscotto', nome: 'Cruscotto', titolo: 'Dashboard del condominio', href: c(''), icona: LayoutGrid, esatta: true },
-            { chiave: 'struttura', nome: 'Condominio', titolo: 'Condominio: struttura, casse e saldi', href: c('/struttura'), icona: Building,
-                anche: [c('/palazzine'), c('/scale'), c('/casse'), c('/saldi'), c('/contributi')] },
-            { chiave: 'unita', nome: 'Unità', titolo: 'Immobili', href: c('/immobili'), icona: HousePlus },
-            { chiave: 'tabelle', nome: 'Tabelle', titolo: 'Tabelle millesimali', href: c('/tabelle'), icona: Table2 },
-            { chiave: 'esercizi', nome: 'Esercizi', titolo: 'Esercizi', href: c('/esercizi'), icona: Library },
-            { chiave: 'gestioni', nome: 'Gestioni', titolo: 'Gestioni', href: oElenco(e('/gestioni')), icona: ListPlus },
-            { chiave: 'conti', nome: 'Conti', titolo: 'Piani conti', href: oElenco(e('/piani-conti')), icona: HandCoins, anche: [e('/conti'), e('/voci')].filter((h): h is string => !! h) },
-            { chiave: 'rate', nome: 'Rate', titolo: 'Piani rate', href: oElenco(e('/piani-rate')), icona: Wallet },
+            { chiave: 'cruscotto', nome: 'Cruscotto', titolo: 'Dashboard del condominio', icona: LayoutGrid, esatta: true, ...voce('') },
+            { chiave: 'struttura', nome: 'Condominio', titolo: 'Condominio: struttura, casse e saldi', icona: Building, ...voce('/struttura'),
+                anche: anche(c('/palazzine'), c('/scale'), c('/casse'), c('/saldi'), c('/contributi')) },
+            { chiave: 'unita', nome: 'Unità', titolo: 'Immobili', icona: HousePlus, ...voce('/immobili') },
+            { chiave: 'tabelle', nome: 'Tabelle', titolo: 'Tabelle millesimali', icona: Table2, ...voce('/tabelle') },
+            { chiave: 'esercizi', nome: 'Esercizi', titolo: 'Esercizi', icona: Library, ...voce('/esercizi') },
+            { chiave: 'gestioni', nome: 'Gestioni', titolo: 'Gestioni', icona: ListPlus, ...sottoEsercizio('/gestioni') },
+            { chiave: 'conti', nome: 'Conti', titolo: 'Piani conti', icona: HandCoins, ...sottoEsercizio('/piani-conti'), anche: anche(e('/conti'), e('/voci')) },
+            { chiave: 'rate', nome: 'Rate', titolo: 'Piani rate', icona: Wallet, ...sottoEsercizio('/piani-rate') },
             {
                 chiave: 'movimenti',
                 nome: 'Movimenti',
                 titolo: 'Movimenti',
-                href: c('/movimenti'),
                 icona: ArrowUpDown,
+                ...voce('/movimenti'),
                 figlie: [
-                    { chiave: 'incassi', nome: 'Incassi', titolo: 'Incassi rate', href: c('/movimenti-rate'), icona: LogIn, anche: [c('/ricevute')] },
-                    { chiave: 'rate-scadute', nome: 'Rate scadute', titolo: 'Rate scadute', href: c('/rate-scadute'), icona: CalendarClock },
-                    { chiave: 'fatture', nome: 'Fatture', titolo: 'Fatture passive', href: c('/fatture'), icona: FileText, anche: [c('/regolazioni-immediate')] },
-                    { chiave: 'pagamenti', nome: 'Pagamenti', titolo: 'Pagamenti fornitori', href: c('/pagamenti-fornitori'), icona: LogOut },
-                    { chiave: 'giroconti', nome: 'Giroconti', titolo: 'Giroconti', href: c('/giroconti'), icona: Repeat2 },
-                    { chiave: 'f24', nome: 'Ritenute e F24', titolo: 'Ritenute e F24', href: c('/f24'), icona: Percent },
-                    { chiave: 'giornale', nome: 'Libro giornale', titolo: 'Libro Giornale', icona: BookOpen, ...delMovimento(e('/scritture')) },
-                    { chiave: 'registro', nome: 'Registro', titolo: 'Registro di contabilità', icona: Wallet, ...delMovimento(e('/registro-contabilita')) },
-                    { chiave: 'rendiconto', nome: 'Rendiconto', titolo: 'Rendiconto', icona: Scale, ...delMovimento(e('/rendiconto')),
-                        anche: [e('/stato-patrimoniale')].filter((h): h is string => !! h) },
-                    { chiave: 'fascicolo', nome: 'Fascicolo di bilancio', titolo: 'Fascicolo di bilancio', icona: BookMarked, ...delMovimento(e('/fascicolo-bilancio')) },
+                    { chiave: 'incassi', nome: 'Incassi', titolo: 'Incassi rate', icona: LogIn, ...voce('/movimenti-rate'), anche: anche(c('/ricevute')) },
+                    { chiave: 'rate-scadute', nome: 'Rate scadute', titolo: 'Rate scadute', icona: CalendarClock, ...voce('/rate-scadute') },
+                    { chiave: 'fatture', nome: 'Fatture', titolo: 'Fatture passive', icona: FileText, ...voce('/fatture'), anche: anche(c('/regolazioni-immediate')) },
+                    { chiave: 'pagamenti', nome: 'Pagamenti', titolo: 'Pagamenti fornitori', icona: LogOut, ...voce('/pagamenti-fornitori') },
+                    { chiave: 'giroconti', nome: 'Giroconti', titolo: 'Giroconti', icona: Repeat2, ...voce('/giroconti') },
+                    { chiave: 'f24', nome: 'Ritenute e F24', titolo: 'Ritenute e F24', icona: Percent, ...voce('/f24') },
+                    { chiave: 'giornale', nome: 'Libro giornale', titolo: 'Libro Giornale', icona: BookOpen, ...delMovimento('/scritture') },
+                    { chiave: 'registro', nome: 'Registro', titolo: 'Registro di contabilità', icona: Wallet, ...delMovimento('/registro-contabilita') },
+                    { chiave: 'rendiconto', nome: 'Rendiconto', titolo: 'Rendiconto', icona: Scale, ...delMovimento('/rendiconto'), anche: anche(e('/stato-patrimoniale')) },
+                    { chiave: 'fascicolo', nome: 'Fascicolo di bilancio', titolo: 'Fascicolo di bilancio', icona: BookMarked, ...delMovimento('/fascicolo-bilancio') },
                 ],
             },
             // Le assemblee e le registrazioni: il ruolo amministratore o il permesso, come le rotte.
-            { chiave: 'assemblee', nome: 'Assemblee', titolo: 'Assemblee', href: c('/assemblee'), icona: Gavel, roles: [Role.AMMINISTRATORE], permissions: [Permission.VIEW_ASSEMBLEE] },
-            { chiave: 'registrazioni', nome: 'Registrazioni', titolo: 'Registrazioni delle riunioni', href: c('/registrazioni'), icona: Mic, roles: [Role.AMMINISTRATORE], permissions: [Permission.VIEW_ASSEMBLEE] },
+            { chiave: 'assemblee', nome: 'Assemblee', titolo: 'Assemblee', icona: Gavel, roles: [Role.AMMINISTRATORE], permissions: [Permission.VIEW_ASSEMBLEE], ...voce('/assemblee') },
+            { chiave: 'registrazioni', nome: 'Registrazioni', titolo: 'Registrazioni delle riunioni', icona: Mic, roles: [Role.AMMINISTRATORE], permissions: [Permission.VIEW_ASSEMBLEE], ...voce('/registrazioni') },
         ];
     });
 
@@ -283,12 +322,14 @@ export function useVociMenu(opzioni: { gestionale?: boolean } = {}) {
 
     const studio = computed<VoceMenu[]>(() => accessibili(definizioniStudio.value).map((d) => inVoce(d)));
     const fondo = computed<VoceMenu[]>(() => accessibili(definizioniFondo.value).map((d) => inVoce(d)));
-    const gruppoCondominio = computed<GruppoCondominio | null>(() => (condominio.value
+    /** Il gruppo del condominio: c'è sempre per chi ha il pannello, anche senza un condominio in uso (voci da scegliere). */
+    const gruppoCondominio = computed<GruppoCondominio | null>(() => (nelPannello.value
         ? {
-            id: condominio.value.id,
-            nome: condominio.value.nome,
-            esercizio: esercizio.value?.nome ?? null,
+            id: condominio.value?.id ?? null,
+            nome: condominio.value?.nome ?? null,
+            esercizio: condominio.value ? (esercizio.value?.nome ?? ricordato.value?.nome ?? null) : null,
             voci: accessibili(definizioniCondominio.value).map((d) => inVoce(d)),
+            dellaPagina: !! dellaPagina.value?.id,
         }
         : null));
 

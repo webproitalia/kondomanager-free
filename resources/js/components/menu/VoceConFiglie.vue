@@ -3,7 +3,7 @@
  * Una voce che si apre («Movimenti», con dentro le voci del menu dei movimenti).
  *
  * Con il menu aperto è un cassettino: un clic lo apre e lo chiude, e resta aperto da solo quando si è in una delle sue pagine.
- * Con il menu chiuso è un'icona che apre l'elenco accanto.
+ * Con il menu chiuso è un'icona che apre l'elenco accanto. Senza un condominio in uso è una voce da scegliere, come le altre.
  */
 import { ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
@@ -15,10 +15,13 @@ import IconaSezione from './IconaSezione.vue';
 import VoceMenuRiga from './VoceMenu.vue';
 import type { VoceMenu } from './vociMenu';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     voce: VoceMenu;
     soloIcona?: boolean;
-}>();
+    livello?: 1 | 2;
+}>(), { livello: 1 });
+
+defineEmits<{ scegli: [voce: VoceMenu] }>();
 
 const CHIAVE = `km-menu-aperta-${props.voce.chiave}`;
 const ricordata = () => {
@@ -49,19 +52,22 @@ const ricorda = (valore: boolean) => {
 </script>
 
 <template>
+    <!-- Senza un condominio in uso: una voce da scegliere, al suo posto -->
+    <VoceMenuRiga v-if="voce.daScegliere" :voce="voce" :solo-icona="soloIcona" :livello="livello" @scegli="$emit('scegli', $event)" />
+
     <!--
         Il menu chiuso: l'icona apre l'elenco accanto, e al passaggio del mouse dice il nome.
         L'elenco sta DENTRO il suggerimento, non il contrario: tutti e due si agganciano al pulsante, e con l'elenco fuori il
         pulsante si agganciava al solo suggerimento (il più vicino), lasciando l'elenco senza un posto dove comparire.
     -->
-    <Tooltip v-if="soloIcona" :delay-duration="0">
+    <Tooltip v-else-if="soloIcona" :delay-duration="0">
         <TooltipTrigger as-child>
             <span class="flex">
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
-                        <button type="button" class="km-voce relative flex size-10 items-center justify-center rounded-lg" :data-menu-voce="voce.chiave" :data-attiva="voce.attiva ? 'true' : 'false'" :aria-label="voce.titolo">
+                        <button type="button" class="km-voce km-riga relative flex w-10 items-center justify-center rounded-lg" :data-menu-voce="voce.chiave" :data-attiva="voce.attiva ? 'true' : 'false'" :aria-label="voce.titolo">
                             <span v-if="voce.attiva" class="km-tacca" />
-                            <IconaSezione :icona="voce.icona" :colore="voce.colore" />
+                            <IconaSezione :icona="voce.icona" :colore="voce.colore" misura="voce" />
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" :side-offset="10" class="w-56">
@@ -83,14 +89,21 @@ const ricorda = (valore: boolean) => {
     <!-- Il menu aperto: un cassettino -->
     <Collapsible v-else :open="aperta" @update:open="ricorda">
         <CollapsibleTrigger as-child>
-            <button type="button" class="km-voce flex h-9 w-full items-center gap-2.5 rounded-lg px-1.5 text-left text-[13.5px] font-medium" :data-menu-voce="voce.chiave" :data-attiva="voce.attiva ? 'dentro' : 'false'">
-                <IconaSezione :icona="voce.icona" :colore="voce.colore" />
+            <button
+                type="button"
+                class="km-voce km-riga flex w-full items-center gap-2.5 rounded-lg px-1.5 text-left font-medium"
+                :class="livello === 2 ? 'text-[13px]' : 'text-[13.5px]'"
+                :data-menu-voce="voce.chiave"
+                :data-attiva="voce.attiva ? 'dentro' : 'false'"
+            >
+                <IconaSezione :icona="voce.icona" :colore="voce.colore" :misura="livello === 2 ? 'voce2' : 'voce'" />
                 <span class="truncate">{{ voce.nome }}</span>
                 <ChevronRight class="ml-auto mr-0.5 size-4 opacity-60 transition-transform duration-200" :class="{ 'rotate-90': aperta }" />
             </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-            <div class="ml-[1.2rem] mt-0.5 flex flex-col gap-px border-l border-[var(--km-menu-riga)] py-0.5 pl-2.5">
+            <!-- Il terzo livello: un rientro in più, con la sua linea di guida -->
+            <div class="km-rientro mt-px flex flex-col gap-px py-px" data-menu-figlie>
                 <VoceMenuRiga v-for="figlia in voce.figlie" :key="figlia.chiave" :voce="figlia" figlia />
             </div>
         </CollapsibleContent>

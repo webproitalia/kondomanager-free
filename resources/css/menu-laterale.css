@@ -23,6 +23,26 @@
   --km-menu-passaggio: hsl(0 0% 100% / 0.07);
 
   --km-lavoro: hsl(var(--km-tinta) 16% 95.5%);
+
+  /*
+   * Le misure del menu. Le righe sono compatte perché i due gruppi — lo studio e le sezioni del condominio — stiano nello
+   * schermo senza scorrere a 1440×900; sugli schermi bassi (un portatile a 1366×768) si stringono ancora un po'.
+   */
+  --km-testa: 3.25rem;
+  --km-riga: 2rem;
+  --km-riga-figlia: 1.75rem;
+  --km-tessera: 1.5rem;
+  --km-tessera-2: 1.25rem;
+}
+
+@media (max-height: 820px) {
+  :root {
+    --km-testa: 3rem;
+    --km-riga: 1.6875rem;
+    --km-riga-figlia: 1.5625rem;
+    --km-tessera: 1.3125rem;
+    --km-tessera-2: 1.125rem;
+  }
 }
 
 .dark {
@@ -77,6 +97,68 @@
 .km-voce[aria-disabled='true'] {
   opacity: 0.45;
   pointer-events: none;
+}
+
+/* Le righe del menu e le loro icone: le misure stanno in cima a questo file. */
+.km-riga {
+  height: var(--km-riga);
+  flex-shrink: 0;
+}
+.km-riga-figlia {
+  height: var(--km-riga-figlia);
+  flex-shrink: 0;
+}
+/*
+ * Il menu chiuso: una colonna di sole icone, le stesse e nello stesso ordine di quello aperto. Le righe sono un filo più
+ * fitte, perché le ventidue voci e il fondo stiano nello schermo senza scorrere.
+ */
+[data-menu-chiuso='true'] {
+  --km-riga: 1.875rem;
+}
+@media (max-height: 820px) {
+  [data-menu-chiuso='true'] {
+    --km-riga: 1.5625rem;
+  }
+}
+.km-icona-voce {
+  width: var(--km-tessera);
+  height: var(--km-tessera);
+  border-radius: 6px;
+}
+.km-icona-voce2 {
+  width: var(--km-tessera-2);
+  height: var(--km-tessera-2);
+  border-radius: 5px;
+}
+
+/* La riga di testa del condominio in uso: un clic e se ne sceglie un altro. */
+.km-condominio {
+  height: calc(var(--km-riga) + 0.5rem);
+  flex-shrink: 0;
+  background-color: hsl(0 0% 100% / 0.05);
+}
+
+/*
+ * La gerarchia: le sezioni del condominio stanno un livello sotto la sua riga di testa, rientrate lungo una linea di guida;
+ * le voci dentro «Movimenti» un livello ancora sotto, con la loro.
+ */
+.km-rientro {
+  margin-left: calc(0.375rem + var(--km-tessera) / 2);
+  border-left: 1px solid hsl(0 0% 100% / 0.12);
+  padding-left: 0.375rem;
+}
+.km-rientro .km-rientro {
+  margin-left: calc(0.375rem + var(--km-tessera-2) / 2);
+  padding-left: 0.25rem;
+}
+
+/* Senza un condominio in uso le sue sezioni restano al loro posto, più tenui: un clic apre la scelta del condominio. */
+.km-voce[data-da-scegliere] {
+  opacity: 0.5;
+}
+.km-voce[data-da-scegliere]:hover,
+.km-voce[data-da-scegliere]:focus-visible {
+  opacity: 0.9;
 }
 
 /* La voce accesa a menu chiuso: una tacca chiara sul bordo sinistro, come nelle barre a sole icone. */
