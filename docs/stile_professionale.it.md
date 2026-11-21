@@ -66,6 +66,17 @@ I file di Odoo stanno in `addons/web/static/src/`: `scss/primary_variables.scss`
   sola sono alte 36 px (34 nel riferimento).
 - **I testi di più righe hanno la cornice intera**, sottile: con la sola riga sotto non si capirebbe dove si scrive.
 - **Le intestazioni delle tabelle non hanno le righe verticali** fra le colonne.
-- **I riquadri restano.** Nel riferimento un elenco occupa tutta la pagina; qui le pagine sono fatte di riquadri (testata,
-  spiegazioni, contenuto), che restano dove sono con una cornice sola e sottile.
 - **Restano tratteggiati** i riquadri «non c'è ancora niente» e le aree dove si trascina un file.
+
+## Le cornici
+
+Come nel riferimento, la pagina è un foglio bianco solo: attorno al titolo, alle spiegazioni, all'elenco con i suoi filtri e
+ai gruppi di un modulo non c'è nessun riquadro. I riquadri di contenuto sono sezioni del foglio, separate da una riga
+sottile sopra e dal loro titoletto; la tabella sta direttamente sulla pagina, con l'intestazione grigia e le righe da 1 px;
+l'area di lavoro arriva a 16 px dai bordi.
+
+Di cornici ne resta al più una per contenuto, e solo dove separa cose diverse: le tessere con un numero (affiancate a tre o
+più), gli avvisi tinti di un colore, le aree dove si trascina un file, gli stati vuoti, le voci che si cliccano (le tessere
+delle impostazioni), ciò che resta agganciato in cima mentre si scorre.
+
+Nel tema scuro alcune pagine hanno il fondo bianco scritto a mano, senza la variante scura: lì il bianco resta, com'era.

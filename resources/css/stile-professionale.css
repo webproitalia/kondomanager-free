@@ -55,8 +55,8 @@ html[data-km-stile='professionale'] {
   --km-ombra-tendina: 0 1rem 1.1rem rgb(0 0 0 / 0.1); /* $o-dropdown-box-shadow: l'unica ombra, per ciò che sta sopra la pagina */
   --km-raggio: 3px; /* $o-border-radius (.25rem con la radice a 12 px) */
 
-  /* L'area di lavoro: il fondo di Odoo, con i fogli bianchi. */
-  --km-lavoro: var(--km-g100);
+  /* L'area di lavoro è un foglio bianco solo, come le viste di Odoo ($o-view-background-color): niente riquadri sopra un fondo. */
+  --km-lavoro: #ffffff;
 
   /* ─── I colori del kit ────────────────────────────────────────────────────────────────────────────────────────────────── */
   --background: #ffffff;
@@ -148,7 +148,7 @@ html[data-km-stile='professionale'].dark {
   --km-piede-tabella: #2b3035;
   --km-passaggio: rgb(255 255 255 / 0.06);
   --km-collegamento: color-mix(in srgb, var(--primary) 80%, white);
-  --km-lavoro: #121416;
+  --km-lavoro: #1a1d20;
 
   --background: #212529;
   --card: #212529;
@@ -246,14 +246,108 @@ html[data-km-stile='professionale'] {
       font-weight: 700;
     }
 
+    /* ─── Le cornici ──────────────────────────────────────────────────────────────────────────────────────────────────── */
     /*
-     * La cornice doppia più frequente: la tabella ha la sua cornice arrotondata, dentro un riquadro che ne ha già una.
-     * Resta quella del riquadro; la tabella ci sta dentro con le sole righe.
+     * Come in Odoo, attorno al titolo, all'elenco e ai gruppi di un modulo non c'è nessun riquadro: la pagina è un foglio
+     * solo. Di cornici ne resta al più una per contenuto, e solo dove separa davvero cose diverse: le tessere con un
+     * numero, un avviso, un'area dove si trascina un file, uno stato vuoto.
      */
-    & :is([class*='rounded-2xl'], [class*='rounded-xl'], [class*='rounded-lg'])[class*='border']
-      :is(.rounded-md, .rounded-lg).border:is(:has(> table), :has(> .relative > table), :has(> div > .relative > table)) {
+
+    /* L'aria ai lati: l'area di lavoro arriva vicino ai bordi (16 px, come il pannello di controllo di Odoo). */
+    & main {
+      max-width: none;
+    }
+    & main > :is(div, section):is([class~='px-4'], [class~='px-6'], [class~='px-8'], [class~='p-4'], [class~='p-6']) {
+      padding-inline: 1rem;
+    }
+
+    /* La testata di pagina: titolo e pulsanti sul foglio. La riga che la separa dal resto è quella della sezione che segue. */
+    & [data-testata-pagina] {
       border-width: 0;
       border-radius: 0;
+      background-color: transparent;
+    }
+    & [data-testata-pagina] > .relative {
+      padding-inline: 0;
+    }
+
+    /* Le spiegazioni: i tre testi con la loro icona, separati da una riga verticale; nessuna scatola attorno. */
+    & [data-guide-pagina] {
+      border-width: 0;
+      border-radius: 0;
+      background-color: transparent;
+      padding-inline: 0;
+      padding-block: 0.25rem;
+    }
+
+    /* La tabella sta direttamente sul foglio: l'intestazione grigia e le righe sottili bastano. */
+    & :is(.rounded-md, .rounded-lg, .rounded-xl).border:is(:has(> table), :has(> .relative > table), :has(> div > .relative > table)) {
+      border-width: 0;
+      border-radius: 0;
+      background-color: transparent;
+    }
+
+    /*
+     * I riquadri di contenuto (un gruppo di campi, un elenco con i suoi filtri, un pannello di un cruscotto) diventano
+     * sezioni del foglio: niente cornice, niente fondo; resta una riga sopra, che le separa da ciò che le precede.
+     * Non sono riquadri di contenuto, e tengono la loro cornice: le tessere (affiancate a tre o più), ciò che è tinto di
+     * un colore (un avviso), ciò che è tratteggiato, ciò che sta sopra la pagina, e quello che si clicca.
+     */
+    & :is(div, section, article, form, aside):is(.rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is(.border, [class*='ring-black/5']):is([class*='bg-white'], .bg-card, [class*='bg-background'], [class~='bg-slate-50'], :has(> textarea, > * textarea)):not(
+        [class*='border-dashed'],
+        [class*='border-l-'],
+        [class*='border-2'],
+        [class*='cursor-pointer'],
+        [class*='hover:bg-'],
+        .absolute,
+        .fixed,
+        .sticky,
+        [class*='z-'],
+        [role],
+        [data-slot],
+        [data-state],
+        td *,
+        th *
+      ):not(:is([class*='grid-cols-3'], [class*='grid-cols-4'], [class*='grid-cols-5'], [class*='grid-cols-6']) > *) {
+      border-width: 1px 0 0;
+      border-radius: 0;
+      background-color: transparent;
+      padding-inline: 0;
+
+      /* Il titoletto della sezione non ha una fascia né una riga sua: la riga è quella sopra. */
+      & > :is(div, header):first-child[class*='border-b'] {
+        border-bottom-width: 0;
+        background-color: transparent;
+      }
+      & > :is([class~='p-3'], [class~='p-4'], [class~='p-5'], [class~='p-6'], [class~='px-3'], [class~='px-4'], [class~='px-5'], [class~='px-6']) {
+        padding-inline: 0;
+      }
+    }
+    /* I gruppi di campi di un modulo (un riquadro tratteggiato e appena tinto): lo stesso, sezioni del foglio. */
+    & :is(div, section).rounded-lg.border.border-dashed.shadow-sm:is([class*='bg-slate-50/'], [class*='bg-white']):not([data-slot], [role]) {
+      border-width: 1px 0 0;
+      border-style: solid;
+      border-radius: 0;
+      background-color: transparent;
+      padding-inline: 0;
+
+      & > :is(div, header):first-child[class*='border-b'] {
+        border-bottom-width: 0;
+        background-color: transparent;
+      }
+      & > :is([class~='p-3'], [class~='p-4'], [class~='p-5'], [class~='p-6'], [class~='px-3'], [class~='px-4'], [class~='px-5'], [class~='px-6']) {
+        padding-inline: 0;
+      }
+    }
+    /* Un elenco con i suoi filtri non ha nemmeno la riga sopra: sta subito sotto il titolo della pagina. */
+    & :is(div, section):is(.rounded-lg, .rounded-xl, .rounded-2xl).border[class*='bg-white']:has(table):not(:has(h1, h2, h3, h4, h5), [role], [data-slot], td *) {
+      border-top-width: 0;
+      padding-top: 0;
+    }
+    /* I contenitori senza cornice propria che tenevano il margine interno di un riquadro (le pagine dei movimenti). */
+    & :is(div, section)[class*='ring-black/5']:is([class~='p-4'], [class~='p-6']) {
+      padding-inline: 0;
+      background-color: transparent;
     }
 
     /*
@@ -472,6 +566,14 @@ html[data-km-stile='professionale'] {
       background: var(--c);
       box-shadow: none;
     }
+  }
+
+  /*
+   * Tema scuro: alcune pagine hanno il fondo bianco scritto a mano, senza la variante scura, e sopra testi scuri. Lì il
+   * bianco resta, com'era prima dello stile: toglierlo lascerebbe testo scuro su fondo scuro.
+   */
+  &.dark .km-lavoro [class*='bg-white']:not([class*='dark:bg-']) {
+    background-color: #ffffff !important;
   }
 
   /* I titoli e le etichette dei campi sono più scuri del testo; chi ha un colore suo lo tiene (questo livello perde con le classi). */
