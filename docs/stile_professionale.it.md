@@ -80,3 +80,19 @@ più), gli avvisi tinti di un colore, le aree dove si trascina un file, gli stat
 delle impostazioni), ciò che resta agganciato in cima mentre si scorre.
 
 Nel tema scuro alcune pagine hanno il fondo bianco scritto a mano, senza la variante scura: lì il bianco resta, com'era.
+
+## La fascia «copertina»
+
+Il blocco delle spiegazioni di una pagina (le due o tre colonne con icona, titoletto e testo) è una fascia bassa, da bordo a
+bordo dell'area di lavoro: una fotografia di palazzi con sopra un velo di colore, e i testi in bianco. È la fascia che il
+riferimento mette fra il pannello del titolo e l'elenco (`addons/base/static/src/scss/onboarding.scss`, misurata sull'elenco
+delle fatture: alta 242 px, velo `linear-gradient(rgba(96,171,195,.5), rgb(65,135,174))`, titoli bianchi, testi bianchi al 75%).
+
+- Il velo è quello del riferimento e non segue il colore principale. Sopra c'è un 18% di petrolio scuro: con il solo velo il
+  bianco ha un contrasto di 4:1, così arriva a 5:1.
+- La nostra è più bassa: sta sul contenuto (da 83 a 158 px a 1440, secondo quanto è lungo il testo), senza altezza fissa.
+- La fotografia è nostra (l'intestazione dello studio), ritagliata a striscia: `resources/images/copertina-condomini.webp`,
+  1000×208, 42 KB.
+- Da telefono le colonne stanno una accanto all'altra e si scorrono di lato, così la fascia resta bassa.
+- Dove una pagina non ha le spiegazioni non c'è fascia; nella scheda laterale nemmeno.
+

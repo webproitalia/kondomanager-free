@@ -271,13 +271,69 @@ html[data-km-stile='professionale'] {
       padding-inline: 0;
     }
 
-    /* Le spiegazioni: i tre testi con la loro icona, separati da una riga verticale; nessuna scatola attorno. */
+    /*
+     * Le spiegazioni sono la «copertina» della pagina: una fascia bassa, da bordo a bordo dell'area di lavoro, con una
+     * fotografia di palazzi e sopra un velo di colore; dentro, i testi in bianco. È la fascia che Odoo mette fra il
+     * pannello del titolo e l'elenco (`base/static/src/scss/onboarding.scss`): il velo è il suo — dall'azzurro chiaro a metà
+     * trasparenza, in alto, al petrolio pieno in basso (misurato sull'elenco delle fatture) — e non segue il colore
+     * principale. Sotto il velo la fotografia è scurita, e sopra tutto c'è un 18% di petrolio scuro: con il solo velo di
+     * Odoo il bianco ha un contrasto di 4:1 (in basso, sul colore pieno), così arriva a 5:1 e i testi piccoli si leggono.
+     * La fotografia è nostra (l'intestazione dello studio), ritagliata a striscia.
+     */
     & [data-guide-pagina] {
+      margin-inline: -1rem;
       border-width: 0;
       border-radius: 0;
-      background-color: transparent;
-      padding-inline: 0;
-      padding-block: 0.25rem;
+      padding: 0.875rem 1rem;
+      background-color: rgb(55 118 153);
+      background-image: linear-gradient(rgb(12 40 58 / 0.18), rgb(12 40 58 / 0.18)), linear-gradient(to bottom, rgb(96 171 195 / 0.5), rgb(65 135 174)),
+        linear-gradient(rgb(18 52 74 / 0.5), rgb(18 52 74 / 0.5)), url('../images/copertina-condomini.webp');
+      background-position: center;
+      background-size: cover;
+      color: #ffffff;
+    }
+    & [data-guide-pagina] :is(h2, h3, h4, h5, span, strong, a, div) {
+      color: #ffffff;
+    }
+    & [data-guide-pagina] p {
+      color: rgb(255 255 255 / 0.88);
+      line-height: 1.45;
+    }
+    /* Le colonne: una riga sottile e chiara fra l'una e l'altra, poca aria fra il titoletto e il testo. */
+    & [data-guide-pagina] > div {
+      border-color: rgb(255 255 255 / 0.28);
+    }
+    & [data-guide-pagina] > div > :not(:last-child) {
+      margin-block: 0 0.375rem;
+    }
+    /* Le iconcine: semplici, chiare, senza il quadratino colorato. */
+    & [data-guide-pagina] .rounded-md.border {
+      border-color: rgb(255 255 255 / 0.45);
+      background-color: rgb(255 255 255 / 0.12);
+      color: #ffffff;
+    }
+    /* Da telefono la fascia resta bassa: le colonne stanno una accanto all'altra e si scorrono di lato. */
+    @media (max-width: 767px) {
+      & [data-guide-pagina] {
+        display: flex;
+        gap: 0;
+        overflow-x: auto;
+        padding-inline: 0;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+      }
+      & [data-guide-pagina] > div {
+        flex: 0 0 84%;
+        padding-inline: 1rem;
+        scroll-snap-align: start;
+      }
+      & [data-guide-pagina] > div + div {
+        border-left-width: 1px;
+      }
+    }
+    /* Nella scheda laterale le spiegazioni non ci sono (`menu-laterale.css`): nemmeno la fascia. */
+    &.km-scheda [data-guide-pagina] {
+      display: none;
     }
 
     /* La tabella sta direttamente sul foglio: l'intestazione grigia e le righe sottili bastano. */
