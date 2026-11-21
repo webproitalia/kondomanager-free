@@ -30,7 +30,10 @@ import SchedaTestata from '@/components/scheda/SchedaTestata.vue';
 import { avviaSchedaLaterale, useSchedaLaterale } from '@/components/scheda/schedaLaterale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { useImpalcatura } from '@/composables/useImpalcatura';
+import BarraStudio from './BarraStudio.vue';
 import BarraSuperiore from './BarraSuperiore.vue';
+import PercorsoStudio from './PercorsoStudio.vue';
 import { ascoltaCondominioInUso, useCondominioInUso } from './condominioInUso';
 import MenuLaterale from './MenuLaterale.vue';
 import { offriPercorsoPagina } from './percorsoPagina';
@@ -59,6 +62,13 @@ watch(() => [props.gestionale, page.props.condominio, page.props.esercizio] as c
     const esercizio = dellEsercizio as { id?: number; nome?: string } | null | undefined;
     ricorda({ id: condominio.id, nome: condominio.nome, esercizio: esercizio?.id ? { id: esercizio.id, nome: esercizio.nome ?? null } : null });
 }, { immediate: true });
+
+/*
+ * La navigazione «Barra in alto» (Impostazioni → Aspetto): in alto, sempre, la barra dello studio (`BarraStudio.vue`); il
+ * menu laterale c'è solo dentro un condominio, con le sue sole sezioni, sotto la barra. Il percorso «Studio › condominio ›
+ * esercizio», con i suoi due selettori, sta in una riga sottile sopra la pagina, e solo dentro un condominio.
+ */
+const { barraInAlto } = useImpalcatura();
 
 const CHIAVE = 'km-menu-aperto';
 
@@ -122,14 +132,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', tasto));
 </script>
 
 <template>
-    <SidebarProvider :open="aperto" class="km-impalcatura" :data-scheda="scheda.fase" @update:open="cambia">
+    <SidebarProvider :open="aperto" class="km-impalcatura" :class="{ 'km-con-barra': barraInAlto }" :data-scheda="scheda.fase" @update:open="cambia">
         <!-- Nella scheda laterale: sotto, ferma, la pagina da cui si è partiti; un velo, che al clic chiude -->
         <template v-if="inScheda">
             <SchedaFondo />
             <div class="km-scheda-velo no-print" :data-fase="scheda.fase === 'chiusura' ? 'chiusura' : 'aperta'" data-scheda-velo @click="chiudi()" />
         </template>
 
-        <MenuLaterale v-if="! inScheda" :gestionale="gestionale" />
+        <BarraStudio v-if="barraInAlto && ! inScheda" :gestionale="gestionale" />
+
+        <MenuLaterale v-if="! inScheda" :gestionale="gestionale" :barra="barraInAlto" />
 
         <div
             class="km-lavoro min-w-0"
@@ -143,10 +155,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', tasto));
             @change="toccato"
         >
             <SchedaTestata v-if="inScheda" :gestionale="gestionale" @chiudi="chiudi()" @pagina-intera="apriAPaginaIntera()" />
-            <BarraSuperiore v-else :breadcrumbs="breadcrumbs" :gestionale="gestionale">
+            <BarraSuperiore v-else-if="! barraInAlto" :breadcrumbs="breadcrumbs" :gestionale="gestionale">
                 <template v-if="$slots['breadcrumb-condominio']" #breadcrumb-condominio><slot name="breadcrumb-condominio" /></template>
                 <template v-if="$slots['breadcrumb-esercizio']" #breadcrumb-esercizio><slot name="breadcrumb-esercizio" /></template>
             </BarraSuperiore>
+            <!-- Con la barra in alto: dentro un condominio, il percorso con i selettori di condominio ed esercizio -->
+            <div v-else-if="gestionale" class="km-percorso-riga no-print print:hidden" data-percorso-riga>
+                <PercorsoStudio :breadcrumbs="breadcrumbs" :gestionale="gestionale" class="flex-1">
+                    <template v-if="$slots['breadcrumb-condominio']" #breadcrumb-condominio><slot name="breadcrumb-condominio" /></template>
+                    <template v-if="$slots['breadcrumb-esercizio']" #breadcrumb-esercizio><slot name="breadcrumb-esercizio" /></template>
+                </PercorsoStudio>
+            </div>
 
             <main class="mx-auto flex w-full max-w-[96rem] flex-1 flex-col">
                 <slot />

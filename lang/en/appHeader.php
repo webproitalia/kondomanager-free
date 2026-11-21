@@ -7,6 +7,7 @@ return [
     'importaDati'   => "Import data",
     'rubrica'       => "Address book",
     'anagrafiche'   => "Residents",
+    'comunicazioni' => "Communications",
     'fornitori'     => "Suppliers",
     'bacheca'       => "Communications",
     'segnalazioni'  => "Tickets",

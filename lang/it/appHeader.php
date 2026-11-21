@@ -7,6 +7,7 @@ return [
     'importaDati'   => "Importa dati",
     'rubrica'       => "Rubrica",
     'anagrafiche'   => "Anagrafiche",
+    'comunicazioni' => "Comunicazioni",
     'fornitori'     => "Fornitori",
     'bacheca'       => "Bacheca",
     'segnalazioni'  => "Segnalazioni",

@@ -28,4 +28,18 @@ describe('la scelta dell\'impalcatura', () => {
             expect(useImpalcatura().menuLaterale).toBe(false);
         }
     });
+
+    test('«barra»: l\'impalcatura nuova, con la barra dello studio in alto; le schede di lato ci sono come con il menu laterale', async () => {
+        document.documentElement.dataset.kmMenu = 'barra';
+        document.documentElement.dataset.kmSchede = 'lato';
+        const { impalcaturaScelta, schedeScelte, useImpalcatura } = await import('./useImpalcatura');
+        expect(impalcaturaScelta()).toBe('barra');
+        expect(schedeScelte()).toBe('lato');
+        expect(useImpalcatura()).toMatchObject({ impalcatura: 'barra', menuLaterale: true, barraInAlto: true, schedeDiLato: true });
+
+        document.documentElement.dataset.kmMenu = 'laterale';
+        expect(useImpalcatura()).toMatchObject({ impalcatura: 'laterale', menuLaterale: true, barraInAlto: false });
+        delete document.documentElement.dataset.kmMenu;
+        delete document.documentElement.dataset.kmSchede;
+    });
 });

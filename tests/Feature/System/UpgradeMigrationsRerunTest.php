@@ -850,8 +850,8 @@ it('la migrazione del menu dell\'aspetto si riprende e non tocca una scelta già
     $migration = require $path;
     $valore = fn () => DB::table('settings')->where('group', 'aspetto')->where('name', 'menu')->value('payload');
     $quante = fn () => DB::table('settings')->where('group', 'aspetto')->where('name', 'menu')->count();
-    // Di serie il menu laterale.
-    expect($valore())->toBe(json_encode('laterale'))->and($quante())->toBe(1);
+    // Di serie la barra in alto (dal 21/11/2026; prima il menu laterale).
+    expect($valore())->toBe(json_encode('barra'))->and($quante())->toBe(1);
 
     // Lo studio ha scelto il menu in alto: la ripresa non lo riporta al predefinito, e non raddoppia la riga.
     DB::table('settings')->where('group', 'aspetto')->where('name', 'menu')->update(['payload' => json_encode('alto')]);
@@ -865,7 +865,7 @@ it('la migrazione del menu dell\'aspetto si riprende e non tocca una scelta già
     expect($quante())->toBe(0)
         ->and(DB::table('settings')->where('group', 'aspetto')->whereIn('name', ['colore', 'angoli'])->count())->toBe(2);
     $migration->up();
-    expect($valore())->toBe(json_encode('laterale'))->and($quante())->toBe(1);
+    expect($valore())->toBe(json_encode('barra'))->and($quante())->toBe(1);
 });
 
 it('la migrazione delle schede dell\'aspetto si riprende e non tocca una scelta già scritta', function () {

@@ -13,7 +13,8 @@ return new class extends SettingsMigration
     public function up(): void
     {
         if (! $this->migrator->exists('aspetto.menu')) {
-            $this->migrator->add('aspetto.menu', 'laterale');
+            // Dal 21/11/2026 un'installazione nuova nasce con «barra» (la barra dello studio in alto); chi ha già la riga la tiene.
+            $this->migrator->add('aspetto.menu', 'barra');
         }
     }
 

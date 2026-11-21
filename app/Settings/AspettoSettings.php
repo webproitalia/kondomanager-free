@@ -20,7 +20,7 @@ class AspettoSettings extends Settings
 
     public string $angoli = 'standard';
 
-    public string $menu = 'laterale';
+    public string $menu = 'barra';
 
     public string $schede = 'lato';
 

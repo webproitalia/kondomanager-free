@@ -14,7 +14,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import MenuContenuto from './MenuContenuto.vue';
 import { scorciatoia } from './tasti';
 
-defineProps<{ gestionale?: boolean }>();
+defineProps<{
+    gestionale?: boolean;
+    /** La navigazione «Barra in alto»: la colonna sta sotto la barra dello studio, e c'è solo dentro un condominio. */
+    barra?: boolean;
+}>();
 
 const { isMobile, state, openMobile, setOpenMobile, toggleSidebar } = useSidebar();
 const chiuso = computed(() => state.value === 'collapsed');
@@ -125,7 +129,7 @@ let scorrimento = 0;
         <SheetContent side="left" class="km-menu w-[17.5rem] max-w-[86vw] gap-0 border-0 p-0 [&>button]:hidden" data-menu-laterale data-menu-cassetto>
             <SheetTitle class="sr-only">Menu</SheetTitle>
             <SheetDescription class="sr-only">Le sezioni del gestionale.</SheetDescription>
-            <MenuContenuto :gestionale="gestionale" />
+            <MenuContenuto :gestionale="gestionale" :barra="barra" />
         </SheetContent>
     </Sheet>
 
@@ -135,15 +139,15 @@ let scorrimento = 0;
         (o sotto il marchio, a menu chiuso), la linguetta a metà del bordo, il bordo stesso, e il tasto della barra in alto.
     -->
     <aside
-        v-else
+        v-else-if="! barra || gestionale"
         ref="colonna"
-        class="km-menu no-print sticky top-0 z-40 hidden h-svh shrink-0 transition-[width] duration-200 ease-out md:block print:hidden"
-        :class="chiuso ? 'w-[3.75rem]' : 'w-60'"
+        class="km-menu no-print sticky z-30 hidden shrink-0 transition-[width] duration-200 ease-out md:block print:hidden"
+        :class="[chiuso ? 'w-[3.75rem]' : 'w-60', barra ? 'top-[var(--km-barra-studio)] h-[calc(100svh-var(--km-barra-studio))]' : 'top-0 !z-40 h-svh']"
         data-menu-laterale
         :data-stato="chiuso ? 'chiuso' : 'aperto'"
     >
         <div class="flex h-full flex-col overflow-hidden">
-            <MenuContenuto :gestionale="gestionale" :chiuso="chiuso" />
+            <MenuContenuto :gestionale="gestionale" :chiuso="chiuso" :barra="barra" />
         </div>
 
         <!-- Il bordo: tutto cliccabile, con un filo che si accende al passaggio del mouse -->

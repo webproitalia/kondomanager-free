@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Impostazioni → Aspetto (Web Pro Italia, 09/11/2026): colore principale e angoli dell'installazione.
 // L'anteprima è immediata (stesse variabili CSS del layout); salvando, la pagina si ricarica e l'aspetto vale ovunque.
-// Dal 18/11/2026 anche dove sta il menu: laterale (predefinito) o in alto, com'era. Il menu cambia al salvataggio.
+// Dal 18/11/2026 anche dove sta il menu: laterale o in alto, com'era. Dal 21/11/2026 la scelta predefinita è una terza:
+// la barra dello studio in alto, sempre visibile, con il menu laterale solo dentro un condominio. Il menu cambia al salvataggio.
 // E dove si aprono le schede e i moduli: di lato (predefinito), senza lasciare la pagina, o a pagina intera. Solo con il menu laterale.
 // Dal 21/11/2026 lo stile dell'area di lavoro: professionale (predefinito: superfici piane, righe sottili, il carattere del
 // sistema) o morbido (quello di prima). Si vede subito, mentre si sceglie; resta dopo il salvataggio. Solo con il menu laterale.
@@ -34,10 +35,10 @@ const form = useForm({ colore: props.aspetto.colore, angoli: props.aspetto.angol
 
 // Lo stile si prova subito: la pagina prende quello scelto, e uscendo senza salvare torna quello salvato.
 const stileSalvato = typeof document === 'undefined' ? undefined : document.documentElement.dataset.kmStile
-const professionale = computed(() => form.stile === 'professionale' && form.menu === 'laterale')
+const professionale = computed(() => form.stile === 'professionale' && form.menu !== 'alto')
 watch(professionale, (si) => {
   // Con il menu in alto (che cambia solo al salvataggio) lo stile resta quello che c'è.
-  if (document.documentElement.dataset.kmMenu === 'laterale') {
+  if (document.documentElement.dataset.kmMenu !== 'alto') {
     document.documentElement.dataset.kmStile = si ? 'professionale' : 'morbido'
   }
 })
@@ -122,13 +123,27 @@ const submit = () => form.post('/impostazioni/aspetto', {
                 <label class="block text-sm font-medium leading-none mb-1">{{ trans('impostazioni.aspetto.menu_title') }}</label>
                 <p class="text-sm text-muted-foreground">{{ trans('impostazioni.aspetto.menu_description') }}</p>
               </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 <button v-for="m in scelte.menu" :key="m.valore" type="button" @click="form.menu = m.valore"
                   class="flex items-center gap-4 rounded-lg border p-3 text-left transition hover:bg-accent"
                   :class="form.menu === m.valore ? 'ring-2 ring-ring border-transparent' : ''"
                   :aria-pressed="form.menu === m.valore" :data-menu-scelta="m.valore">
                   <!-- Un disegnino dell'impalcatura: il menu scuro a sinistra, oppure la barra in alto -->
-                  <span v-if="m.valore === 'laterale'" class="flex h-14 w-24 shrink-0 overflow-hidden rounded-md border bg-muted" aria-hidden="true">
+                  <span v-if="m.valore === 'barra'" class="flex h-14 w-24 shrink-0 flex-col overflow-hidden rounded-md border bg-muted" aria-hidden="true">
+                    <span class="flex h-2.5 items-center gap-1 bg-[var(--km-menu-attiva)] px-1">
+                      <span class="h-1 w-2 rounded-sm bg-white/90" />
+                      <span class="h-1 w-3 rounded-sm bg-white/50" />
+                      <span class="h-1 w-3 rounded-sm bg-white/50" />
+                    </span>
+                    <span class="flex flex-1">
+                      <span class="flex w-4 flex-col gap-1 bg-[var(--km-menu-fondo)] p-1">
+                        <span class="h-1 rounded-sm bg-[var(--km-menu-attiva)]" />
+                        <span class="h-1 rounded-sm bg-white/25" />
+                      </span>
+                      <span class="m-1.5 flex-1 rounded-sm border bg-background" />
+                    </span>
+                  </span>
+                  <span v-else-if="m.valore === 'laterale'" class="flex h-14 w-24 shrink-0 overflow-hidden rounded-md border bg-muted" aria-hidden="true">
                     <span class="flex w-6 flex-col gap-1 bg-[var(--km-menu-fondo)] p-1">
                       <span class="h-1.5 rounded-sm bg-[var(--km-menu-attiva)]" />
                       <span class="h-1.5 rounded-sm bg-white/25" />
@@ -168,8 +183,8 @@ const submit = () => form.post('/impostazioni/aspetto', {
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button v-for="sc in scelte.schede" :key="sc.valore" type="button" @click="form.schede = sc.valore"
                   class="flex items-center gap-4 rounded-lg border p-3 text-left transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-                  :class="form.schede === sc.valore && form.menu === 'laterale' ? 'ring-2 ring-ring border-transparent' : ''"
-                  :disabled="form.menu !== 'laterale'"
+                  :class="form.schede === sc.valore && form.menu !== 'alto' ? 'ring-2 ring-ring border-transparent' : ''"
+                  :disabled="form.menu === 'alto'"
                   :aria-pressed="form.schede === sc.valore" :data-schede-scelta="sc.valore">
                   <!-- Un disegnino: la scheda che entra da destra sopra la pagina, oppure la pagina intera -->
                   <span v-if="sc.valore === 'lato'" class="relative flex h-14 w-24 shrink-0 overflow-hidden rounded-md border bg-muted" aria-hidden="true">
@@ -192,13 +207,13 @@ const submit = () => form.post('/impostazioni/aspetto', {
                   <span class="min-w-0">
                     <span class="flex items-center gap-1.5 text-sm font-medium">
                       {{ sc.nome }}
-                      <Check v-if="form.schede === sc.valore && form.menu === 'laterale'" class="size-4 text-primary" />
+                      <Check v-if="form.schede === sc.valore && form.menu !== 'alto'" class="size-4 text-primary" />
                     </span>
                     <span class="mt-0.5 block text-xs text-muted-foreground">{{ trans(`impostazioni.aspetto.schede_${sc.valore}_description`) }}</span>
                   </span>
                 </button>
               </div>
-              <p v-if="form.menu !== 'laterale'" class="text-xs text-muted-foreground">{{ trans('impostazioni.aspetto.schede_solo_laterale') }}</p>
+              <p v-if="form.menu === 'alto'" class="text-xs text-muted-foreground">{{ trans('impostazioni.aspetto.schede_solo_laterale') }}</p>
             </div>
 
             <div class="border rounded-lg p-4 space-y-4">
@@ -209,8 +224,8 @@ const submit = () => form.post('/impostazioni/aspetto', {
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button v-for="st in scelte.stile" :key="st.valore" type="button" @click="form.stile = st.valore"
                   class="flex items-center gap-4 rounded-lg border p-3 text-left transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
-                  :class="form.stile === st.valore && form.menu === 'laterale' ? 'ring-2 ring-ring border-transparent' : ''"
-                  :disabled="form.menu !== 'laterale'"
+                  :class="form.stile === st.valore && form.menu !== 'alto' ? 'ring-2 ring-ring border-transparent' : ''"
+                  :disabled="form.menu === 'alto'"
                   :aria-pressed="form.stile === st.valore" :data-stile-scelta="st.valore">
                   <!-- Un disegnino: un foglio piano con le righe sottili, oppure riquadri arrotondati con l'ombra. I suoi tratti non seguono lo stile della pagina. -->
                   <span v-if="st.valore === 'professionale'" class="flex h-14 w-24 shrink-0 flex-col overflow-hidden border border-[#dee2e6] bg-white" style="border-radius: 2px" aria-hidden="true">
@@ -231,13 +246,13 @@ const submit = () => form.post('/impostazioni/aspetto', {
                   <span class="min-w-0">
                     <span class="flex items-center gap-2 text-sm font-medium">
                       {{ st.nome }}
-                      <Check v-if="form.stile === st.valore && form.menu === 'laterale'" class="size-4 text-primary" />
+                      <Check v-if="form.stile === st.valore && form.menu !== 'alto'" class="size-4 text-primary" />
                     </span>
                     <span class="mt-0.5 block text-xs text-muted-foreground">{{ trans(`impostazioni.aspetto.stile_${st.valore}_description`) }}</span>
                   </span>
                 </button>
               </div>
-              <p v-if="form.menu !== 'laterale'" class="text-xs text-muted-foreground">{{ trans('impostazioni.aspetto.stile_solo_laterale') }}</p>
+              <p v-if="form.menu === 'alto'" class="text-xs text-muted-foreground">{{ trans('impostazioni.aspetto.stile_solo_laterale') }}</p>
             </div>
 
             <div class="rounded-lg border p-4 flex flex-wrap items-center gap-3">

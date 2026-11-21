@@ -10,6 +10,7 @@ const IT: Record<string, string> = {
     'appHeader.importaDati': 'Importa dati',
     'appHeader.rubrica': 'Rubrica',
     'appHeader.anagrafiche': 'Anagrafiche',
+    'appHeader.comunicazioni': 'Comunicazioni',
     'appHeader.fornitori': 'Fornitori',
     'appHeader.bacheca': 'Bacheca',
     'appHeader.segnalazioni': 'Segnalazioni',

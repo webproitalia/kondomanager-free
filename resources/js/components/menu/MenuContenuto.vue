@@ -50,7 +50,7 @@ import { useElencoCondomini, type CondominioInElenco } from './elencoCondomini';
 import { scorciatoia } from './tasti';
 import VoceConFiglie from './VoceConFiglie.vue';
 import VoceMenuRiga from './VoceMenu.vue';
-import { useVociMenu, type VoceMenu } from './vociMenu';
+import { ORDINE_BARRA, useVociMenu, type VoceMenu } from './vociMenu';
 import type { Auth } from '@/types';
 
 const props = defineProps<{
@@ -58,6 +58,12 @@ const props = defineProps<{
     gestionale?: boolean;
     /** Il menu è chiuso: solo le icone. */
     chiuso?: boolean;
+    /**
+     * La navigazione «Barra in alto»: le sezioni dello studio, l'utente, le impostazioni e la guida stanno nella barra
+     * (`BarraStudio.vue`), e la colonna — che c'è solo dentro un condominio — ha le sole sezioni del condominio. Nel cassetto
+     * del telefono, dove la barra non ha posto per le voci, ci sono anche quelle dello studio.
+     */
+    barra?: boolean;
 }>();
 
 const page = usePage();
@@ -65,6 +71,12 @@ const { generatePath } = usePermission();
 // Il comando per richiudere e riaprire sta sul menu stesso (oltre che nella barra in alto e sul suo bordo): lì lo si cerca.
 const { toggleSidebar, isMobile } = useSidebar();
 const { studio, gruppoCondominio, fondo, nomeStudio } = useVociMenu({ gestionale: props.gestionale });
+/** Con la barra in alto le sezioni dello studio hanno l'ordine della barra: «Condomini» è l'ultima. */
+const studioInOrdine = computed(() => (props.barra ? [...studio.value].sort((a, b) => ORDINE_BARRA.indexOf(a.chiave) - ORDINE_BARRA.indexOf(b.chiave)) : studio.value));
+/** Con la barra in alto la colonna ha le sole sezioni del condominio (nel cassetto del telefono c'è tutto). */
+const soloCondominio = computed(() => !! props.barra && ! isMobile.value);
+/** Con la barra in alto il gruppo del condominio c'è solo dentro un condominio: fuori ci si torna dalla barra. */
+const conIlCondominio = computed(() => !! gruppoCondominio.value && (! props.barra || !! props.gestionale));
 
 const utente = computed(() => (page.props.auth as Auth).user);
 const nomeApp = computed(() => (page.props.name as string) || 'KondoManager');
@@ -127,7 +139,7 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
 <template>
     <div class="flex h-full min-h-0 flex-col" :data-menu-chiuso="chiuso ? 'true' : 'false'">
         <!-- Il marchio -->
-        <div class="flex h-[var(--km-testa)] shrink-0 items-center" :class="chiuso ? 'justify-center' : 'pl-3.5 pr-2'">
+        <div v-if="! soloCondominio" class="flex h-[var(--km-testa)] shrink-0 items-center" :class="chiuso ? 'justify-center' : 'pl-3.5 pr-2'">
             <Link :href="generatePath('dashboard')" class="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/40" :class="{ 'flex-none': chiuso }" :title="nomeApp">
                 <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--km-menu-attiva)] text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_1px_2px_hsl(0_0%_0%/0.3)]">
                     <AppLogoIcon class="size-5" />
@@ -148,7 +160,7 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
         </div>
 
         <!-- Riaprire: con il menu chiuso, la freccia subito sotto il marchio -->
-        <div v-if="chiuso" class="flex shrink-0 justify-center pb-0.5">
+        <div v-if="chiuso" class="flex shrink-0 justify-center pb-0.5" :class="{ 'pt-2': soloCondominio }">
             <Tooltip :delay-duration="0">
                 <TooltipTrigger as-child>
                     <button type="button" class="km-voce flex h-6 w-10 items-center justify-center rounded-lg text-white/70 hover:text-white" data-menu-riapri aria-label="Apri il menu" @click="toggleSidebar">
@@ -165,17 +177,17 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
         -->
         <nav class="km-menu-scorre km-menu-zone min-h-0 flex-1 px-2.5 pb-2" aria-label="Menu principale">
             <!-- ─── 1. Lo studio: sempre qui, sempre uguale ─── -->
-            <div class="km-menu-zona-studio" data-menu-zona="studio">
+            <div v-if="! soloCondominio" class="km-menu-zona-studio" data-menu-zona="studio">
                 <div v-if="! chiuso" class="km-menu-etichetta flex h-6 items-end px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em]" data-menu-gruppo="studio">{{ nomeStudio }}</div>
                 <div class="flex flex-col gap-px" :class="{ 'items-center': chiuso }" data-menu-voci="studio">
-                    <VoceMenuRiga v-for="voce in studio" :key="voce.chiave" :voce="voce" :solo-icona="chiuso" />
+                    <VoceMenuRiga v-for="voce in studioInOrdine" :key="voce.chiave" :voce="voce" :solo-icona="chiuso" />
                 </div>
             </div>
 
             <!-- ─── 2. Il condominio in uso: la riga di testa (un clic: se ne sceglie un altro) e le sue sezioni, rientrate ─── -->
-            <div v-if="gruppoCondominio" class="km-menu-zona-condominio" data-menu-zona="condominio">
+            <div v-if="conIlCondominio && gruppoCondominio" class="km-menu-zona-condominio" data-menu-zona="condominio">
                 <!-- Menu chiuso: il separatore fra i due gruppi è anche la freccia che ripiega le icone delle sezioni -->
-                <Tooltip v-if="chiuso" :delay-duration="0">
+                <Tooltip v-if="chiuso && ! soloCondominio" :delay-duration="0">
                     <TooltipTrigger as-child>
                         <button type="button" class="km-ripiega-icone mx-auto flex h-[18px] w-10 items-center gap-1 rounded" data-menu-separatore data-menu-ripiega :aria-expanded="! ripiegato" :aria-label="comandoRipiega" @click="ripiega(! ripiegato)">
                             <span class="h-px flex-1 bg-white/15" />
@@ -186,7 +198,7 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
                     <TooltipContent side="right" :side-offset="10">{{ comandoRipiega }}</TooltipContent>
                 </Tooltip>
 
-                <Collapsible :open="! ripiegato">
+                <Collapsible :open="soloCondominio || ! ripiegato">
                     <!-- La riga di testa: il nome (si sceglie il condominio) e la freccia (si ripiegano le sezioni) -->
                     <div
                         :class="chiuso ? 'flex justify-center' : 'km-condominio mb-px flex items-stretch rounded-lg ring-1 ring-inset ring-white/[0.08]'"
@@ -244,15 +256,18 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
                                 <button
                                     type="button"
                                     class="km-voce flex w-7 shrink-0 items-center justify-center rounded-r-lg border-l border-white/[0.08]"
-                                    data-menu-ripiega
-                                    :aria-expanded="! ripiegato"
-                                    :aria-label="comandoRipiega"
-                                    @click="ripiega(! ripiegato)"
+                                    :data-menu-ripiega="soloCondominio ? undefined : ''"
+                                    :data-menu-richiudi="soloCondominio ? '' : undefined"
+                                    :aria-expanded="soloCondominio ? undefined : ! ripiegato"
+                                    :aria-label="soloCondominio ? 'Richiudi il menu' : comandoRipiega"
+                                    @click="soloCondominio ? toggleSidebar() : ripiega(! ripiegato)"
                                 >
-                                    <ChevronRight class="size-4 opacity-70 transition-transform duration-200" :class="{ 'rotate-90': ! ripiegato }" />
+                                    <!-- Con la barra in alto le sezioni sono tutto il menu: la freccia lo richiude a sole icone -->
+                                    <ChevronsLeft v-if="soloCondominio" class="size-4 opacity-70" />
+                                    <ChevronRight v-else class="size-4 opacity-70 transition-transform duration-200" :class="{ 'rotate-90': ! ripiegato }" />
                                 </button>
                             </TooltipTrigger>
-                            <TooltipContent side="right" :side-offset="10">{{ comandoRipiega }}</TooltipContent>
+                            <TooltipContent side="right" :side-offset="10">{{ soloCondominio ? 'Richiudi il menu' : comandoRipiega }}<span v-if="soloCondominio" class="ml-1.5 opacity-60">{{ scorciatoia('B') }}</span></TooltipContent>
                         </Tooltip>
                     </div>
 
@@ -269,7 +284,7 @@ const testaAccesa = computed(() => ripiegato.value && !! gruppoCondominio.value?
         </nav>
 
         <!-- ─── In fondo, compatti: l'utente con il suo menu, le impostazioni e la guida ─── -->
-        <div class="flex shrink-0 gap-1 border-t border-[var(--km-menu-riga)] px-2.5 py-1.5" :class="chiuso ? 'flex-col-reverse items-center' : 'items-center'" data-menu-fondo>
+        <div v-if="! soloCondominio" class="flex shrink-0 gap-1 border-t border-[var(--km-menu-riga)] px-2.5 py-1.5" :class="chiuso ? 'flex-col-reverse items-center' : 'items-center'" data-menu-fondo>
             <DropdownMenu>
                 <DropdownMenuTrigger as-child>
                     <button type="button" class="km-voce flex min-w-0 items-center rounded-lg text-left" :class="chiuso ? 'km-riga w-10 justify-center' : 'h-10 flex-1 gap-2.5 px-1.5'" data-menu-utente :aria-label="utente.name">

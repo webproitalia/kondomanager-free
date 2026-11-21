@@ -465,6 +465,7 @@ return [
         'salva' => 'Salva',
         'menu_title' => 'Menu',
         'menu_description' => 'Dove stanno le sezioni del gestionale.',
+        'menu_barra_description' => 'Le sezioni dello studio in una barra in alto, sempre visibile; il menu laterale compare dentro un condominio.',
         'menu_laterale_description' => 'Le sezioni in un elenco a sinistra, che si richiude a sole icone.',
         'menu_alto_description' => 'La barra orizzontale in alto, com\'era prima.',
         'schede_title' => 'Schede e moduli',

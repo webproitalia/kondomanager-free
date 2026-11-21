@@ -468,6 +468,7 @@ return [
         'salva' => 'Save',
         'menu_title' => 'Menu',
         'menu_description' => 'Where the sections of the application are.',
+        'menu_barra_description' => 'The firm\'s sections in a bar at the top, always visible; the side menu appears inside a building.',
         'menu_laterale_description' => 'The sections in a list on the left, which collapses to icons only.',
         'menu_alto_description' => 'The horizontal bar at the top, as it was before.',
         'schede_title' => 'Records and forms',

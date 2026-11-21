@@ -489,3 +489,86 @@ html.km-scheda-con-barra {
     box-shadow: none;
   }
 }
+
+/* ─── La navigazione «Barra in alto» ──────────────────────────────────────────────────────────────────────────────────── */
+/*
+ * In alto, sempre, la barra dello studio: una fascia del colore principale larga tutto lo schermo, con le sezioni dello
+ * studio (`BarraStudio.vue`). Il menu laterale sta sotto la barra, e c'è solo dentro un condominio.
+ */
+:root {
+  --km-barra-studio: 2.75rem;
+}
+
+.km-con-barra {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.km-con-barra > .km-barra-studio {
+  grid-column: 1 / -1;
+}
+.km-con-barra > aside {
+  grid-column: 1;
+  grid-row: 2;
+}
+.km-con-barra > .km-lavoro:not(.km-scheda) {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: calc(100svh - var(--km-barra-studio));
+  /* Chi resta agganciato in cima alla pagina si ferma sotto la barra dello studio. */
+  --km-barra: var(--km-barra-studio);
+}
+
+.km-barra-studio {
+  background-color: var(--km-menu-attiva);
+  border-bottom: 1px solid color-mix(in srgb, var(--km-menu-attiva) 80%, black);
+  color: hsl(0 0% 100% / 0.92);
+  font-size: 0.8125rem;
+}
+/* In un livello che perde con le classi delle pagine: una voce nascosta sugli schermi stretti (`hidden`, `md:hidden`) resta nascosta. */
+@layer components {
+  .km-barra-voce {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+}
+.km-barra-voce {
+  color: inherit;
+  outline: none;
+  transition: background-color 0.12s ease;
+}
+.km-barra-voce:hover,
+.km-barra-voce:focus-visible,
+.km-barra-voce[data-state='open'] {
+  background-color: hsl(0 0% 0% / 0.1);
+  color: hsl(0 0% 100%);
+}
+/* La sezione in cui si è: resta accesa. */
+.km-barra-voce[data-attiva='true'] {
+  background-color: hsl(0 0% 0% / 0.18);
+  color: hsl(0 0% 100%);
+  box-shadow: inset 0 -2px 0 hsl(0 0% 100% / 0.85);
+}
+/* La fila di misura: le voci fuori dalla vista, per sapere quante ne stanno nella barra. */
+.km-barra-misura {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Il percorso «Studio › condominio › esercizio», dentro un condominio: una riga sottile sopra la pagina. */
+.km-percorso-riga {
+  display: flex;
+  align-items: center;
+  height: 2.25rem;
+  flex-shrink: 0;
+  padding-inline: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--background);
+}

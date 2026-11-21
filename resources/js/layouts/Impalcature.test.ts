@@ -44,6 +44,13 @@ describe('AppLayout', () => {
         expect(alto.exists()).toBe(false);
     });
 
+    test('«Barra in alto»: la stessa impalcatura nuova (che mette la barra dello studio e, dentro un condominio, il menu)', async () => {
+        const { laterale, alto } = await monta('AppLayout', 'barra' as 'laterale');
+        expect([laterale.exists(), alto.exists()]).toEqual([true, false]);
+        const gestionale = await monta('GestionaleLayout', 'barra' as 'laterale');
+        expect([gestionale.laterale.exists(), gestionale.alto.exists()]).toEqual([true, false]);
+    });
+
     test('«Menu: in alto»: l\'impalcatura di sempre, con le stesse briciole', async () => {
         const { laterale, alto } = await monta('AppLayout', 'alto');
         expect(alto.exists()).toBe(true);

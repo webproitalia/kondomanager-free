@@ -468,6 +468,7 @@ return [
         'salva' => 'Guardar',
         'menu_title' => 'Menu',
         'menu_description' => 'Onde ficam as secções da aplicação.',
+        'menu_barra_description' => 'As secções do escritório numa barra no topo, sempre visível; o menu lateral aparece dentro de um condomínio.',
         'menu_laterale_description' => 'As secções numa lista à esquerda, que se recolhe só a ícones.',
         'menu_alto_description' => 'A barra horizontal em cima, como antes.',
         'schede_title' => 'Fichas e formulários',

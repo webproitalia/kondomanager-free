@@ -470,6 +470,51 @@ describe('«Chiudi il condominio»: nessun condominio in uso', () => {
     });
 });
 
+describe('con la barra in alto: la colonna ha le sole sezioni del condominio', () => {
+    test('dentro un condominio: né il marchio, né lo studio, né l\'utente — stanno nella barra; la riga di testa e le sezioni', () => {
+        const menu = monta('/admin/gestionale/7/immobili', { gestionale: true, barra: true }, condominio);
+        expect(fila(menu)).toEqual(['(condominio)', ...SEZIONI]);
+        expect(menu.find('[data-menu-zona="studio"]').exists()).toBe(false);
+        expect(menu.find('[data-menu-fondo]').exists()).toBe(false);
+        expect(menu.find('a[title="Studio Bianchi"]').exists()).toBe(false);
+        expect(menu.get('[data-menu-condominio]').text()).toBe('Le RoseEsercizio 2026');
+        expect(menu.get('[data-menu-voce="unita"]').attributes('data-attiva')).toBe('true');
+    });
+
+    test('le sezioni sono tutto il menu: non si ripiegano, e la freccia della riga di testa richiude la colonna a sole icone', async () => {
+        localStorage.setItem('km-condominio-ripiegato:5', 'true');
+        azzeraCondominioInUso();
+        const colonna = monta('/admin/gestionale/7/immobili', { gestionale: true, barra: true }, condominio);
+        expect(voci(colonna, '[data-menu-voci="condominio"]')).toEqual(SEZIONI);
+        expect(colonna.find('[data-menu-ripiega]').exists()).toBe(false);
+
+        await colonna.get('[data-menu-testa-condominio] [data-menu-richiudi]').trigger('click');
+        expect(menu.toggleSidebar).toHaveBeenCalledTimes(1);
+    });
+
+    test('a sole icone: la freccia che riapre, l\'icona del condominio e quelle delle sezioni; nessun separatore', () => {
+        const colonna = monta('/admin/gestionale/7/immobili', { gestionale: true, barra: true, chiuso: true }, condominio);
+        expect(colonna.find('[data-menu-riapri]').exists()).toBe(true);
+        expect(fila(colonna)).toEqual(['(condominio)', ...SEZIONI]);
+        expect(colonna.find('[data-menu-separatore]').exists()).toBe(false);
+        expect(colonna.get('nav').text()).toBe('');
+    });
+
+    test('nel cassetto del telefono ci sono anche le sezioni dello studio, nell\'ordine della barra («Condomini» ultima); quelle del condominio solo dentro un condominio', () => {
+        menu.telefono = true;
+        // L'ordine della barra: le anagrafiche, l'agenda, le comunicazioni, i documenti, l'importazione, e in fondo i condomini.
+        const STUDIO = ['dashboard', 'persone', 'fornitori', 'agenda', 'bacheca', 'segnalazioni', 'documenti', 'allegati', 'importa', 'condomini'];
+        const dentro = monta('/admin/gestionale/7/immobili', { gestionale: true, barra: true }, condominio);
+        expect(fila(dentro)).toEqual([...STUDIO, '(condominio)', ...SEZIONI]);
+        expect(dentro.find('[data-menu-fondo]').exists()).toBe(true);
+        dentro.unmount();
+
+        inUso(leRose);
+        const fuori = monta('/admin/anagrafiche', { barra: true });
+        expect(fila(fuori)).toEqual(STUDIO);
+    });
+});
+
 describe('richiudere e riaprire il menu dal menu stesso', () => {
     test('aperto: accanto al nome c\'è la freccia che lo richiude', async () => {
         const aperto = monta('/admin/dashboard');

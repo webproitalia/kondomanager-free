@@ -3,8 +3,9 @@
 /**
  * # Impostazioni → Aspetto: dove sta il menu (Web Pro Italia, 18/11/2026)
  *
- * L'installazione ha due impalcature: quella a menu laterale, predefinita, e quella con il menu in alto, che è la testata
- * di sempre. La scelta è un'impostazione dell'aspetto (`aspetto.menu`, «laterale» o «alto») e arriva al browser scritta
+ * L'installazione ha tre impalcature: la barra dello studio in alto con il menu laterale solo dentro un condominio
+ * («barra», predefinita dal 21/11/2026), il menu laterale su ogni pagina («laterale») e la testata di sempre («alto»).
+ * La scelta è un'impostazione dell'aspetto (`aspetto.menu`) e arriva al browser scritta
  * sulla pagina (`<html data-km-menu="…">`), dove la legge `resources/js/composables/useImpalcatura.ts`.
  *
  * Il colore dello studio dà anche la tinta del menu laterale: il fondo è il colore molto scuro, la voce attiva lo usa pieno.
@@ -44,18 +45,38 @@ function paginaAspetto($test): string
     return (string) $test->actingAs($test->admin)->get('/impostazioni/aspetto')->assertOk()->getContent();
 }
 
-it('di serie il menu è laterale, e la pagina lo porta scritto', function () {
-    expect(app(AspettoSettings::class)->menu)->toBe('laterale')
-        ->and(Tema::menu())->toBe('laterale')
-        ->and(paginaAspetto($this))->toContain('data-km-menu="laterale"');
+it('di serie c\'è la barra in alto, e la pagina lo porta scritto', function () {
+    expect(app(AspettoSettings::class)->menu)->toBe('barra')
+        ->and(Tema::menu())->toBe('barra')
+        ->and(paginaAspetto($this))->toContain('data-km-menu="barra"');
 });
+
+it('con la barra in alto le schede di lato e lo stile professionale ci sono, come con il menu laterale', function () {
+    expect(paginaAspetto($this))->toContain('data-km-menu="barra"', 'data-km-schede="lato"', 'data-km-stile="professionale"');
+
+    $this->actingAs($this->admin)
+        ->post('/impostazioni/aspetto', ['colore' => 'grafite', 'angoli' => 'standard', 'menu' => 'laterale'])
+        ->assertSessionHasNoErrors();
+
+    expect(paginaAspetto($this))->toContain('data-km-menu="laterale"', 'data-km-schede="lato"', 'data-km-stile="professionale"');
+});
+
+it('chi aveva già scelto resta dov\'è: una scelta salvata non la cambia nessuno', function (string $scelta) {
+    $aspetto = app(AspettoSettings::class);
+    $aspetto->menu = $scelta;
+    $aspetto->save();
+    app()->forgetInstance(AspettoSettings::class);
+
+    expect(Tema::menu())->toBe($scelta)
+        ->and(paginaAspetto($this))->toContain("data-km-menu=\"{$scelta}\"");
+})->with(['laterale', 'alto']);
 
 it('la pagina Aspetto riceve la scelta salvata e le due possibilità', function () {
     $this->actingAs($this->admin)->get('/impostazioni/aspetto')
         ->assertInertia(fn (Assert $page) => $page
             ->component('impostazioni/impostazioniAspetto')
-            ->where('aspetto.menu', 'laterale')
-            ->where('scelte.menu', [['valore' => 'laterale', 'nome' => 'Laterale'], ['valore' => 'alto', 'nome' => 'In alto']])
+            ->where('aspetto.menu', 'barra')
+            ->where('scelte.menu', [['valore' => 'barra', 'nome' => 'Barra in alto'], ['valore' => 'laterale', 'nome' => 'Laterale'], ['valore' => 'alto', 'nome' => 'In alto, com\'era prima']])
         );
 });
 
@@ -95,7 +116,7 @@ it('un menu che non esiste è rifiutato, e niente cambia', function (mixed $valo
         ->assertSessionHasErrors('menu');
 
     $salvato = app(AspettoSettings::class)->refresh();
-    expect([$salvato->colore, $salvato->angoli, $salvato->menu])->toBe(['grafite', 'standard', 'laterale']);
+    expect([$salvato->colore, $salvato->angoli, $salvato->menu])->toBe(['grafite', 'standard', 'barra']);
 })->with(['una parola qualunque' => ['sotto'], 'vuoto' => [''], 'un elenco' => [['alto']]]);
 
 it('chi non gestisce le impostazioni non cambia il menu', function () {
@@ -103,15 +124,15 @@ it('chi non gestisce le impostazioni non cambia il menu', function () {
         ->post('/impostazioni/aspetto', ['colore' => 'grafite', 'angoli' => 'standard', 'menu' => 'alto'])
         ->assertForbidden();
 
-    expect(app(AspettoSettings::class)->refresh()->menu)->toBe('laterale');
+    expect(app(AspettoSettings::class)->refresh()->menu)->toBe('barra');
 });
 
-it('un valore sconosciuto rimasto nel database non rompe la pagina: vale il menu laterale', function () {
+it('un valore sconosciuto rimasto nel database non rompe la pagina: vale la barra in alto', function () {
     DB::table('settings')->where('group', 'aspetto')->where('name', 'menu')->update(['payload' => json_encode('di-lato')]);
     app()->forgetInstance(AspettoSettings::class);
 
-    expect(Tema::menu())->toBe('laterale')
-        ->and(paginaAspetto($this))->toContain('data-km-menu="laterale"');
+    expect(Tema::menu())->toBe('barra')
+        ->and(paginaAspetto($this))->toContain('data-km-menu="barra"');
 });
 
 it('il colore dello studio dà la tinta del menu laterale: la tinta per il fondo scuro, il colore pieno per la voce attiva', function () {

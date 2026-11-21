@@ -152,6 +152,56 @@ describe('dimenticare', () => {
     });
 });
 
+describe('gli ultimi condomini aperti', () => {
+    const scritti = () => JSON.parse(localStorage.getItem('km-condomini-recenti:5') ?? '[]');
+
+    test('ogni condominio in cui si entra va in testa all\'elenco, senza doppioni, per quell\'utente', () => {
+        const { recenti, ricorda } = entra();
+        ricorda(leRose);
+        ricorda({ id: 9, nome: 'I Tigli', esercizio: null });
+        ricorda(leRose);
+        expect(recenti.value).toEqual([{ id: 7, nome: 'Le Rose' }, { id: 9, nome: 'I Tigli' }]);
+        expect(scritti()).toEqual(recenti.value);
+        expect(entra().recenti.value).toEqual([{ id: 7, nome: 'Le Rose' }, { id: 9, nome: 'I Tigli' }]);
+        expect(entra(8).recenti.value).toEqual([]);
+    });
+
+    test('al più cinque: il sesto fa uscire il più vecchio', () => {
+        const { recenti, ricorda } = entra();
+        for (let i = 1; i <= 6; i += 1) {
+            ricorda({ id: i, nome: `Condominio ${i}`, esercizio: null });
+        }
+        expect(recenti.value.map((c) => c.id)).toEqual([6, 5, 4, 3, 2]);
+    });
+
+    test('«Chiudi il condominio» non li tocca: servono proprio a tornarci', () => {
+        const { recenti, ricorda, dimentica } = entra();
+        ricorda(leRose);
+        dimentica();
+        expect(recenti.value).toEqual([{ id: 7, nome: 'Le Rose' }]);
+    });
+
+    test('un condominio che non c\'è più esce dall\'elenco: la sua pagina non si trova, o non è più fra i condomini', () => {
+        const { recenti, ricorda, controllaCon } = entra();
+        ricorda({ id: 9, nome: 'I Tigli', esercizio: null });
+        ricorda({ id: 4, nome: 'Gli Olmi', esercizio: null });
+        ricorda(leRose);
+        paginaNonTrovata('/admin/gestionale/7/immobili');
+        expect(recenti.value.map((c) => c.id)).toEqual([4, 9]);
+
+        controllaCon([{ id: 9 }, { id: 30 }]);
+        expect(recenti.value.map((c) => c.id)).toEqual([9]);
+        expect(scritti()).toEqual([{ id: 9, nome: 'I Tigli' }]);
+    });
+
+    test('un elenco illeggibile vale come nessun elenco', () => {
+        localStorage.setItem('km-condomini-recenti:5', '{non è json');
+        expect(entra().recenti.value).toEqual([]);
+        localStorage.setItem('km-condomini-recenti:5', '[{"id":"x"},{"id":3,"nome":"Buono"}]');
+        expect(entra().recenti.value).toEqual([{ id: 3, nome: 'Buono' }]);
+    });
+});
+
 describe('ripiegare il gruppo del condominio', () => {
     test('nasce aperto; ripiegato si ricorda nel browser, per quell\'utente soltanto', () => {
         const { ripiegato, ripiega } = entra();

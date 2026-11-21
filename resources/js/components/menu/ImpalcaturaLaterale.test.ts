@@ -48,6 +48,7 @@ afterEach(() => {
     azzeraCondominioInUso();
     dimenticaSchedaLaterale();
     window.history.replaceState({}, '', '/');
+    delete document.documentElement.dataset.kmMenu;
     vi.useRealTimers();
 });
 
@@ -120,8 +121,10 @@ const contenitore = { inheritAttrs: false, render() { return (this as any).$slot
 const pulsante = { template: '<button type="button"><slot /></button>' };
 const stubs = {
     SidebarProvider: { template: '<div><slot /></div>' },
-    MenuLaterale: { template: '<aside data-prova-menu />' },
+    MenuLaterale: { props: { gestionale: Boolean, barra: Boolean }, template: '<aside data-prova-menu :data-barra="barra" :data-gestionale="gestionale" />' },
     BarraSuperiore: { template: '<header data-prova-barra />' },
+    BarraStudio: { props: { gestionale: Boolean }, template: '<header data-prova-barra-studio :data-gestionale="gestionale" />' },
+    PercorsoStudio: { template: '<nav data-prova-percorso />' },
     Footer: { template: '<footer data-prova-piede />' },
     SchedaFondo: { template: '<div data-prova-fondo />' },
     SchedaInArrivo: { props: { uscita: Boolean }, template: '<div data-prova-in-arrivo :data-uscita="uscita" />' },
@@ -302,5 +305,52 @@ describe('la scheda laterale', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         vi.advanceTimersByTime(1);
         expect(scheda.fase).toBe('chiusa');
+    });
+});
+
+// ─── La navigazione «Barra in alto» ──────────────────────────────────────────────────────────────────────────────────────
+
+describe('con la barra in alto', () => {
+    function montaConLaBarra(url: string, gestionale: boolean) {
+        document.documentElement.dataset.kmMenu = 'barra';
+        sono(url);
+        stato.pagina.props = reactive({ ...utente, ...(gestionale ? { condominio: { id: 7, nome: 'Le Rose' }, esercizio: null } : {}) });
+        w = mount(ImpalcaturaLaterale, { props: { gestionale }, slots: { default: () => h(Pagina) }, global: { stubs }, attachTo: document.body });
+
+        return w;
+    }
+
+    test('nelle pagine dello studio: la barra dello studio al posto di quella chiara, e nessun percorso; al menu si dice che c\'è la barra', () => {
+        const pagina = montaConLaBarra('/admin/anagrafiche', false);
+        expect(pagina.get('.km-impalcatura').classes()).toContain('km-con-barra');
+        expect(pagina.find('[data-prova-barra-studio]').exists()).toBe(true);
+        expect(pagina.find('[data-prova-barra]').exists()).toBe(false);
+        expect(pagina.find('[data-percorso-riga]').exists()).toBe(false);
+        // La colonna la decide `MenuLaterale` (che c'è solo dentro un condominio): qui gli arriva che la barra è in alto.
+        expect(pagina.get('[data-prova-menu]').attributes('data-barra')).toBe('true');
+        expect(pagina.get('[data-prova-menu]').attributes('data-gestionale')).toBe('false');
+    });
+
+    test('dentro un condominio: la stessa barra, il menu, e sopra la pagina la riga del percorso con i selettori', () => {
+        const pagina = montaConLaBarra('/admin/gestionale/7/immobili', true);
+        expect(pagina.get('[data-prova-barra-studio]').attributes('data-gestionale')).toBe('true');
+        expect(pagina.get('[data-prova-menu]').attributes('data-gestionale')).toBe('true');
+        expect(pagina.get('[data-percorso-riga]').find('[data-prova-percorso]').exists()).toBe(true);
+        expect(pagina.find('[data-prova-barra]').exists()).toBe(false);
+    });
+
+    test('nella scheda laterale la barra e il menu veri non ci sono: sono nella copia ferma di sotto', async () => {
+        const pagina = montaConLaBarra('/admin/anagrafiche', false);
+        await apro('/admin/anagrafiche/5');
+        expect(pagina.find('[data-scheda-laterale]').exists()).toBe(true);
+        expect([pagina.find('[data-prova-barra-studio]').exists(), pagina.find('[data-prova-menu]').exists(), pagina.find('[data-prova-fondo]').exists()]).toEqual([false, false, true]);
+    });
+
+    test('con il menu laterale di sempre niente di tutto questo: la barra chiara e il menu su ogni pagina', () => {
+        document.documentElement.dataset.kmMenu = 'laterale';
+        const pagina = montaElenco();
+        expect(pagina.get('.km-impalcatura').classes()).not.toContain('km-con-barra');
+        expect([pagina.find('[data-prova-barra-studio]').exists(), pagina.find('[data-prova-barra]').exists()]).toEqual([false, true]);
+        expect(pagina.get('[data-prova-menu]').attributes('data-barra')).toBe('false');
     });
 });

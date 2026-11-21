@@ -10,7 +10,7 @@
  * dell'applicazione, i test delle singole pagine — resta l'impalcatura di sempre: è la via di ritorno, e i test che montano una
  * pagina continuano a guardare la pagina, non il menu.
  */
-export type Impalcatura = 'laterale' | 'alto';
+export type Impalcatura = 'barra' | 'laterale' | 'alto';
 
 /**
  * Dove si aprono le schede (la scheda di una persona, un modulo): «lato», in una scheda che entra da destra sopra la pagina in
@@ -20,7 +20,8 @@ export type Impalcatura = 'laterale' | 'alto';
 export type Schede = 'lato' | 'pagina';
 
 export function schedeScelte(): Schede {
-    if (typeof document === 'undefined' || impalcaturaScelta() !== 'laterale') {
+    // Le schede di lato ci sono con le due impalcature nuove; con la testata di sempre («alto») no.
+    if (typeof document === 'undefined' || impalcaturaScelta() === 'alto') {
         return 'pagina';
     }
 
@@ -32,11 +33,15 @@ export function impalcaturaScelta(): Impalcatura {
         return 'alto';
     }
 
-    return document.documentElement.dataset.kmMenu === 'laterale' ? 'laterale' : 'alto';
+    const scritta = document.documentElement.dataset.kmMenu;
+
+    return scritta === 'barra' || scritta === 'laterale' ? scritta : 'alto';
 }
 
 export function useImpalcatura() {
     const impalcatura = impalcaturaScelta();
 
-    return { impalcatura, menuLaterale: impalcatura === 'laterale', schedeDiLato: schedeScelte() === 'lato' };
+    // `menuLaterale`: una delle due impalcature nuove (pagine con la testata nuova, schede di lato…). `barraInAlto`: quella
+    // con la barra dello studio in alto e il menu laterale solo dentro un condominio.
+    return { impalcatura, menuLaterale: impalcatura !== 'alto', barraInAlto: impalcatura === 'barra', schedeDiLato: schedeScelte() === 'lato' };
 }

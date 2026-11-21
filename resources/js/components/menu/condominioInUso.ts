@@ -19,6 +19,12 @@
  * dalla ricerca rapida, o aprendo il cruscotto di un condominio dall'elenco dei condomini): non a ogni pagina.
  *
  * «Chiudi il condominio», nella scelta del condominio, toglie quello in uso: il menu torna a «Scegli un condominio».
+ *
+ * ## Gli ultimi aperti
+ *
+ * Con la navigazione «Barra in alto» nelle pagine dello studio il menu laterale non c'è: a un condominio si torna dalla
+ * tendina «Condomini» della barra, che elenca gli ultimi aperti (cinque al più). Anche loro si ricordano qui, nel browser,
+ * utente per utente, e spariscono dall'elenco quando il condominio non c'è più.
  */
 import { ref } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
@@ -31,6 +37,13 @@ export interface CondominioInUso {
 
 // Fuori dalla funzione: è lo stesso per il menu, la ricerca e la testata, e vale per tutta la visita.
 const inUso = ref<CondominioInUso | null>(null);
+/** Gli ultimi condomini aperti, dal più recente: per la tendina «Condomini» della barra in alto. */
+export interface CondominioRecente {
+    id: number;
+    nome: string;
+}
+const recenti = ref<CondominioRecente[]>([]);
+const QUANTI_RECENTI = 5;
 /** Il gruppo del condominio è ripiegato: nel menu resta la sola riga di testa. */
 const ripiegato = ref(false);
 let lettoPer: string | null = null;
@@ -40,6 +53,28 @@ let paginaPrima = '';
 
 const chiave = (utente: string) => `km-condominio-in-uso:${utente}`;
 const chiaveRipiegato = (utente: string) => `km-condominio-ripiegato:${utente}`;
+const chiaveRecenti = (utente: string) => `km-condomini-recenti:${utente}`;
+
+function leggiRecenti(utente: string): CondominioRecente[] {
+    try {
+        const scritti = JSON.parse(localStorage.getItem(chiaveRecenti(utente)) ?? '[]');
+
+        return Array.isArray(scritti)
+            ? scritti.filter((c) => c && typeof c.id === 'number' && typeof c.nome === 'string').map((c) => ({ id: c.id, nome: c.nome })).slice(0, QUANTI_RECENTI)
+            : [];
+    } catch {
+        return [];
+    }
+}
+
+function scriviRecenti(elenco: CondominioRecente[]): void {
+    recenti.value = elenco.slice(0, QUANTI_RECENTI);
+    try {
+        localStorage.setItem(chiaveRecenti(lettoPer ?? ''), JSON.stringify(recenti.value));
+    } catch {
+        // Valgono lo stesso, fino alla prossima pagina intera.
+    }
+}
 
 function leggi(utente: string): CondominioInUso | null {
     try {
@@ -102,11 +137,16 @@ export function useCondominioInUso() {
     if (lettoPer !== utente) {
         inUso.value = leggi(utente);
         ripiegato.value = leggiRipiegato(utente);
+        recenti.value = leggiRecenti(utente);
         lettoPer = utente;
     }
 
     /** Si è dentro questo condominio: da adesso è quello in uso. */
     const ricorda = (condominio: CondominioInUso): void => {
+        // È anche il più recente fra gli ultimi aperti.
+        if (recenti.value[0]?.id !== condominio.id || recenti.value[0]?.nome !== condominio.nome) {
+            scriviRecenti([{ id: condominio.id, nome: condominio.nome }, ...recenti.value.filter((c) => c.id !== condominio.id)]);
+        }
         const prima = inUso.value;
         // Una pagina che non porta l'esercizio non cancella quello in cui si lavorava nello stesso condominio.
         const esercizio = condominio.esercizio ?? (prima?.id === condominio.id ? prima.esercizio : null);
@@ -127,15 +167,21 @@ export function useCondominioInUso() {
      * chiesto al server): le pagine a volte ne portano uno parziale, che non dice niente su chi manca.
      */
     const controllaCon = (elenco: { id: number }[]): void => {
-        if (inUso.value && elenco.length > 0 && ! elenco.some((c) => c.id === inUso.value?.id)) {
+        if (elenco.length === 0) {
+            return;
+        }
+        if (inUso.value && ! elenco.some((c) => c.id === inUso.value?.id)) {
             dimentica();
+        }
+        if (recenti.value.some((r) => ! elenco.some((c) => c.id === r.id))) {
+            scriviRecenti(recenti.value.filter((r) => elenco.some((c) => c.id === r.id)));
         }
     };
 
     /** Si apre o si cambia condominio con una scelta esplicita: se il gruppo era ripiegato, si riapre. */
     const riapri = (): void => ripiega(false);
 
-    return { inUso, ripiegato, ricorda, dimentica, controllaCon, ripiega, riapri };
+    return { inUso, ripiegato, recenti, ricorda, dimentica, controllaCon, ripiega, riapri };
 }
 
 /**
@@ -169,6 +215,7 @@ export function paginaNonTrovata(percorso: string): void {
     const sezione = trovato[2] ?? '';
     if (sezione === '' || /^\/[a-z-]+$/.test(sezione)) {
         inUso.value = null;
+        scriviRecenti(recenti.value.filter((c) => c.id !== ricordo.id));
     } else if (ricordo.esercizio && new RegExp(`^/esercizi/${ricordo.esercizio.id}/[a-z-]+$`).test(sezione)) {
         inUso.value = { ...ricordo, esercizio: null };
     } else {
@@ -211,5 +258,6 @@ export function ascoltaCondominioInUso(): void {
 export function azzeraCondominioInUso(): void {
     inUso.value = null;
     ripiegato.value = false;
+    recenti.value = [];
     lettoPer = null;
 }

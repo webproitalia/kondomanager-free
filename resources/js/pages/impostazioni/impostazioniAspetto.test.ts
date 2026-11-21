@@ -27,7 +27,7 @@ const Pagina = (await import('./impostazioniAspetto.vue')).default;
 const scelte = {
     colori: [{ valore: 'grafite', nome: 'Grafite (originale)', campione: '#171717' }, { valore: 'glicine', nome: 'Glicine', campione: '#71639e' }],
     angoli: [{ valore: 'standard', nome: 'Standard' }, { valore: 'morbidi', nome: 'Morbidi' }],
-    menu: [{ valore: 'laterale', nome: 'Laterale' }, { valore: 'alto', nome: 'In alto' }],
+    menu: [{ valore: 'barra', nome: 'Barra in alto' }, { valore: 'laterale', nome: 'Laterale' }, { valore: 'alto', nome: 'In alto, com\'era prima' }],
     schede: [{ valore: 'lato', nome: 'Di lato' }, { valore: 'pagina', nome: 'A pagina intera' }],
     stile: [{ valore: 'professionale', nome: 'Professionale' }, { valore: 'morbido', nome: 'Morbido' }],
     anteprime: {},
@@ -45,7 +45,7 @@ afterEach(() => {
 function monta(aspetto: Partial<{ menu: string; stile: string }> = {}) {
     const salvato = { colore: 'glicine', angoli: 'standard', menu: 'laterale', schede: 'lato', stile: 'professionale', ...aspetto };
     document.documentElement.dataset.kmMenu = salvato.menu;
-    document.documentElement.dataset.kmStile = salvato.menu === 'laterale' ? salvato.stile : 'morbido';
+    document.documentElement.dataset.kmStile = salvato.menu !== 'alto' ? salvato.stile : 'morbido';
     w = shallowMount(Pagina, { props: { aspetto: salvato, scelte }, global: { renderStubDefaultSlot: true } });
 
     return w;
@@ -107,6 +107,15 @@ describe('lo stile dell\'area di lavoro', () => {
         expect(pagina.findAll('[data-stile-scelta]').every((b) => b.attributes('disabled') !== undefined)).toBe(true);
         expect(angoli(pagina).every((b) => b.attributes('disabled') === undefined)).toBe(true);
         // …e l'anteprima mostra ciò che si avrà: il menu in alto ha lo stile di prima.
+        expect(stileDellaPagina()).toBe('morbido');
+    });
+
+    test('le tre scelte del menu; con la barra in alto lo stile e le schede si scelgono, come con il menu laterale', async () => {
+        const pagina = monta({ menu: 'barra' });
+        expect(pagina.findAll('[data-menu-scelta]').map((b) => b.attributes('data-menu-scelta'))).toEqual(['barra', 'laterale', 'alto']);
+        expect(pagina.get('[data-menu-scelta="barra"]').attributes('aria-pressed')).toBe('true');
+        expect(pagina.findAll('[data-stile-scelta], [data-schede-scelta]').every((b) => b.attributes('disabled') === undefined)).toBe(true);
+        await scelta(pagina, 'morbido').trigger('click');
         expect(stileDellaPagina()).toBe('morbido');
     });
 });

@@ -139,6 +139,13 @@ interface Definizione extends Omit<VoceMenu, 'attiva' | 'colore' | 'figlie'> {
     figlie?: Definizione[];
 }
 
+/**
+ * L'ordine delle sezioni dello studio con la navigazione «Barra in alto» (nella barra e nel cassetto del telefono).
+ * «Condomini» è l'ultima (Web Pro Italia, 21/11/2026): è la voce che fa entrare il menu laterale, e in fondo non spezza la fila
+ * delle altre; ed essendo la più usata, l'ultimo posto la fa ritrovare subito.
+ */
+export const ORDINE_BARRA = ['dashboard', 'persone', 'fornitori', 'agenda', 'bacheca', 'segnalazioni', 'documenti', 'allegati', 'importa', 'condomini'];
+
 /** L'indirizzo senza la domanda e senza l'ancora: `/admin/eventi?mese=3` è la pagina `/admin/eventi`. */
 export const percorsoDi = (url: string): string => url.split(/[?#]/)[0].replace(/\/+$/, '') || '/';
 

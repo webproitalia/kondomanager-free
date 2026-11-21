@@ -54,8 +54,10 @@ class Tema
 
     /** Dove sta il menu: l'impalcatura a menu laterale (predefinita) o la testata di sempre. */
     public const MENU = [
+        // Dal 21/11/2026, predefinita: la barra dello studio in alto, sempre; il menu laterale solo dentro un condominio.
+        'barra'    => ['nome' => 'Barra in alto'],
         'laterale' => ['nome' => 'Laterale'],
-        'alto'     => ['nome' => 'In alto'],
+        'alto'     => ['nome' => 'In alto, com\'era prima'],
     ];
 
     /**
@@ -80,7 +82,7 @@ class Tema
     /** Lo stile salvato (per il layout): «morbido» con il menu in alto, e «professionale» anche prima della migrazione delle impostazioni. */
     public static function stile(): string
     {
-        if (self::menu() !== 'laterale') {
+        if (self::menu() === 'alto') {
             return 'morbido';
         }
         try {
@@ -95,7 +97,7 @@ class Tema
     /** Le schede salvate (per il layout): «pagina» con il menu in alto, e «lato» anche prima della migrazione delle impostazioni. */
     public static function schede(): string
     {
-        if (self::menu() !== 'laterale') {
+        if (self::menu() === 'alto') {
             return 'pagina';
         }
         try {
@@ -113,10 +115,10 @@ class Tema
         try {
             $menu = app(AspettoSettings::class)->menu;
         } catch (\Throwable) {
-            return 'laterale';
+            return 'barra';
         }
 
-        return isset(self::MENU[$menu]) ? $menu : 'laterale';
+        return isset(self::MENU[$menu]) ? $menu : 'barra';
     }
 
     /** Il CSS dell'aspetto salvato (per il layout). */
