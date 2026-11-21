@@ -475,6 +475,12 @@ return [
         'schede_lato_description' => 'Num painel que entra pela direita, sem sair da página em que está.',
         'schede_pagina_description' => 'Em página inteira, como antes.',
         'schede_solo_laterale' => 'Os painéis laterais só existem com o menu lateral.',
+        'stile_title' => 'Estilo',
+        'stile_description' => 'Como são desenhados os quadros, as tabelas, os botões e os campos da área de trabalho.',
+        'stile_professionale_description' => 'Superfícies planas, uma única linha fina, cantos pequenos, o tipo de letra do sistema.',
+        'stile_morbido_description' => 'Quadros com sombra e cantos grandes, como antes.',
+        'stile_solo_laterale' => 'O estilo profissional só existe com o menu lateral.',
+        'angoli_con_stile' => 'Com o estilo profissional os cantos são os do estilo: pequenos.',
     ],
 
 ];

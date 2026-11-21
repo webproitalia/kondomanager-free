@@ -891,3 +891,27 @@ it('la migrazione delle schede dell\'aspetto si riprende e non tocca una scelta 
     $migration->up();
     expect($valore())->toBe(json_encode('lato'))->and($quante())->toBe(1);
 });
+
+it('la migrazione dello stile dell\'aspetto si riprende e non tocca una scelta già scritta', function () {
+    $path = database_path('settings/2026_11_21_100000_add_stile_to_aspetto_settings.php');
+    expect(file_exists($path))->toBeTrue('Migrazione non trovata: 2026_11_21_100000_add_stile_to_aspetto_settings');
+    $migration = require $path;
+    $valore = fn () => DB::table('settings')->where('group', 'aspetto')->where('name', 'stile')->value('payload');
+    $quante = fn () => DB::table('settings')->where('group', 'aspetto')->where('name', 'stile')->count();
+    // Di serie lo stile professionale.
+    expect($valore())->toBe(json_encode('professionale'))->and($quante())->toBe(1);
+
+    // Lo studio ha tenuto lo stile di prima: la ripresa non lo riporta al predefinito, e non raddoppia la riga.
+    DB::table('settings')->where('group', 'aspetto')->where('name', 'stile')->update(['payload' => json_encode('morbido')]);
+    $migration->up();
+    $migration->up();
+    expect($valore())->toBe(json_encode('morbido'))->and($quante())->toBe(1);
+
+    // Il resto dell'aspetto, che è di altre migrazioni, resta dov'è.
+    $migration->down();
+    $migration->down();
+    expect($quante())->toBe(0)
+        ->and(DB::table('settings')->where('group', 'aspetto')->whereIn('name', ['colore', 'angoli', 'menu', 'schede'])->count())->toBe(4);
+    $migration->up();
+    expect($valore())->toBe(json_encode('professionale'))->and($quante())->toBe(1);
+});

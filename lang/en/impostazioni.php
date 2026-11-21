@@ -475,6 +475,12 @@ return [
         'schede_lato_description' => 'In a panel that slides in from the right, without leaving the page you are on.',
         'schede_pagina_description' => 'On a full page, as it was before.',
         'schede_solo_laterale' => 'Side panels are available only with the side menu.',
+        'stile_title' => 'Style',
+        'stile_description' => 'How boxes, tables, buttons and fields of the work area are drawn.',
+        'stile_professionale_description' => 'Flat surfaces, a single thin line, small corners, the system font.',
+        'stile_morbido_description' => 'Boxes with shadows and large corners, as it was before.',
+        'stile_solo_laterale' => 'The professional style is available only with the side menu.',
+        'angoli_con_stile' => 'With the professional style the corners are those of the style: small.',
     ],
 
 ];

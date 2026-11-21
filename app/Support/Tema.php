@@ -27,6 +27,10 @@ class Tema
         'indaco'   => ['nome' => 'Indaco', 'campione' => '#4f46e5',
             'chiaro' => ['p' => '243 62% 52%', 'a' => '243 80% 96%', 'af' => '243 55% 35%'],
             'scuro'  => ['p' => '239 84% 72%', 'pf' => '243 47% 10%', 'a' => '243 30% 20%', 'af' => '239 84% 90%']],
+        // Il viola spento dei gestionali da ufficio: il colore principale di Odoo 16 Community (#71639e).
+        'glicine'  => ['nome' => 'Glicine', 'campione' => '#71639e',
+            'chiaro' => ['p' => '254 23.3% 50.4%', 'a' => '254 30% 95%', 'af' => '254 25% 34%'],
+            'scuro'  => ['p' => '254 36% 72%', 'pf' => '254 40% 10%', 'a' => '254 20% 20%', 'af' => '254 40% 90%']],
         'viola'    => ['nome' => 'Viola', 'campione' => '#7c3aed',
             'chiaro' => ['p' => '262 60% 48%', 'a' => '262 80% 96%', 'af' => '262 55% 32%'],
             'scuro'  => ['p' => '262 80% 72%', 'pf' => '262 47% 10%', 'a' => '262 30% 20%', 'af' => '262 80% 90%']],
@@ -62,6 +66,31 @@ class Tema
         'lato'   => ['nome' => 'Di lato'],
         'pagina' => ['nome' => 'A pagina intera'],
     ];
+
+    /**
+     * Lo stile dell'area di lavoro: «professionale» (superfici piane, righe sottili, angoli piccoli, il carattere del sistema:
+     * predefinito) o «morbido» (quello di prima). Lo stile professionale veste l'impalcatura a menu laterale: con il menu in
+     * alto resta quello di prima. Le regole stanno in resources/css/stile-professionale.css.
+     */
+    public const STILE = [
+        'professionale' => ['nome' => 'Professionale'],
+        'morbido'       => ['nome' => 'Morbido'],
+    ];
+
+    /** Lo stile salvato (per il layout): «morbido» con il menu in alto, e «professionale» anche prima della migrazione delle impostazioni. */
+    public static function stile(): string
+    {
+        if (self::menu() !== 'laterale') {
+            return 'morbido';
+        }
+        try {
+            $stile = app(AspettoSettings::class)->stile;
+        } catch (\Throwable) {
+            return 'professionale';
+        }
+
+        return isset(self::STILE[$stile]) ? $stile : 'professionale';
+    }
 
     /** Le schede salvate (per il layout): «pagina» con il menu in alto, e «lato» anche prima della migrazione delle impostazioni. */
     public static function schede(): string
@@ -163,6 +192,7 @@ class Tema
             'angoli' => collect(self::ANGOLI)->map(fn ($a, $k) => ['valore' => $k, 'nome' => $a['nome']])->values(),
             'menu' => collect(self::MENU)->map(fn ($m, $k) => ['valore' => $k, 'nome' => $m['nome']])->values(),
             'schede' => collect(self::SCHEDE)->map(fn ($m, $k) => ['valore' => $k, 'nome' => $m['nome']])->values(),
+            'stile' => collect(self::STILE)->map(fn ($m, $k) => ['valore' => $k, 'nome' => $m['nome']])->values(),
             // anteprima immediata: il CSS di ogni combinazione colore/angoli
             'anteprime' => collect(self::COLORI)->keys()->mapWithKeys(fn ($c) => [
                 $c => collect(self::ANGOLI)->keys()->mapWithKeys(fn ($a) => [$a => self::cssPer($c, $a)]),

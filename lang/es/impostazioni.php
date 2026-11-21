@@ -475,6 +475,12 @@ return [
         'schede_lato_description' => 'En un panel que entra por la derecha, sin dejar la página en la que estás.',
         'schede_pagina_description' => 'A página completa, como antes.',
         'schede_solo_laterale' => 'Los paneles laterales solo existen con el menú lateral.',
+        'stile_title' => 'Estilo',
+        'stile_description' => 'Cómo se dibujan los recuadros, las tablas, los botones y los campos del área de trabajo.',
+        'stile_professionale_description' => 'Superficies planas, una sola línea fina, esquinas pequeñas, la fuente del sistema.',
+        'stile_morbido_description' => 'Recuadros con sombra y esquinas grandes, como antes.',
+        'stile_solo_laterale' => 'El estilo profesional solo existe con el menú lateral.',
+        'angoli_con_stile' => 'Con el estilo profesional las esquinas son las del estilo: pequeñas.',
     ],
 
 ];

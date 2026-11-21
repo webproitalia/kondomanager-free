@@ -3,6 +3,8 @@
 // L'anteprima è immediata (stesse variabili CSS del layout); salvando, la pagina si ricarica e l'aspetto vale ovunque.
 // Dal 18/11/2026 anche dove sta il menu: laterale (predefinito) o in alto, com'era. Il menu cambia al salvataggio.
 // E dove si aprono le schede e i moduli: di lato (predefinito), senza lasciare la pagina, o a pagina intera. Solo con il menu laterale.
+// Dal 21/11/2026 lo stile dell'area di lavoro: professionale (predefinito: superfici piane, righe sottili, il carattere del
+// sistema) o morbido (quello di prima). Si vede subito, mentre si sceglie; resta dopo il salvataggio. Solo con il menu laterale.
 import { computed, watch, onBeforeUnmount } from 'vue'
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
@@ -16,8 +18,8 @@ import type { BreadcrumbItem } from '@/types'
 
 interface Scelta { valore: string; nome: string; campione?: string }
 interface Props {
-  aspetto: { colore: string; angoli: string; menu: string; schede: string }
-  scelte: { colori: Scelta[]; angoli: Scelta[]; menu: Scelta[]; schede: Scelta[]; anteprime: Record<string, Record<string, string>> }
+  aspetto: { colore: string; angoli: string; menu: string; schede: string; stile: string }
+  scelte: { colori: Scelta[]; angoli: Scelta[]; menu: Scelta[]; schede: Scelta[]; stile: Scelta[]; anteprime: Record<string, Record<string, string>> }
 }
 const props = defineProps<Props>()
 const page = usePage()
@@ -28,7 +30,22 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
   { title: trans('impostazioni.header.aspetto_title'), href: '/impostazioni/aspetto' },
 ])
 
-const form = useForm({ colore: props.aspetto.colore, angoli: props.aspetto.angoli, menu: props.aspetto.menu, schede: props.aspetto.schede })
+const form = useForm({ colore: props.aspetto.colore, angoli: props.aspetto.angoli, menu: props.aspetto.menu, schede: props.aspetto.schede, stile: props.aspetto.stile })
+
+// Lo stile si prova subito: la pagina prende quello scelto, e uscendo senza salvare torna quello salvato.
+const stileSalvato = typeof document === 'undefined' ? undefined : document.documentElement.dataset.kmStile
+const professionale = computed(() => form.stile === 'professionale' && form.menu === 'laterale')
+watch(professionale, (si) => {
+  // Con il menu in alto (che cambia solo al salvataggio) lo stile resta quello che c'è.
+  if (document.documentElement.dataset.kmMenu === 'laterale') {
+    document.documentElement.dataset.kmStile = si ? 'professionale' : 'morbido'
+  }
+})
+onBeforeUnmount(() => {
+  if (stileSalvato !== undefined) {
+    document.documentElement.dataset.kmStile = stileSalvato
+  }
+})
 
 const anteprima = () => {
   const css = props.scelte.anteprime?.[form.colore]?.[form.angoli] ?? ''
@@ -92,10 +109,12 @@ const submit = () => form.post('/impostazioni/aspetto', {
               </div>
               <div class="flex flex-wrap gap-3">
                 <button v-for="a in scelte.angoli" :key="a.valore" type="button" @click="form.angoli = a.valore"
-                  class="rounded-lg border px-4 py-2 text-sm transition hover:bg-accent"
-                  :class="form.angoli === a.valore ? 'ring-2 ring-ring border-transparent font-medium' : ''"
+                  class="rounded-lg border px-4 py-2 text-sm transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                  :class="form.angoli === a.valore && ! professionale ? 'ring-2 ring-ring border-transparent font-medium' : ''"
+                  :disabled="professionale"
                   :aria-pressed="form.angoli === a.valore">{{ a.nome }}</button>
               </div>
+              <p v-if="professionale" class="text-xs text-muted-foreground" data-angoli-con-stile>{{ trans('impostazioni.aspetto.angoli_con_stile') }}</p>
             </div>
 
             <div class="border rounded-lg p-4 space-y-4">
@@ -180,6 +199,45 @@ const submit = () => form.post('/impostazioni/aspetto', {
                 </button>
               </div>
               <p v-if="form.menu !== 'laterale'" class="text-xs text-muted-foreground">{{ trans('impostazioni.aspetto.schede_solo_laterale') }}</p>
+            </div>
+
+            <div class="border rounded-lg p-4 space-y-4">
+              <div>
+                <label class="block text-sm font-medium leading-none mb-1">{{ trans('impostazioni.aspetto.stile_title') }}</label>
+                <p class="text-sm text-muted-foreground">{{ trans('impostazioni.aspetto.stile_description') }}</p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button v-for="st in scelte.stile" :key="st.valore" type="button" @click="form.stile = st.valore"
+                  class="flex items-center gap-4 rounded-lg border p-3 text-left transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                  :class="form.stile === st.valore && form.menu === 'laterale' ? 'ring-2 ring-ring border-transparent' : ''"
+                  :disabled="form.menu !== 'laterale'"
+                  :aria-pressed="form.stile === st.valore" :data-stile-scelta="st.valore">
+                  <!-- Un disegnino: un foglio piano con le righe sottili, oppure riquadri arrotondati con l'ombra. I suoi tratti non seguono lo stile della pagina. -->
+                  <span v-if="st.valore === 'professionale'" class="flex h-14 w-24 shrink-0 flex-col overflow-hidden border border-[#dee2e6] bg-white" style="border-radius: 2px" aria-hidden="true">
+                    <span class="h-3 bg-[#e9ecef]" />
+                    <span class="h-px bg-[#dee2e6]" />
+                    <span class="flex flex-1 flex-col justify-around px-1.5">
+                      <span class="h-px bg-[#dee2e6]" />
+                      <span class="h-px bg-[#dee2e6]" />
+                      <span class="h-px bg-[#dee2e6]" />
+                    </span>
+                  </span>
+                  <span v-else class="flex h-14 w-24 shrink-0 items-center justify-center bg-[#eef1f5] p-1.5" style="border-radius: 10px" aria-hidden="true">
+                    <span class="flex h-full w-full flex-col gap-1 border border-[#e2e8f0] bg-white p-1.5" style="border-radius: 8px; box-shadow: 0 3px 8px rgb(15 23 42 / 0.18)">
+                      <span class="h-1.5 w-2/3 bg-[#cbd5e1]" style="border-radius: 999px" />
+                      <span class="flex-1 border border-[#e2e8f0]" style="border-radius: 5px" />
+                    </span>
+                  </span>
+                  <span class="min-w-0">
+                    <span class="flex items-center gap-2 text-sm font-medium">
+                      {{ st.nome }}
+                      <Check v-if="form.stile === st.valore && form.menu === 'laterale'" class="size-4 text-primary" />
+                    </span>
+                    <span class="mt-0.5 block text-xs text-muted-foreground">{{ trans(`impostazioni.aspetto.stile_${st.valore}_description`) }}</span>
+                  </span>
+                </button>
+              </div>
+              <p v-if="form.menu !== 'laterale'" class="text-xs text-muted-foreground">{{ trans('impostazioni.aspetto.stile_solo_laterale') }}</p>
             </div>
 
             <div class="rounded-lg border p-4 flex flex-wrap items-center gap-3">

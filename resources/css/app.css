@@ -9,6 +9,9 @@
 /* L'impalcatura a menu laterale (Web Pro Italia): i colori del menu e l'area di lavoro. */
 @import './menu-laterale.css';
 
+/* Lo stile «professionale» dell'area di lavoro (Web Pro Italia): vale solo con <html data-km-stile="professionale">. */
+@import './stile-professionale.css';
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 

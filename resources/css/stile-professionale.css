@@ -1,0 +1,507 @@
+/**
+ * Lo stile «professionale» dell'area di lavoro (Web Pro Italia, 21/11/2026).
+ *
+ * ## Che cos'è
+ *
+ * Una «pelle»: colori, spessore delle linee, carattere. Le pagine restano quelle che sono — stessi elementi negli stessi
+ * posti — ma al posto dei riquadri dentro riquadri con bordo, ombra soffice, sfumatura e angoli a 12-16 px ci sono superfici
+ * piane, una riga sola e sottile dove serve, angoli piccoli e nessuna ombra decorativa.
+ *
+ * Vale quando la pagina porta `<html data-km-stile="professionale">` (Impostazioni → Aspetto → Stile; è il predefinito, e c'è
+ * solo con il menu laterale). Con «morbido» niente di questo file tocca le pagine: resta l'aspetto di prima.
+ *
+ * ## Da dove vengono i valori
+ *
+ * Da Odoo 16 Community, che usiamo per la contabilità: i valori sono presi dai suoi fogli di stile
+ * (`addons/web/static/src/scss/primary_variables.scss`, `bootstrap_overridden.scss`, `views/list/list_renderer.scss`) e
+ * misurati nel browser sull'elenco e sul modulo delle fatture. Odoo Community è LGPL-3: qui non c'è codice suo copiato, i
+ * valori sono riespressi nelle nostre variabili. La tabella dei valori e delle misure sta in `docs/stile_professionale.it.md`.
+ *
+ * ## Come funziona
+ *
+ * 1. **Le variabili**: quasi tutto l'aspetto delle pagine passa da variabili (i grigi di Tailwind, i colori del kit, i raggi,
+ *    le grandezze e i pesi del carattere). Ridefinirle qui cambia ogni pagina senza toccarla.
+ * 2. **Poche regole** dentro `.km-lavoro` (l'area di lavoro dell'impalcatura a menu laterale) per ciò che le variabili non
+ *    raggiungono: le ombre, le sfumature, le tabelle, i campi, le etichette di stato, le linguette, le cornici doppie.
+ *    Stanno fuori dai livelli di Tailwind, quindi vincono sulle classi scritte nelle pagine.
+ *
+ * Il colore principale resta quello scelto in Aspetto (`--primary`): «Glicine» è il viola di Odoo.
+ */
+
+html[data-km-stile='professionale'] {
+  /* ─── I grigi (Odoo: $o-gray-100…900) ─────────────────────────────────────────────────────────────────────────────────── */
+  --km-g100: #f8f9fa;
+  --km-g200: #e9ecef;
+  --km-g300: #dee2e6;
+  --km-g400: #ced4da;
+  --km-g500: #adb5bd;
+  --km-g600: #6c757d;
+  --km-g700: #495057;
+  --km-g800: #343a40;
+  --km-g900: #212529;
+
+  --km-testo: var(--km-g700); /* il testo (Odoo: $o-main-text-color) */
+  --km-titoli: var(--km-g900); /* titoli, etichette dei campi, intestazioni di tabella ($o-main-headings-color) */
+  --km-bordo: var(--km-g300); /* le cornici ($o-border-color) */
+  --km-separatore: var(--km-g200); /* le righe fra le righe di una tabella ($table-border-color) */
+  --km-testata-tabella: var(--km-g200); /* il fondo dell'intestazione di tabella */
+  --km-piede-tabella: #eeeeee; /* $o-list-footer-bg-color */
+  --km-passaggio: rgb(0 0 0 / 0.055); /* una riga sotto il mouse ($table-hover-bg-factor) */
+  --km-collegamento: color-mix(in srgb, var(--primary) 90%, black); /* darken($o-brand-primary, 5%) */
+  --km-successo: #28a745;
+  --km-informazione: #17a2b8;
+  --km-avviso: #ffac00;
+  --km-pericolo: #dc3545;
+  --km-ombra-tendina: 0 1rem 1.1rem rgb(0 0 0 / 0.1); /* $o-dropdown-box-shadow: l'unica ombra, per ciò che sta sopra la pagina */
+  --km-raggio: 3px; /* $o-border-radius (.25rem con la radice a 12 px) */
+
+  /* L'area di lavoro: il fondo di Odoo, con i fogli bianchi. */
+  --km-lavoro: var(--km-g100);
+
+  /* ─── I colori del kit ────────────────────────────────────────────────────────────────────────────────────────────────── */
+  --background: #ffffff;
+  --foreground: var(--km-testo);
+  --card: #ffffff;
+  --card-foreground: var(--km-testo);
+  --popover: #ffffff;
+  --popover-foreground: var(--km-testo);
+  --secondary: var(--km-g200);
+  --secondary-foreground: var(--km-g900);
+  --muted: var(--km-g100);
+  --muted-foreground: var(--km-g600);
+  /* Il passaggio del mouse è grigio, non tinto del colore dello studio ($component-active-bg). */
+  --accent: var(--km-g200);
+  --accent-foreground: var(--km-g900);
+  --destructive: var(--km-pericolo);
+  --destructive-foreground: #ffffff;
+  --border: var(--km-bordo);
+  --input: var(--km-g400);
+
+  /* ─── I grigi di Tailwind diventano quelli di Odoo: slate, gray, zinc, neutral e stone ────────────────────────────────── */
+  --color-slate-50: #f8f9fa; --color-slate-100: #e9ecef; --color-slate-200: #dee2e6; --color-slate-300: #ced4da; --color-slate-400: #adb5bd; --color-slate-500: #6c757d;
+  --color-slate-600: #495057; --color-slate-700: #343a40; --color-slate-800: #212529; --color-slate-900: #212529; --color-slate-950: #16191c;
+  --color-gray-50: #f8f9fa; --color-gray-100: #e9ecef; --color-gray-200: #dee2e6; --color-gray-300: #ced4da; --color-gray-400: #adb5bd; --color-gray-500: #6c757d;
+  --color-gray-600: #495057; --color-gray-700: #343a40; --color-gray-800: #212529; --color-gray-900: #212529; --color-gray-950: #16191c;
+  --color-zinc-50: #f8f9fa; --color-zinc-100: #e9ecef; --color-zinc-200: #dee2e6; --color-zinc-300: #ced4da; --color-zinc-400: #adb5bd; --color-zinc-500: #6c757d;
+  --color-zinc-600: #495057; --color-zinc-700: #343a40; --color-zinc-800: #212529; --color-zinc-900: #212529; --color-zinc-950: #16191c;
+  --color-neutral-50: #f8f9fa; --color-neutral-100: #e9ecef; --color-neutral-200: #dee2e6; --color-neutral-300: #ced4da; --color-neutral-400: #adb5bd; --color-neutral-500: #6c757d;
+  --color-neutral-600: #495057; --color-neutral-700: #343a40; --color-neutral-800: #212529; --color-neutral-900: #212529; --color-neutral-950: #16191c;
+  --color-stone-50: #f8f9fa; --color-stone-100: #e9ecef; --color-stone-200: #dee2e6; --color-stone-300: #ced4da; --color-stone-400: #adb5bd; --color-stone-500: #6c757d;
+  --color-stone-600: #495057; --color-stone-700: #343a40; --color-stone-800: #212529; --color-stone-900: #212529; --color-stone-950: #16191c;
+
+  /* I colori di stato pieni (testi, icone, fondi pieni): quelli di Odoo. Le tinte chiare restano quelle di Tailwind. */
+  --color-emerald-500: #28a745; --color-emerald-600: #28a745; --color-emerald-700: #1e7e34; --color-emerald-800: #155724;
+  --color-green-500: #28a745; --color-green-600: #28a745; --color-green-700: #1e7e34; --color-green-800: #155724;
+  --color-red-500: #dc3545; --color-red-600: #dc3545; --color-red-700: #b02a37; --color-red-800: #842029;
+  --color-rose-500: #dc3545; --color-rose-600: #dc3545; --color-rose-700: #b02a37; --color-rose-800: #842029;
+  --color-amber-400: #ffbd33; --color-amber-500: #ffac00; --color-amber-600: #cc8a00; --color-amber-700: #996700;
+  --color-sky-500: #17a2b8; --color-sky-600: #17a2b8; --color-sky-700: #117a8b;
+  --color-cyan-500: #17a2b8; --color-cyan-600: #17a2b8; --color-cyan-700: #117a8b;
+
+  /* ─── Gli angoli: piccoli, uguali per tutto ───────────────────────────────────────────────────────────────────────────── */
+  /* `rounded-md` è «raggio − 2 px» e `rounded-sm` «raggio − 4 px»: con 5 px i comandi hanno i 3 px di Odoo. */
+  --radius: 5px;
+  --radius-xs: 2px;
+  --radius-xl: var(--km-raggio);
+  --radius-2xl: var(--km-raggio);
+  --radius-3xl: var(--km-raggio);
+  --radius-4xl: var(--km-raggio);
+
+  /* ─── Il carattere: quello del sistema, 13 px, pesi 400 e 500 ─────────────────────────────────────────────────────────── */
+  --km-carattere: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Ubuntu, 'Liberation Sans', Arial, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-sans: var(--km-carattere);
+  --default-font-family: var(--km-carattere);
+  font-family: var(--km-carattere);
+
+  /* Le grandezze di Odoo: 12 (piccolo), 13 (base), poi i suoi titoli (×1,1 ×1,2 ×1,3 ×1,5 ×2). */
+  --text-xs: 0.75rem; --text-xs--line-height: 1.5;
+  --text-sm: 0.8125rem; --text-sm--line-height: 1.5;
+  --text-base: 0.875rem; --text-base--line-height: 1.5;
+  --text-lg: 0.975rem; --text-lg--line-height: 1.45;
+  --text-xl: 1.0625rem; --text-xl--line-height: 1.4;
+  --text-2xl: 1.21875rem; --text-2xl--line-height: 1.35;
+  --text-3xl: 1.625rem; --text-3xl--line-height: 1.25;
+  --text-4xl: 1.875rem; --text-4xl--line-height: 1.2;
+
+  /* I pesi: in Odoo «grassetto» è 500; il 700 resta ai totali. */
+  --font-weight-semibold: 500;
+  --font-weight-bold: 500;
+  --font-weight-extrabold: 700;
+  --font-weight-black: 700;
+
+  /* Niente lettere strette nei titoli né larghissime nelle etichette. */
+  --tracking-tighter: 0em;
+  --tracking-tight: 0em;
+  --tracking-wide: 0.01em;
+  --tracking-wider: 0.02em;
+  --tracking-widest: 0.03em;
+}
+
+/* Il tema scuro: la stessa geometria, i grigi scuri della stessa scala. */
+html[data-km-stile='professionale'].dark {
+  --km-testo: #dee2e6;
+  --km-titoli: #f8f9fa;
+  --km-bordo: #3d4349;
+  --km-separatore: #343a40;
+  --km-testata-tabella: #2b3035;
+  --km-piede-tabella: #2b3035;
+  --km-passaggio: rgb(255 255 255 / 0.06);
+  --km-collegamento: color-mix(in srgb, var(--primary) 80%, white);
+  --km-lavoro: #121416;
+
+  --background: #212529;
+  --card: #212529;
+  --popover: #2b3035;
+  --secondary: #343a40;
+  --secondary-foreground: #f8f9fa;
+  --muted: #2b3035;
+  --muted-foreground: #adb5bd;
+  --accent: #343a40;
+  --accent-foreground: #f8f9fa;
+  --input: #495057;
+}
+
+html[data-km-stile='professionale'] {
+  & body {
+    font-family: var(--km-carattere);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    /* Odoo non assottiglia il carattere. */
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+  }
+
+  & .font-sans,
+  & ::placeholder {
+    font-family: var(--km-carattere);
+  }
+
+  /* ═══ L'area di lavoro ════════════════════════════════════════════════════════════════════════════════════════════════ */
+  & .km-lavoro {
+    color: var(--km-testo);
+
+    /* ─── Niente ombre decorative, niente sfumature, niente riquadri che si sollevano ─────────────────────────────────── */
+    & [class*='shadow'] {
+      --tw-shadow: 0 0 #0000;
+    }
+    /* La cornice quasi invisibile (un anello nero al 5%) attorno a intere sezioni: via, resta la cornice del contenuto. */
+    & [class*='ring-black/5'] {
+      --tw-ring-shadow: 0 0 #0000;
+    }
+    & :is([class*='bg-gradient-to-'], [class*='bg-linear-to-']) {
+      background-image: none;
+    }
+    /* Dove la sfumatura era il fondo (una tessera colorata, un titolo), resta il suo primo colore, pieno. */
+    & :is([class*='bg-gradient-to-'], [class*='bg-linear-to-'])[class*='from-'] {
+      background-color: var(--tw-gradient-from);
+    }
+    & :is([class*='hover:-translate-y'], [class*='hover:translate-y'], [class*='hover:scale-']):hover {
+      translate: none;
+      scale: none;
+    }
+    & :is(.rounded-lg, [class*=':rounded-lg']) {
+      border-radius: var(--km-raggio);
+    }
+
+    /* ─── Le tabelle (Odoo: views/list/list_renderer.scss) ────────────────────────────────────────────────────────────── */
+    & table {
+      border-collapse: collapse;
+    }
+    & thead {
+      background-color: var(--km-testata-tabella);
+    }
+    & thead tr {
+      background-color: transparent;
+      border-color: var(--km-separatore);
+    }
+    & thead tr:hover {
+      background-color: transparent;
+    }
+    & thead th {
+      background-color: var(--km-testata-tabella);
+      color: var(--km-titoli);
+      font-weight: 500;
+    }
+    /* L'intestazione del kit: alta 44 px come in Odoo (era 48). */
+    & thead th.h-12 {
+      height: 2.75rem;
+    }
+    & tbody tr {
+      border-color: var(--km-separatore);
+    }
+    & tbody tr:hover {
+      background-color: transparent;
+    }
+    /* Il passaggio del mouse: un velo sopra il colore della cella, così regge anche sulle colonne ferme di una tabella larga. */
+    & tbody tr:hover > :is(td, th) {
+      box-shadow: inset 0 0 0 9999px var(--km-passaggio);
+    }
+    /* Le celle del kit: 8 px sopra e sotto (erano 16). Una riga di una sola linea è alta 36 px; in Odoo 34. */
+    & tbody td.p-4 {
+      padding-block: 0.5rem;
+    }
+    & tfoot {
+      background-color: var(--km-piede-tabella);
+      font-weight: 700;
+    }
+
+    /*
+     * La cornice doppia più frequente: la tabella ha la sua cornice arrotondata, dentro un riquadro che ne ha già una.
+     * Resta quella del riquadro; la tabella ci sta dentro con le sole righe.
+     */
+    & :is([class*='rounded-2xl'], [class*='rounded-xl'], [class*='rounded-lg'])[class*='border']
+      :is(.rounded-md, .rounded-lg).border:is(:has(> table), :has(> .relative > table), :has(> div > .relative > table)) {
+      border-width: 0;
+      border-radius: 0;
+    }
+
+    /*
+     * Un riquadro in pila dentro un altro riquadro (i gruppi di una pagina di impostazioni, un pannello dentro la scheda):
+     * della sua cornice resta la riga di sopra, che lo separa da ciò che lo precede. Le tessere affiancate tengono la loro.
+     */
+    & :is([class*='rounded-2xl'], [class*='rounded-xl'], [class*='rounded-lg'])[class*='border']:is([class*='bg-white'], [class*='bg-card'])
+      :is([class*='space-y-'], .flex-col):not([class*='grid-cols'], [class*=':flex-row'])
+      > :is(div, section, form, ul).border:is(.rounded-lg, .rounded-xl, .rounded-md):not([class*='border-dashed'], [class*='border-l-'], [class*='bg-'][class*='-50'], [class*='ring-']) {
+      border-width: 1px 0 0;
+      border-radius: 0;
+    }
+    /*
+     * Le cornici tratteggiate dei riquadri diventano una riga piena. Restano tratteggiati i riquadri «non c'è ancora niente»,
+     * le aree dove si trascina un file e i filtri: lì il tratteggio dice qualcosa.
+     */
+    & :is(div, section, hr, li)[class*='border-dashed']:not([data-slot='empty'], [class*='border-2'], [class*='cursor-pointer'], [role='button'], :has(> input[type='file'])) {
+      border-style: solid;
+    }
+
+    /* ─── I pulsanti ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+    /* L'azione principale di una pagina era nero-blu: ha il colore dello studio, come il pulsante primario di Odoo. */
+    & :is(a, button):is([class*=' bg-slate-900'], [class^='bg-slate-900'], [class*=' bg-slate-950'], [class*=' bg-gray-900'], [class*=' bg-zinc-900'], [class*=' bg-neutral-900']) {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-foreground);
+    }
+    & :is(a, button):is([class*=' bg-slate-900'], [class^='bg-slate-900'], [class*=' bg-slate-950'], [class*=' bg-gray-900'], [class*=' bg-zinc-900'], [class*=' bg-neutral-900']):hover {
+      background-color: color-mix(in srgb, var(--primary) 88%, black);
+      border-color: color-mix(in srgb, var(--primary) 88%, black);
+    }
+    /* Le loro icone avevano un colore proprio, pensato per il fondo scuro: prendono quello del testo. */
+    & :is(a, button):is([class*=' bg-slate-900'], [class^='bg-slate-900'], [class*=' bg-slate-950'], [class*=' bg-gray-900'], [class*=' bg-zinc-900'], [class*=' bg-neutral-900']) svg {
+      color: inherit;
+    }
+    /* Il pulsante secondario: bianco, con il testo del colore dello studio. */
+    & :is(a, button)[class*='bg-background'][class*='hover:bg-accent'] {
+      color: var(--km-collegamento);
+    }
+
+    /* ─── I campi: una riga sotto, che prende il colore dello studio quando ci si scrive (Odoo: `.o_input`) ───────────── */
+    & :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden'], [type='submit'], [type='button']), textarea, select, button[role='combobox']) {
+      border-width: 0 0 1px;
+      border-style: solid;
+      border-color: var(--input);
+      border-radius: 0;
+      background-color: transparent;
+      box-shadow: none;
+    }
+    & :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']), textarea, select, button[role='combobox']):is(:hover, :focus, :focus-visible, [data-state='open']) {
+      border-color: var(--primary);
+      box-shadow: none;
+      outline: none;
+    }
+    /* Un testo di più righe tiene la cornice intera, sottile: con la sola riga sotto non si capirebbe dove si scrive. */
+    & textarea:not([hidden]) {
+      border-width: 1px;
+      border-radius: var(--km-raggio);
+    }
+    & :is(input, textarea, select, button[role='combobox'])[aria-invalid='true'] {
+      border-color: var(--km-pericolo);
+    }
+    & :is(input, textarea, select):disabled {
+      border-bottom-style: dotted;
+    }
+    /* Gli elenchi a tendina con la ricerca e il calendario: la stessa riga. */
+    & .v-select .vs__dropdown-toggle,
+    & .dp__input {
+      border-width: 0 0 1px;
+      border-color: var(--input);
+      border-radius: 0;
+      background-color: transparent;
+      box-shadow: none;
+    }
+    & .v-select.vs--open .vs__dropdown-toggle,
+    & .v-select .vs__dropdown-toggle:hover,
+    & .dp__input:is(:hover, :focus) {
+      border-color: var(--primary);
+    }
+    & .v-select .vs__search {
+      border: 0;
+    }
+    /* `custom.css` fissa con «!important» grandezza e carattere di questi due campi: qui serve lo stesso peso. */
+    & .v-select :is(.vs__search, .vs__selected) {
+      font-size: 0.8125rem !important;
+    }
+    & .dp__input {
+      font-family: var(--km-carattere) !important;
+      font-size: 0.8125rem !important;
+    }
+    & .v-select {
+      --vs-font-size: 0.8125rem;
+      --vs-border-radius: 0;
+      --vs-border-color: var(--input);
+      background-color: transparent;
+    }
+    & .dp__main {
+      --dp-font-size: 0.8125rem;
+      --dp-font-family: var(--km-carattere);
+      --dp-border-radius: var(--km-raggio);
+      --dp-primary-color: var(--primary);
+    }
+    & :is(input[type='checkbox'], input[type='radio']) {
+      accent-color: var(--primary);
+    }
+    /* La casella di spunta: 1 px grigio, piena del colore dello studio quando è spuntata. */
+    & [role='checkbox'] {
+      border-color: rgb(0 0 0 / 0.25);
+      border-radius: var(--km-raggio);
+    }
+    & [role='checkbox'][data-state='checked'] {
+      border-color: var(--primary);
+    }
+
+    /* ─── Le etichette di stato: una pastiglia piena, testo bianco, 12 px (Odoo: `.badge.rounded-pill.text-bg-*`) ─────── */
+    & :is(span, div, a, p)[class*='uppercase'][class*='inline-flex']:is([class*='text-[8px]'], [class*='text-[9px]'], [class*='text-[10px]'], [class*='text-[11px]'], [class*='text-xs']):is([class*='rounded'])[class*='bg-']:not([class*='bg-white'], [class*='h-8'], [class*='h-9'], [class*='h-10']),
+    & .inline-flex.rounded-md.border.text-xs[class*='px-2.5'][class*='py-0.5'] {
+      border-radius: 999px;
+      border-color: transparent;
+      padding: 0.1875rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      line-height: 1.1;
+      letter-spacing: 0;
+      text-transform: none;
+      --km-pastiglia: var(--km-g200);
+      --km-pastiglia-testo: var(--km-g700);
+      background-color: var(--km-pastiglia);
+      color: var(--km-pastiglia-testo);
+
+      &:is([class*='bg-emerald-'], [class*='bg-green-'], [class*='bg-teal-'], [class*='bg-lime-']) {
+        --km-pastiglia: var(--km-successo);
+        --km-pastiglia-testo: #ffffff;
+      }
+      &:is([class*='bg-red-'], [class*='bg-rose-'], [class*='bg-destructive']) {
+        --km-pastiglia: var(--km-pericolo);
+        --km-pastiglia-testo: #ffffff;
+      }
+      &:is([class*='bg-amber-'], [class*='bg-yellow-'], [class*='bg-orange-']) {
+        --km-pastiglia: var(--km-avviso);
+        --km-pastiglia-testo: #212529;
+      }
+      &:is([class*='bg-blue-'], [class*='bg-sky-'], [class*='bg-cyan-']) {
+        --km-pastiglia: var(--km-informazione);
+        --km-pastiglia-testo: #ffffff;
+      }
+      &:is([class*='bg-indigo-'], [class*='bg-violet-'], [class*='bg-purple-'], [class*='bg-fuchsia-'], [class*='bg-primary']) {
+        --km-pastiglia: var(--primary);
+        --km-pastiglia-testo: var(--primary-foreground);
+      }
+    }
+
+    /* ─── Le linguette (Odoo: `.nav-tabs`): una riga sotto, la linguetta accesa attaccata alla riga ───────────────────── */
+    & [role='tablist'] {
+      height: auto;
+      padding: 0;
+      gap: 0;
+      border-radius: 0;
+      border-bottom: 1px solid var(--km-bordo);
+      background-color: transparent;
+    }
+    & [role='tablist'] [role='tab'] {
+      margin-bottom: -1px;
+      border: 1px solid transparent;
+      border-radius: var(--km-raggio) var(--km-raggio) 0 0;
+      padding: 0.375rem 0.75rem;
+      color: var(--km-collegamento);
+      font-weight: 400;
+      box-shadow: none;
+    }
+    & [role='tablist'] [role='tab'][data-state='active'] {
+      border-color: var(--km-bordo) var(--km-bordo) var(--card);
+      background-color: var(--card);
+      color: var(--km-testo);
+    }
+    /* Le linguette di sezione di una scheda (persona, unità, fornitore): `NavSezione.vue`. */
+    & nav[class*='ring-black/5'] {
+      width: 100%;
+      max-width: 100%;
+      gap: 0;
+      padding: 0;
+      border-radius: 0;
+      border-bottom: 1px solid var(--km-bordo);
+      background-color: transparent;
+    }
+    & nav[class*='ring-black/5'] > a {
+      height: auto;
+      margin-bottom: -1px;
+      border: 1px solid transparent;
+      border-radius: var(--km-raggio) var(--km-raggio) 0 0;
+      padding: 0.375rem 0.75rem;
+      background-color: transparent;
+      color: var(--km-collegamento);
+      font-weight: 400;
+    }
+    & nav[class*='ring-black/5'] > a:hover {
+      border-color: var(--km-g200) var(--km-g200) transparent;
+    }
+    & nav[class*='ring-black/5'] > a[class*='bg-muted'] {
+      border-color: var(--km-bordo) var(--km-bordo) var(--km-lavoro);
+      background-color: var(--km-lavoro);
+      color: var(--km-testo);
+    }
+
+    /* ─── La testata di pagina: un foglio bianco con la sua riga, senza barra colorata né sfumatura ───────────────────── */
+    & [data-testata-pagina] > .pointer-events-none {
+      display: none;
+    }
+    & [data-testata-pagina] h1 {
+      color: var(--km-titoli);
+      font-weight: 500;
+    }
+
+    /* Le tessere colorate delle sezioni: piene, senza rilievo. */
+    & .km-icona {
+      background: var(--c);
+      box-shadow: none;
+    }
+  }
+
+  /* I titoli e le etichette dei campi sono più scuri del testo; chi ha un colore suo lo tiene (questo livello perde con le classi). */
+  @layer components {
+    & .km-lavoro :is(h1, h2, h3, h4, h5, h6, label, dt) {
+      color: var(--km-titoli);
+    }
+  }
+
+  /* ═══ La scheda laterale: una riga a sinistra invece dell'ombra ═══════════════════════════════════════════════════════ */
+  & .km-scheda {
+    border-left: 1px solid var(--km-bordo);
+    box-shadow: none;
+  }
+
+  /* ═══ Ciò che sta sopra la pagina: finestre, menu a tendina, elenchi a comparsa ═══════════════════════════════════════ */
+  /* Le finestre: cornice di 1 px, nessuna ombra (c'è già il velo scuro sotto), come le finestre di Odoo. */
+  & :is([role='dialog'], [role='alertdialog'])[data-state] {
+    border-color: rgb(0 0 0 / 0.2);
+    box-shadow: none;
+  }
+  & .vs__dropdown-menu {
+    border-color: var(--km-bordo);
+    border-radius: var(--km-raggio);
+    box-shadow: var(--km-ombra-tendina);
+    font-size: 0.8125rem;
+  }
+  /* I menu a tendina e gli elenchi a comparsa: cornice di 1 px e l'unica ombra dello stile. */
+  & [data-reka-popper-content-wrapper] > * {
+    border-color: var(--km-bordo);
+    box-shadow: var(--km-ombra-tendina);
+  }
+}

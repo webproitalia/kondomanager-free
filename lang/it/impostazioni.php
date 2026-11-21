@@ -472,6 +472,12 @@ return [
         'schede_lato_description' => 'In una scheda che entra da destra, senza lasciare la pagina in cui sei.',
         'schede_pagina_description' => 'A pagina intera, com\'era prima.',
         'schede_solo_laterale' => 'Le schede di lato ci sono solo con il menu laterale.',
+        'stile_title' => 'Stile',
+        'stile_description' => 'Come sono disegnati riquadri, tabelle, pulsanti e campi dell\'area di lavoro.',
+        'stile_professionale_description' => 'Superfici piane, una riga sola e sottile, angoli piccoli, il carattere del sistema.',
+        'stile_morbido_description' => 'Riquadri con ombra e angoli grandi, com\'era prima.',
+        'stile_solo_laterale' => 'Lo stile professionale c\'è solo con il menu laterale.',
+        'angoli_con_stile' => 'Con lo stile professionale gli angoli sono quelli dello stile: piccoli.',
     ],
 
 ];
