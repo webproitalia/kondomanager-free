@@ -60,10 +60,12 @@ const mostraLaVoceAccesa = (contenitore: HTMLElement) => {
     const [voce, visibile] = [accesa.getBoundingClientRect(), contenitore.getBoundingClientRect()];
     // Un po' di margine: si vede anche la voce dopo (o quella prima). Il meno possibile, però: ogni voce che resta dov'era
     // è una voce che si ritrova.
-    const margine = voce.height;
+    // In basso il margine conta anche quando la voce «ci sta» di un soffio: l'ultimo tratto dell'elenco sfuma
+    // (`data-altro-sotto`), e una voce accesa lì dentro si vede a metà.
+    const margine = Math.max(voce.height, 32);
     if (voce.top < visibile.top + coperto) {
         contenitore.scrollTop += voce.top - visibile.top - coperto - margine;
-    } else if (voce.bottom > visibile.bottom) {
+    } else if (voce.bottom > visibile.bottom - margine) {
         contenitore.scrollTop += voce.bottom - visibile.bottom + margine;
     }
 };
@@ -84,9 +86,23 @@ onMounted(() => {
         ascoltati.forEach((nodo) => nodo.addEventListener('scroll', ricorda, { passive: true }));
         window.addEventListener('resize', segnaAltroSotto, { passive: true });
         // «Movimenti» che si apre, il gruppo che si ripiega: cambia quanto c'è sotto.
+        // Appena disegnata la pagina «Movimenti» si sta ancora aprendo: la voce accesa finisce più in basso di dov'era
+        // quando l'abbiamo cercata, e resterebbe mezza nascosta. Finché l'elenco cresce (un secondo al più) la si ricerca;
+        // se nel frattempo è la persona a scorrere, si lascia stare.
         const z = zona();
+        const nato = Date.now();
+        let toccato = false;
+        const fermati = () => {
+            toccato = true;
+        };
+        ['wheel', 'touchstart', 'keydown'].forEach((gesto) => contenitore.addEventListener(gesto, fermati, { passive: true, once: true }));
         if (z && typeof ResizeObserver !== 'undefined') {
-            osservatore = new ResizeObserver(segnaAltroSotto);
+            osservatore = new ResizeObserver(() => {
+                if (! toccato && Date.now() - nato < 1000) {
+                    mostraLaVoceAccesa(elenco() ?? contenitore);
+                }
+                segnaAltroSotto();
+            });
             [z, ...z.children].forEach((nodo) => osservatore!.observe(nodo));
         }
         segnaAltroSotto();
